@@ -567,6 +567,34 @@ describe('TTY output selection', () => {
     expect(printMarkdownCalls[0]).toBe('MD');
   });
 
+  it('issues list: isTTY=false emits console.error with count label (non-TTY countLabel path)', async () => {
+    Object.defineProperty(process.stdout, 'isTTY', { value: false, writable: true, configurable: true });
+    const request = vi.fn().mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Bug')]));
+
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
+    }));
+    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
+    vi.doMock('../src/lib/output/markdown.js', () => ({
+      markdownTable: vi.fn().mockReturnValue(''),
+      printMarkdown: vi.fn(),
+    }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue(''),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--all-states']);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringMatching(/Showing \d+ issues/));
+
+    consoleErrorSpy.mockRestore();
+  });
+
   it('teams list: isTTY=true uses prettyTable', async () => {
     Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true, configurable: true });
     const request = vi.fn().mockResolvedValue({
