@@ -1,0 +1,11 @@
+node_modules
+dist
+.ai
+.env
+*.log
+.DS_Store
+coverage
+auth.json
+.biome-cache
+.eslintcache
+/linear
