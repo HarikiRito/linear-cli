@@ -1,20 +1,26 @@
 {
-  "name": "linear-cli",
+  "name": "@harikidev/linear-cli",
   "version": "0.1.0",
   "description": "CLI for Linear — designed for agent/programmatic use",
   "type": "commonjs",
   "bin": {
     "linear": "./dist/index.cjs"
   },
+  "license": "Apache-2.0",
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "build": "tsdown",
+    "prepublishOnly": "npm run build",
     "dev": "tsdown --watch",
     "test": "vitest run",
     "test:watch": "vitest",

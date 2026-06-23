@@ -3,6 +3,7 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: ['src/index.ts'],
   format: ['cjs'],
+  target: 'node20',
   banner: {
     js: '#!/usr/bin/env node',
   },
@@ -10,4 +11,5 @@ export default defineConfig({
   sourcemap: false,
   minify: false,
   dts: false,
+  noExternal: [/.*/],
 })
