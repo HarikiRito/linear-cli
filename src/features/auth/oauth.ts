@@ -12,8 +12,6 @@ import {
 import { AuthError, type CliError, NetworkError } from '../../lib/errors.js';
 import { readSession, writeSession } from './session.js';
 
-// --- PKCE helpers (exported for testing) ---
-
 export function generateCodeVerifier(): string {
   // 96 random bytes → 128 base64url chars (within the required 43–128 char range)
   return crypto.randomBytes(96).toString('base64url');
@@ -22,8 +20,6 @@ export function generateCodeVerifier(): string {
 export function generateCodeChallenge(verifier: string): string {
   return crypto.createHash('sha256').update(verifier).digest('base64url');
 }
-
-// --- Port binding helper ---
 
 function tryBindPort(port: number): Promise<http.Server> {
   return new Promise((resolve, reject) => {
@@ -47,8 +43,7 @@ export async function bindFirstAvailablePort(
   throw new AuthError(`Could not bind to any candidate port: ${ports.join(', ')}`);
 }
 
-// --- Token exchange (PKCE — no client secret) ---
-
+// PKCE flow: no client secret required — the code_verifier proves the initiator
 interface TokenResponse {
   accessToken: string;
   refreshToken: string;
@@ -89,8 +84,6 @@ async function exchangeCodeRaw(
   };
 }
 
-// --- Main OAuth flow (PKCE, embedded client_id, no secret) ---
-
 export function startOAuthFlow(): ResultAsync<void, CliError> {
   const clientId = getClientId();
   const codeVerifier = generateCodeVerifier();
@@ -112,6 +105,7 @@ export function startOAuthFlow(): ResultAsync<void, CliError> {
         state,
         code_challenge: codeChallenge,
         code_challenge_method: 'S256',
+        prompt: 'consent',
       });
       const authorizeUrl = `${LINEAR_AUTHORIZE_URL}?${params.toString()}`;
 
@@ -185,8 +179,6 @@ export function startOAuthFlow(): ResultAsync<void, CliError> {
     (e) => new AuthError(e instanceof Error ? e.message : String(e))
   );
 }
-
-// --- Token refresh (PKCE — client_id only, no secret) ---
 
 export function refreshAccessToken(
   refreshToken: string
