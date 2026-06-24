@@ -13,9 +13,9 @@ export interface IssueResult {
 const COLUMNS = ['ID', 'Identifier', 'Title', 'URL', 'State'];
 const toRowArr = (i: IssueResult): string[] => [i.id, i.identifier, i.title, i.url, i.state];
 
-export function renderIssue(issue: IssueResult, json: boolean): void {
+export function renderIssue(issue: IssueResult, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ issue });
+    printJson({ issue }, pretty);
   } else if (process.stdout.isTTY) {
     printTable(prettyTable(COLUMNS, [toRowArr(issue)]));
   } else {

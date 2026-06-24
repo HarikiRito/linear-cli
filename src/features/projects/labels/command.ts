@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions } from '../../../lib/commandOptions.js';
+import { addAuthOptions, addJsonOptions } from '../../../lib/commandOptions.js';
 import { listProjectLabels } from './labels.js';
 
 export function registerLabelsCommand(projects: Command): void {
@@ -9,10 +9,9 @@ export function registerLabelsCommand(projects: Command): void {
     .requiredOption('--project <id-or-name>', 'Project ID or name')
     .option('--limit <n>', 'Number of labels per page (default: 50)', '50')
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
-    .option('--all', 'Fetch all pages (one request per page)')
-    .option('--json', 'Output as JSON');
+    .option('--all', 'Fetch all pages (one request per page)');
 
-  addAuthOptions(cmd).action(
+  addAuthOptions(addJsonOptions(cmd)).action(
     async (opts: {
       project: string;
       limit: string;
@@ -21,6 +20,7 @@ export function registerLabelsCommand(projects: Command): void {
       apiKey?: string;
       token?: string;
       json?: boolean;
+      pretty?: boolean;
     }) => {
       await listProjectLabels({
         apiKey: opts.apiKey,
@@ -30,6 +30,7 @@ export function registerLabelsCommand(projects: Command): void {
         after: opts.after,
         all: !!opts.all,
         json: !!opts.json,
+        pretty: !!opts.pretty,
       });
     }
   );

@@ -11,6 +11,7 @@ export interface UpdateCommentOptions {
   id: string;
   body: string;
   json: boolean;
+  pretty: boolean;
 }
 
 export async function updateComment(opts: UpdateCommentOptions): Promise<void> {
@@ -29,7 +30,7 @@ export async function updateComment(opts: UpdateCommentOptions): Promise<void> {
   );
 
   result.match(
-    (comment: CommentResult) => renderComment(comment, opts.json),
+    (comment: CommentResult) => renderComment(comment, opts.json, opts.pretty),
     (e) => exitError(e)
   );
 }

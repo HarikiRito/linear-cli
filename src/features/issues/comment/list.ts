@@ -12,6 +12,7 @@ export interface ListCommentsOptions {
   limit: number;
   after?: string;
   json: boolean;
+  pretty: boolean;
 }
 
 interface CommentRow {
@@ -67,7 +68,7 @@ export async function listComments(opts: ListCommentsOptions): Promise<void> {
 
   const r = await result;
   r.match(
-    (data) => renderPaged(data, opts.json, 'comments', COLUMNS),
+    (data) => renderPaged(data, opts.json, 'comments', COLUMNS, undefined, opts.pretty),
     (e) => exitError(e)
   );
 }

@@ -12,6 +12,7 @@ export interface GetUserOptions {
   token?: string;
   id: string;
   json: boolean;
+  pretty: boolean;
 }
 
 interface UserDetail {
@@ -51,14 +52,14 @@ export async function getUser(opts: GetUserOptions): Promise<void> {
   );
 
   result.match(
-    (user) => renderUserDetail(user, opts.json),
+    (user) => renderUserDetail(user, opts.json, opts.pretty),
     (e) => exitError(e)
   );
 }
 
-function renderUserDetail(user: UserDetail, json: boolean): void {
+function renderUserDetail(user: UserDetail, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ user });
+    printJson({ user }, pretty);
     return;
   }
 

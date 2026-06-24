@@ -13,6 +13,7 @@ export interface GetProjectOptions {
   token?: string;
   id: string;
   json: boolean;
+  pretty: boolean;
 }
 
 interface ProjectDetail {
@@ -69,14 +70,14 @@ export async function getProject(opts: GetProjectOptions): Promise<void> {
   );
 
   result.match(
-    (project) => renderProjectDetail(project, opts.json),
+    (project) => renderProjectDetail(project, opts.json, opts.pretty),
     (e) => exitError(e)
   );
 }
 
-function renderProjectDetail(project: ProjectDetail, json: boolean): void {
+function renderProjectDetail(project: ProjectDetail, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ project });
+    printJson({ project }, pretty);
     return;
   }
 

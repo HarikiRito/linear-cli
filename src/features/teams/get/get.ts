@@ -12,6 +12,7 @@ export interface GetTeamOptions {
   token?: string;
   id: string;
   json: boolean;
+  pretty: boolean;
 }
 
 interface TeamDetail {
@@ -65,14 +66,14 @@ export async function getTeam(opts: GetTeamOptions): Promise<void> {
   );
 
   result.match(
-    (team) => renderTeamDetail(team, opts.json),
+    (team) => renderTeamDetail(team, opts.json, opts.pretty),
     (e) => exitError(e)
   );
 }
 
-function renderTeamDetail(team: TeamDetail, json: boolean): void {
+function renderTeamDetail(team: TeamDetail, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ team });
+    printJson({ team }, pretty);
     return;
   }
 

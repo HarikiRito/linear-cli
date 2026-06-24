@@ -20,6 +20,7 @@ export interface ListProjectLabelsOptions {
   after?: string;
   all: boolean;
   json: boolean;
+  pretty: boolean;
 }
 
 interface LabelRow {
@@ -104,5 +105,5 @@ export async function listProjectLabels(opts: ListProjectLabelsOptions): Promise
     coerceCliError
   );
 
-  await runAndRenderPaged(resultAsync, opts.json, 'labels', LABEL_COLUMNS, 'labels');
+  await runAndRenderPaged(resultAsync, opts.json, 'labels', LABEL_COLUMNS, 'labels', opts.pretty);
 }

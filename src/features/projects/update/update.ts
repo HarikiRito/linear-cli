@@ -17,6 +17,7 @@ export interface UpdateProjectOptions {
   startDate?: string;
   state?: string;
   json: boolean;
+  pretty: boolean;
 }
 
 async function resolveAndUpdate(
@@ -58,7 +59,7 @@ export async function updateProject(opts: UpdateProjectOptions): Promise<void> {
   const result = await ResultAsync.fromPromise(resolveAndUpdate(client, opts), coerceCliError);
 
   result.match(
-    (p) => renderProjectResult(p, opts.json),
+    (p) => renderProjectResult(p, opts.json, opts.pretty),
     (e) => exitError(e)
   );
 }

@@ -19,6 +19,7 @@ export interface ListMilestonesOptions {
   after?: string;
   all: boolean;
   json: boolean;
+  pretty: boolean;
 }
 
 interface MilestoneRow {
@@ -83,5 +84,5 @@ export async function listMilestones(opts: ListMilestonesOptions): Promise<void>
     coerceCliError
   );
 
-  await runAndRenderPaged(resultAsync, opts.json, 'milestones', MILESTONE_COLUMNS, 'milestones');
+  await runAndRenderPaged(resultAsync, opts.json, 'milestones', MILESTONE_COLUMNS, 'milestones', opts.pretty);
 }

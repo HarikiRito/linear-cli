@@ -31,18 +31,28 @@ const TEAM_COLUMNS: ColumnConfig<TeamRow> = {
   ttyToRow: (t) => [t.name, t.key],
 };
 
-export function renderTeams(result: TeamsResult, json: boolean): void {
-  renderPaged({ rows: result.teams, pageInfo: result.pageInfo }, json, 'teams', TEAM_COLUMNS);
+export function renderTeams(result: TeamsResult, json: boolean, pretty = false): void {
+  renderPaged(
+    { rows: result.teams, pageInfo: result.pageInfo },
+    json,
+    'teams',
+    TEAM_COLUMNS,
+    undefined,
+    pretty
+  );
 }
 
 export async function runAndRender(
   resultAsync: ResultAsync<TeamsResult, ReturnType<typeof mapLinearError>>,
-  json: boolean
+  json: boolean,
+  pretty = false
 ): Promise<void> {
   await runAndRenderPaged(
     resultAsync.map((r) => ({ rows: r.teams, pageInfo: r.pageInfo })),
     json,
     'teams',
-    TEAM_COLUMNS
+    TEAM_COLUMNS,
+    undefined,
+    pretty
   );
 }

@@ -10,6 +10,7 @@ export interface ListUsersOptions {
   after?: string;
   all: boolean;
   json: boolean;
+  pretty: boolean;
 }
 
 interface UserRow {
@@ -54,5 +55,5 @@ export async function listUsers(opts: ListUsersOptions): Promise<void> {
     limit: opts.limit,
   });
 
-  await runAndRenderPaged(resultAsync, opts.json, 'users', USER_COLUMNS, 'users');
+  await runAndRenderPaged(resultAsync, opts.json, 'users', USER_COLUMNS, 'users', opts.pretty);
 }

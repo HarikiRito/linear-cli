@@ -12,6 +12,7 @@ export interface ListLabelsOptions {
   after?: string;
   all: boolean;
   json: boolean;
+  pretty: boolean;
 }
 
 interface LabelRow {
@@ -70,5 +71,5 @@ export async function listLabels(opts: ListLabelsOptions): Promise<void> {
     { all: opts.all, after: opts.after, limit: opts.limit }
   );
 
-  await runAndRenderPaged(resultAsync, opts.json, 'labels', LABEL_COLUMNS, 'labels');
+  await runAndRenderPaged(resultAsync, opts.json, 'labels', LABEL_COLUMNS, 'labels', opts.pretty);
 }

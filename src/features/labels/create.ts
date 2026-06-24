@@ -16,6 +16,7 @@ export interface CreateLabelOptions {
   team?: string;
   description?: string;
   json: boolean;
+  pretty: boolean;
 }
 
 interface LabelResult {
@@ -68,7 +69,7 @@ export async function createLabel(opts: CreateLabelOptions): Promise<void> {
   result.match(
     (label) => {
       if (opts.json) {
-        printJson({ label });
+        printJson({ label }, opts.pretty);
         return;
       }
       const rows: [string, string][] = [

@@ -31,9 +31,9 @@ export async function buildCommentResult(payload: CommentPayload): Promise<Comme
 const COLUMNS = ['ID', 'Body', 'URL', 'CreatedAt', 'Author'];
 const toRowArr = (c: CommentResult): string[] => [c.id, c.body, c.url, c.createdAt, c.author];
 
-export function renderComment(comment: CommentResult, json: boolean): void {
+export function renderComment(comment: CommentResult, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ comment });
+    printJson({ comment }, pretty);
   } else if (process.stdout.isTTY) {
     printTable(prettyTable(COLUMNS, [toRowArr(comment)]));
   } else {

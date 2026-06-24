@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions } from '../../lib/commandOptions.js';
+import { addAuthOptions, addJsonOptions } from '../../lib/commandOptions.js';
 import { createMilestone } from './create.js';
 import { deleteMilestone } from './delete.js';
 import { getMilestone } from './get.js';
@@ -23,10 +23,9 @@ export function registerMilestones(program: Command): void {
     .requiredOption('--project <id-or-name>', 'Project ID or name (required)')
     .option('--limit <n>', 'Number of milestones per page (default: 50)', '50')
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
-    .option('--all', 'Fetch all pages (one request per page)')
-    .option('--json', 'Output as JSON');
+    .option('--all', 'Fetch all pages (one request per page)');
 
-  addAuthOptions(listCmd).action(
+  addAuthOptions(addJsonOptions(listCmd)).action(
     async (opts: {
       project: string;
       limit: string;
@@ -35,6 +34,7 @@ export function registerMilestones(program: Command): void {
       apiKey?: string;
       token?: string;
       json?: boolean;
+      pretty?: boolean;
     }) => {
       await listMilestones({
         apiKey: opts.apiKey,
@@ -44,6 +44,7 @@ export function registerMilestones(program: Command): void {
         after: opts.after,
         all: !!opts.all,
         json: !!opts.json,
+        pretty: !!opts.pretty,
       });
     }
   );
@@ -51,16 +52,16 @@ export function registerMilestones(program: Command): void {
   // milestones get
   const getCmd = milestones
     .command('get <id>')
-    .description('Get a single milestone by ID')
-    .option('--json', 'Output as JSON');
+    .description('Get a single milestone by ID');
 
-  addAuthOptions(getCmd).action(
-    async (id: string, opts: { apiKey?: string; token?: string; json?: boolean }) => {
+  addAuthOptions(addJsonOptions(getCmd)).action(
+    async (id: string, opts: { apiKey?: string; token?: string; json?: boolean; pretty?: boolean }) => {
       await getMilestone({
         apiKey: opts.apiKey,
         token: opts.token,
         id,
         json: !!opts.json,
+        pretty: !!opts.pretty,
       });
     }
   );
@@ -72,10 +73,9 @@ export function registerMilestones(program: Command): void {
     .requiredOption('--project <id-or-name>', 'Project ID or name (required)')
     .requiredOption('--name <name>', 'Milestone name (required)')
     .option('--target-date <YYYY-MM-DD>', 'Target date for the milestone')
-    .option('--description <text>', 'Milestone description')
-    .option('--json', 'Output as JSON');
+    .option('--description <text>', 'Milestone description');
 
-  addAuthOptions(createCmd).action(
+  addAuthOptions(addJsonOptions(createCmd)).action(
     async (opts: {
       project: string;
       name: string;
@@ -84,6 +84,7 @@ export function registerMilestones(program: Command): void {
       apiKey?: string;
       token?: string;
       json?: boolean;
+      pretty?: boolean;
     }) => {
       await createMilestone({
         apiKey: opts.apiKey,
@@ -93,6 +94,7 @@ export function registerMilestones(program: Command): void {
         targetDate: opts.targetDate,
         description: opts.description,
         json: !!opts.json,
+        pretty: !!opts.pretty,
       });
     }
   );
@@ -103,10 +105,9 @@ export function registerMilestones(program: Command): void {
     .description('Update an existing milestone by ID')
     .option('--name <name>', 'New milestone name')
     .option('--target-date <YYYY-MM-DD>', 'New target date')
-    .option('--description <text>', 'New description')
-    .option('--json', 'Output as JSON');
+    .option('--description <text>', 'New description');
 
-  addAuthOptions(updateCmd).action(
+  addAuthOptions(addJsonOptions(updateCmd)).action(
     async (
       id: string,
       opts: {
@@ -116,6 +117,7 @@ export function registerMilestones(program: Command): void {
         apiKey?: string;
         token?: string;
         json?: boolean;
+        pretty?: boolean;
       }
     ) => {
       await updateMilestone({
@@ -126,6 +128,7 @@ export function registerMilestones(program: Command): void {
         targetDate: opts.targetDate,
         description: opts.description,
         json: !!opts.json,
+        pretty: !!opts.pretty,
       });
     }
   );
@@ -134,13 +137,12 @@ export function registerMilestones(program: Command): void {
   const deleteCmd = milestones
     .command('delete <id>')
     .description('Delete a milestone by ID')
-    .option('--yes', 'Skip confirmation prompt')
-    .option('--json', 'Output as JSON');
+    .option('--yes', 'Skip confirmation prompt');
 
-  addAuthOptions(deleteCmd).action(
+  addAuthOptions(addJsonOptions(deleteCmd)).action(
     async (
       id: string,
-      opts: { yes?: boolean; apiKey?: string; token?: string; json?: boolean }
+      opts: { yes?: boolean; apiKey?: string; token?: string; json?: boolean; pretty?: boolean }
     ) => {
       await deleteMilestone({
         apiKey: opts.apiKey,
@@ -148,6 +150,7 @@ export function registerMilestones(program: Command): void {
         id,
         yes: !!opts.yes,
         json: !!opts.json,
+        pretty: !!opts.pretty,
       });
     }
   );

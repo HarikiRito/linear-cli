@@ -13,6 +13,7 @@ export interface ListCyclesOptions {
   after?: string;
   all: boolean;
   json: boolean;
+  pretty: boolean;
 }
 
 interface CycleRow {
@@ -80,5 +81,5 @@ export async function listCycles(opts: ListCyclesOptions): Promise<void> {
     limit: opts.limit,
   });
 
-  await runAndRenderPaged(resultAsync, opts.json, 'cycles', CYCLE_COLUMNS, 'cycles');
+  await runAndRenderPaged(resultAsync, opts.json, 'cycles', CYCLE_COLUMNS, 'cycles', opts.pretty);
 }

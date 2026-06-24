@@ -13,6 +13,7 @@ export interface UpdateMilestoneOptions {
   targetDate?: string;
   description?: string;
   json: boolean;
+  pretty: boolean;
 }
 
 async function doUpdate(
@@ -50,7 +51,7 @@ export async function updateMilestone(opts: UpdateMilestoneOptions): Promise<voi
   const result = await ResultAsync.fromPromise(doUpdate(client, opts), coerceCliError);
 
   result.match(
-    (milestone) => renderMilestoneResult(milestone, opts.json),
+    (milestone) => renderMilestoneResult(milestone, opts.json, opts.pretty),
     (e) => exitError(e)
   );
 }

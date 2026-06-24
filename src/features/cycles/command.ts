@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions } from '../../lib/commandOptions.js';
+import { addAuthOptions, addJsonOptions } from '../../lib/commandOptions.js';
 import { listCycles } from './list.js';
 
 export function registerCycles(program: Command): void {
@@ -18,10 +18,9 @@ export function registerCycles(program: Command): void {
     .requiredOption('--team <key-or-id>', 'Team key or ID')
     .option('--limit <n>', 'Number of cycles per page (default: 50)', '50')
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
-    .option('--all', 'Fetch all pages (one request per page)')
-    .option('--json', 'Output as JSON');
+    .option('--all', 'Fetch all pages (one request per page)');
 
-  addAuthOptions(listCmd).action(
+  addAuthOptions(addJsonOptions(listCmd)).action(
     async (opts: {
       team: string;
       limit: string;
@@ -30,6 +29,7 @@ export function registerCycles(program: Command): void {
       apiKey?: string;
       token?: string;
       json?: boolean;
+      pretty?: boolean;
     }) => {
       await listCycles({
         apiKey: opts.apiKey,
@@ -39,6 +39,7 @@ export function registerCycles(program: Command): void {
         after: opts.after,
         all: !!opts.all,
         json: !!opts.json,
+        pretty: !!opts.pretty,
       });
     }
   );

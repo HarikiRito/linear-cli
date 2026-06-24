@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import { ResultAsync } from 'neverthrow';
 import { getClient } from '../../lib/client/index.js';
+import { addJsonOptions } from '../../lib/commandOptions.js';
 import { mapLinearError } from '../../lib/errors.js';
 import { printJson } from '../../lib/output/json.js';
 import { markdownTable, printMarkdown } from '../../lib/output/markdown.js';
@@ -18,6 +19,7 @@ export interface WhoamiOptions {
   apiKey?: string;
   token?: string;
   json: boolean;
+  pretty: boolean;
 }
 
 export async function runWhoami(opts: WhoamiOptions): Promise<void> {
@@ -39,7 +41,7 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
   result.match(
     (data) => {
       if (opts.json) {
-        printJson(data);
+        printJson(data, opts.pretty);
       } else {
         const headers = ['Field', 'Value'];
         const rows: string[][] = [
@@ -60,17 +62,18 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
 }
 
 export function registerWhoami(program: Command): void {
-  program
+  const cmd = program
     .command('whoami')
     .description('Show the currently authenticated user')
     .option('--api-key <key>', 'Linear API key')
-    .option('--token <token>', 'Linear access token')
-    .option('--json', 'Output as JSON')
-    .action(async (opts) => {
-      await runWhoami({
-        apiKey: opts.apiKey,
-        token: opts.token,
-        json: !!opts.json,
-      });
+    .option('--token <token>', 'Linear access token');
+
+  addJsonOptions(cmd).action(async (opts) => {
+    await runWhoami({
+      apiKey: opts.apiKey,
+      token: opts.token,
+      json: !!opts.json,
+      pretty: !!opts.pretty,
     });
+  });
 }

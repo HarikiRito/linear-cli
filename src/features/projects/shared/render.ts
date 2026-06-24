@@ -35,12 +35,14 @@ const PROJECT_COLUMNS: ColumnConfig<ProjectRow> = {
   ttyToRow: (p) => [p.name, p.state],
 };
 
-export function renderProjects(result: ProjectsResult, json: boolean): void {
+export function renderProjects(result: ProjectsResult, json: boolean, pretty = false): void {
   renderPaged(
     { rows: result.projects, pageInfo: result.pageInfo },
     json,
     'projects',
-    PROJECT_COLUMNS
+    PROJECT_COLUMNS,
+    undefined,
+    pretty
   );
 }
 
@@ -52,9 +54,9 @@ export interface ProjectResult {
   url: string;
 }
 
-export function renderProjectResult(p: ProjectResult, json: boolean): void {
+export function renderProjectResult(p: ProjectResult, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ project: p });
+    printJson({ project: p }, pretty);
     return;
   }
   const rows: [string, string][] = [
@@ -72,12 +74,15 @@ export function renderProjectResult(p: ProjectResult, json: boolean): void {
 
 export async function runAndRender(
   resultAsync: ResultAsync<ProjectsResult, ReturnType<typeof mapLinearError>>,
-  json: boolean
+  json: boolean,
+  pretty = false
 ): Promise<void> {
   await runAndRenderPaged(
     resultAsync.map((r) => ({ rows: r.projects, pageInfo: r.pageInfo })),
     json,
     'projects',
-    PROJECT_COLUMNS
+    PROJECT_COLUMNS,
+    undefined,
+    pretty
   );
 }

@@ -12,6 +12,7 @@ export interface ListDocumentsOptions {
   after?: string;
   all: boolean;
   json: boolean;
+  pretty: boolean;
 }
 
 interface DocumentRow {
@@ -78,5 +79,5 @@ export async function listDocuments(opts: ListDocumentsOptions): Promise<void> {
     { all: opts.all, after: opts.after, limit: opts.limit }
   );
 
-  await runAndRenderPaged(resultAsync, opts.json, 'documents', DOCUMENT_COLUMNS, 'documents');
+  await runAndRenderPaged(resultAsync, opts.json, 'documents', DOCUMENT_COLUMNS, 'documents', opts.pretty);
 }

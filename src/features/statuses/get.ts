@@ -17,6 +17,7 @@ export interface GetStatusOptions {
   name?: string;
   id?: string;
   json: boolean;
+  pretty: boolean;
 }
 
 type StatusDetail = StatusRow;
@@ -77,14 +78,14 @@ export async function getStatus(opts: GetStatusOptions): Promise<void> {
   });
 
   result.match(
-    (status) => renderStatusDetail(status, opts.json),
+    (status) => renderStatusDetail(status, opts.json, opts.pretty),
     (e) => exitError(e)
   );
 }
 
-function renderStatusDetail(status: StatusDetail, json: boolean): void {
+function renderStatusDetail(status: StatusDetail, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ status });
+    printJson({ status }, pretty);
     return;
   }
 

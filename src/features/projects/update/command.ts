@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions } from '../../../lib/commandOptions.js';
+import { addAuthOptions, addJsonOptions } from '../../../lib/commandOptions.js';
 import { updateProject } from './update.js';
 
 export function registerUpdateCommand(projects: Command): void {
@@ -12,10 +12,9 @@ export function registerUpdateCommand(projects: Command): void {
     .option('--target-date <YYYY-MM-DD>', 'New target date')
     .option('--start-date <YYYY-MM-DD>', 'New start date')
     .option('--state <id>', 'New project status ID')
-    .option('--status <id>', 'New project status ID (alias for --state)')
-    .option('--json', 'Output as JSON');
+    .option('--status <id>', 'New project status ID (alias for --state)');
 
-  addAuthOptions(cmd).action(
+  addAuthOptions(addJsonOptions(cmd)).action(
     async (
       id: string,
       opts: {
@@ -29,6 +28,7 @@ export function registerUpdateCommand(projects: Command): void {
         apiKey?: string;
         token?: string;
         json?: boolean;
+        pretty?: boolean;
       }
     ) => {
       await updateProject({
@@ -42,6 +42,7 @@ export function registerUpdateCommand(projects: Command): void {
         startDate: opts.startDate,
         state: opts.state ?? opts.status,
         json: !!opts.json,
+        pretty: !!opts.pretty,
       });
     }
   );

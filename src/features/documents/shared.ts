@@ -11,9 +11,9 @@ export interface DocumentResult {
   updatedAt: string;
 }
 
-export function renderDocumentResult(doc: DocumentResult, json: boolean): void {
+export function renderDocumentResult(doc: DocumentResult, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ document: doc });
+    printJson({ document: doc }, pretty);
     return;
   }
   const rows: [string, string][] = [

@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions } from '../../lib/commandOptions.js';
+import { addAuthOptions, addJsonOptions } from '../../lib/commandOptions.js';
 import { getStatus } from './get.js';
 import { listStatuses } from './list.js';
 
@@ -20,10 +20,9 @@ export function registerStatuses(program: Command): void {
     .requiredOption('--team <key-or-id>', 'Team key or ID')
     .option('--limit <n>', 'Number of states per page (default: 50)', '50')
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
-    .option('--all', 'Fetch all pages (one request per page)')
-    .option('--json', 'Output as JSON');
+    .option('--all', 'Fetch all pages (one request per page)');
 
-  addAuthOptions(listCmd).action(
+  addAuthOptions(addJsonOptions(listCmd)).action(
     async (opts: {
       team: string;
       limit: string;
@@ -32,6 +31,7 @@ export function registerStatuses(program: Command): void {
       apiKey?: string;
       token?: string;
       json?: boolean;
+      pretty?: boolean;
     }) => {
       await listStatuses({
         apiKey: opts.apiKey,
@@ -41,6 +41,7 @@ export function registerStatuses(program: Command): void {
         after: opts.after,
         all: !!opts.all,
         json: !!opts.json,
+        pretty: !!opts.pretty,
       });
     }
   );
@@ -51,10 +52,9 @@ export function registerStatuses(program: Command): void {
     .description('Get a workflow state by --name or --id within a --team')
     .requiredOption('--team <key-or-id>', 'Team key or ID')
     .option('--name <name>', 'Workflow state name')
-    .option('--id <id>', 'Workflow state UUID')
-    .option('--json', 'Output as JSON');
+    .option('--id <id>', 'Workflow state UUID');
 
-  addAuthOptions(getCmd).action(
+  addAuthOptions(addJsonOptions(getCmd)).action(
     async (opts: {
       team: string;
       name?: string;
@@ -62,6 +62,7 @@ export function registerStatuses(program: Command): void {
       apiKey?: string;
       token?: string;
       json?: boolean;
+      pretty?: boolean;
     }) => {
       await getStatus({
         apiKey: opts.apiKey,
@@ -70,6 +71,7 @@ export function registerStatuses(program: Command): void {
         name: opts.name,
         id: opts.id,
         json: !!opts.json,
+        pretty: !!opts.pretty,
       });
     }
   );

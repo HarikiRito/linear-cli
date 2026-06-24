@@ -13,6 +13,7 @@ export interface ListProjectsOptions {
   after?: string;
   all: boolean;
   json: boolean;
+  pretty: boolean;
 }
 
 // Project.state is a scalar string in the @linear/sdk v22 Project class.
@@ -61,5 +62,5 @@ export async function listProjects(opts: ListProjectsOptions): Promise<void> {
     (e) => mapLinearError(e)
   );
 
-  await runAndRender(resultAsync, opts.json);
+  await runAndRender(resultAsync, opts.json, opts.pretty);
 }

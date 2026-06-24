@@ -12,6 +12,7 @@ export interface GetDocumentOptions {
   token?: string;
   id: string;
   json: boolean;
+  pretty: boolean;
 }
 
 interface DocumentDetail {
@@ -53,14 +54,14 @@ export async function getDocument(opts: GetDocumentOptions): Promise<void> {
   );
 
   result.match(
-    (doc) => renderDocumentDetail(doc, opts.json),
+    (doc) => renderDocumentDetail(doc, opts.json, opts.pretty),
     (e) => exitError(e)
   );
 }
 
-function renderDocumentDetail(doc: DocumentDetail, json: boolean): void {
+function renderDocumentDetail(doc: DocumentDetail, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ document: doc });
+    printJson({ document: doc }, pretty);
     return;
   }
 

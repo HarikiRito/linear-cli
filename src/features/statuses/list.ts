@@ -13,6 +13,7 @@ export interface ListStatusesOptions {
   after?: string;
   all: boolean;
   json: boolean;
+  pretty: boolean;
 }
 
 export interface StatusRow {
@@ -74,5 +75,5 @@ export async function listStatuses(opts: ListStatusesOptions): Promise<void> {
     { all: opts.all, after: opts.after, limit: opts.limit }
   );
 
-  await runAndRenderPaged(resultAsync, opts.json, 'statuses', STATUS_COLUMNS, 'statuses');
+  await runAndRenderPaged(resultAsync, opts.json, 'statuses', STATUS_COLUMNS, 'statuses', opts.pretty);
 }

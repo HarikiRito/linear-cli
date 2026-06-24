@@ -5,6 +5,7 @@ import { exitError } from '../../lib/runner.js';
 export interface SearchDocumentationOptions {
   query: string;
   json: boolean;
+  pretty: boolean;
 }
 
 const NOT_SUPPORTED_MESSAGE =
@@ -14,7 +15,7 @@ const NOT_SUPPORTED_MESSAGE =
 
 export function searchDocumentation(opts: SearchDocumentationOptions): void {
   if (opts.json) {
-    printJson({ error: NOT_SUPPORTED_MESSAGE });
+    printJson({ error: NOT_SUPPORTED_MESSAGE }, opts.pretty);
     process.exitCode = 1;
     return;
   }

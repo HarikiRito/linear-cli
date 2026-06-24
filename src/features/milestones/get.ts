@@ -12,6 +12,7 @@ export interface GetMilestoneOptions {
   token?: string;
   id: string;
   json: boolean;
+  pretty: boolean;
 }
 
 interface MilestoneDetail {
@@ -51,14 +52,14 @@ export async function getMilestone(opts: GetMilestoneOptions): Promise<void> {
   );
 
   result.match(
-    (milestone) => renderMilestoneDetail(milestone, opts.json),
+    (milestone) => renderMilestoneDetail(milestone, opts.json, opts.pretty),
     (e) => exitError(e)
   );
 }
 
-function renderMilestoneDetail(m: MilestoneDetail, json: boolean): void {
+function renderMilestoneDetail(m: MilestoneDetail, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ milestone: m });
+    printJson({ milestone: m }, pretty);
     return;
   }
 

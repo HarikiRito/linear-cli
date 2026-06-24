@@ -11,6 +11,7 @@ export interface DeleteMilestoneOptions {
   id: string;
   yes: boolean;
   json: boolean;
+  pretty: boolean;
 }
 
 export async function deleteMilestone(opts: DeleteMilestoneOptions): Promise<void> {
@@ -38,7 +39,7 @@ export async function deleteMilestone(opts: DeleteMilestoneOptions): Promise<voi
   result.match(
     () => {
       if (opts.json) {
-        printJson({ success: true });
+        printJson({ success: true }, opts.pretty);
       } else {
         console.log(`Milestone ${opts.id} deleted.`);
       }

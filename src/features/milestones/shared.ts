@@ -10,9 +10,9 @@ export interface MilestoneResult {
   project: { id: string; name: string } | null;
 }
 
-export function renderMilestoneResult(milestone: MilestoneResult, json: boolean): void {
+export function renderMilestoneResult(milestone: MilestoneResult, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ milestone });
+    printJson({ milestone }, pretty);
     return;
   }
   const rows: [string, string][] = [

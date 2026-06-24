@@ -12,6 +12,7 @@ export interface GetIssueOptions {
   token?: string;
   id: string;
   json: boolean;
+  pretty: boolean;
 }
 
 interface AttachmentRow {
@@ -98,14 +99,14 @@ export async function getIssue(opts: GetIssueOptions): Promise<void> {
   );
 
   result.match(
-    (issue) => renderIssueDetail(issue, opts.json),
+    (issue) => renderIssueDetail(issue, opts.json, opts.pretty),
     (e) => exitError(e)
   );
 }
 
-function renderIssueDetail(issue: IssueDetail, json: boolean): void {
+function renderIssueDetail(issue: IssueDetail, json: boolean, pretty = false): void {
   if (json) {
-    printJson({ issue });
+    printJson({ issue }, pretty);
     return;
   }
 

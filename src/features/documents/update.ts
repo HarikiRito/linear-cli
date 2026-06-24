@@ -15,6 +15,7 @@ export interface UpdateDocumentOptions {
   content?: string;
   contentFile?: string;
   json: boolean;
+  pretty: boolean;
 }
 
 async function doUpdate(
@@ -60,7 +61,7 @@ export async function updateDocument(opts: UpdateDocumentOptions): Promise<void>
   const result = await ResultAsync.fromPromise(doUpdate(client, opts, content), coerceCliError);
 
   result.match(
-    (doc) => renderDocumentResult(doc, opts.json),
+    (doc) => renderDocumentResult(doc, opts.json, opts.pretty),
     (e) => exitError(e)
   );
 }

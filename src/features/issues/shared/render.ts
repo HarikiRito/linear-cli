@@ -102,26 +102,29 @@ export function fetchIssues<TData>(
 }
 
 /** Render and output an IssuesResult to stdout. */
-export function renderIssues(result: IssuesResult, json: boolean): void {
+export function renderIssues(result: IssuesResult, json: boolean, pretty = false): void {
   renderPaged(
     { rows: result.issues, pageInfo: result.pageInfo },
     json,
     'issues',
     ISSUE_COLUMNS,
-    'issues'
+    'issues',
+    pretty
   );
 }
 
 /** Unwrap a ResultAsync<IssuesResult>, render on ok, exitError on err. */
 export async function runAndRender(
   resultAsync: ResultAsync<IssuesResult, ReturnType<typeof mapLinearError>>,
-  json: boolean
+  json: boolean,
+  pretty = false
 ): Promise<void> {
   await runAndRenderPaged(
     resultAsync.map((r) => ({ rows: r.issues, pageInfo: r.pageInfo })),
     json,
     'issues',
     ISSUE_COLUMNS,
-    'issues'
+    'issues',
+    pretty
   );
 }

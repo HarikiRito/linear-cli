@@ -13,6 +13,7 @@ export interface ListOptions {
   after?: string;
   all: boolean;
   json: boolean;
+  pretty: boolean;
   states: string[];
   allStates: boolean;
 }
@@ -42,6 +43,7 @@ export async function listIssues(opts: ListOptions): Promise<void> {
       after: opts.after,
       limit: opts.limit,
     }),
-    opts.json
+    opts.json,
+    opts.pretty
   );
 }
