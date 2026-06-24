@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/features/auth/session.js', () => ({
   readSession: vi.fn().mockReturnValue(null),
+  readProjectSession: vi.fn().mockReturnValue(null),
   writeSession: vi.fn().mockReturnValue({ isErr: () => false }),
   deleteSession: vi.fn().mockReturnValue({ isErr: () => false }),
   isApiKeySession: (s: unknown) => typeof s === 'object' && s !== null && 'apiKey' in s,
@@ -22,10 +23,11 @@ vi.mock('../src/features/auth/oauth.js', () => ({
 }));
 
 import { resolveCredential } from '../src/features/auth/resolve.js';
-import { readSession } from '../src/features/auth/session.js';
+import { readProjectSession, readSession } from '../src/features/auth/session.js';
 import { UnauthenticatedError } from '../src/lib/errors.js';
 
 const mockReadSession = vi.mocked(readSession);
+const mockReadProjectSession = vi.mocked(readProjectSession);
 
 describe('Credential resolution order', () => {
   const savedEnv: Record<string, string | undefined> = {};
@@ -37,6 +39,7 @@ describe('Credential resolution order', () => {
     delete process.env.LINEAR_ACCESS_TOKEN;
     // Ensure clean state per test — no session by default
     mockReadSession.mockReturnValue(null);
+    mockReadProjectSession.mockReturnValue(null);
   });
 
   afterEach(() => {
