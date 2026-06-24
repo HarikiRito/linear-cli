@@ -1,9 +1,10 @@
 import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
 import { getClient } from '../../../lib/client/index.js';
-import { ValidationError, coerceCliError } from '../../../lib/errors.js';
+import { coerceCliError, ValidationError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
+import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 import {
   looksLikeId,
   resolveAssignee,
@@ -14,7 +15,6 @@ import {
   resolveTeam,
   resolveWorkflowState,
 } from '../shared/resolve.js';
-import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 
 export interface UpdateIssueOptions {
   apiKey?: string;
@@ -84,9 +84,7 @@ async function resolveAndUpdate(
       opts.milestone !== undefined
         ? resolveMilestone(opts.milestone, resolvedProjectId as string, client)
         : Promise.resolve(null),
-      opts.assignee !== undefined
-        ? resolveAssignee(opts.assignee, client)
-        : Promise.resolve(null),
+      opts.assignee !== undefined ? resolveAssignee(opts.assignee, client) : Promise.resolve(null),
       opts.labels !== undefined && opts.labels.length > 0
         ? resolveLabels(opts.labels, client)
         : Promise.resolve(null),
@@ -119,7 +117,7 @@ async function resolveAndUpdate(
     input.cycleId = cycleResult.value;
   }
 
-  const payload = await client.updateIssue(opts.id, input as Parameters<typeof client.updateIssue>[1]);
+  const payload = await client.updateIssue(opts.id, input);
   const issue = await payload.issue;
   if (!issue) throw new Error('updateIssue returned no issue');
 

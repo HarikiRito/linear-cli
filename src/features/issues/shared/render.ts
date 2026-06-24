@@ -1,19 +1,19 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { ResultAsync } from 'neverthrow';
-import { mapLinearError } from '../../../lib/errors.js';
+import type { ResultAsync } from 'neverthrow';
+import type { mapLinearError } from '../../../lib/errors.js';
 import {
   type ColumnConfig,
-  type PageInfo,
-  type PagedResult,
-  type PaginationOptions,
-  type RequestFn,
   fetchOnePage,
   fetchPaged,
+  type PagedResult,
+  type PageInfo,
+  type PaginationOptions,
+  type RequestFn,
   renderPaged,
   runAndRenderPaged,
 } from '../../../lib/pagination.js';
 
-export type { RequestFn, PaginationOptions, PageInfo };
+export type { PageInfo, PaginationOptions, RequestFn };
 
 export interface IssueNode {
   identifier: string;
@@ -70,9 +70,13 @@ export function fetchPage<TData>(
   variables: Record<string, unknown>,
   rootKey: string
 ): ResultAsync<IssuesResult, ReturnType<typeof mapLinearError>> {
-  return fetchOnePage<TData, IssueNode, IssueRow>(requestFn, doc, variables, rootKey, toIssueRows).map(
-    toIssuesResult
-  );
+  return fetchOnePage<TData, IssueNode, IssueRow>(
+    requestFn,
+    doc,
+    variables,
+    rootKey,
+    toIssueRows
+  ).map(toIssuesResult);
 }
 
 /**

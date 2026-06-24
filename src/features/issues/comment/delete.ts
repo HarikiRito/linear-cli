@@ -1,7 +1,7 @@
 import { ResultAsync } from 'neverthrow';
 import { getClient } from '../../../lib/client/index.js';
-import { mapLinearError } from '../../../lib/errors.js';
 import { confirmDestructive } from '../../../lib/confirm.js';
+import { mapLinearError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 
 export interface DeleteCommentOptions {
@@ -12,10 +12,7 @@ export interface DeleteCommentOptions {
 }
 
 export async function deleteComment(opts: DeleteCommentOptions): Promise<void> {
-  const { proceed, error } = await confirmDestructive(
-    `Delete comment ${opts.id}?`,
-    opts.yes
-  );
+  const { proceed, error } = await confirmDestructive(`Delete comment ${opts.id}?`, opts.yes);
   if (error) {
     exitError(error);
     return;
@@ -32,9 +29,8 @@ export async function deleteComment(opts: DeleteCommentOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const result = await ResultAsync.fromPromise(
-    client.deleteComment(opts.id),
-    (e) => mapLinearError(e)
+  const result = await ResultAsync.fromPromise(client.deleteComment(opts.id), (e) =>
+    mapLinearError(e)
   );
 
   result.match(

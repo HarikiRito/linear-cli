@@ -1,10 +1,9 @@
 import type { Team } from '@linear/sdk';
-import { ResultAsync } from 'neverthrow';
-import { mapLinearError } from '../../../lib/errors.js';
+import type { ResultAsync } from 'neverthrow';
+import type { mapLinearError } from '../../../lib/errors.js';
 import {
   type ColumnConfig,
   type PageInfo,
-  type PagedResult,
   renderPaged,
   runAndRenderPaged,
 } from '../../../lib/pagination.js';

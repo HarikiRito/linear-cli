@@ -1,9 +1,10 @@
 import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
 import { getClient } from '../../../lib/client/index.js';
-import { ValidationError, coerceCliError } from '../../../lib/errors.js';
+import { coerceCliError, ValidationError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
+import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 import {
   resolveAssignee,
   resolveCycle,
@@ -13,7 +14,6 @@ import {
   resolveTeam,
   resolveWorkflowState,
 } from '../shared/resolve.js';
-import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 
 export interface CreateIssueOptions {
   apiKey?: string;
@@ -68,18 +68,14 @@ async function resolveAndCreate(
       opts.milestone !== undefined
         ? resolveMilestone(opts.milestone, input.projectId as string, client)
         : Promise.resolve(null),
-      opts.assignee !== undefined
-        ? resolveAssignee(opts.assignee, client)
-        : Promise.resolve(null),
+      opts.assignee !== undefined ? resolveAssignee(opts.assignee, client) : Promise.resolve(null),
       opts.labels !== undefined && opts.labels.length > 0
         ? resolveLabels(opts.labels, client)
         : Promise.resolve(null),
       opts.state !== undefined
         ? resolveWorkflowState(opts.state, teamId, client)
         : Promise.resolve(null),
-      opts.cycle !== undefined
-        ? resolveCycle(opts.cycle, teamId, client)
-        : Promise.resolve(null),
+      opts.cycle !== undefined ? resolveCycle(opts.cycle, teamId, client) : Promise.resolve(null),
     ]);
 
   if (milestoneResult !== null) {

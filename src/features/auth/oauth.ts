@@ -5,9 +5,9 @@ import open from 'open';
 import {
   CALLBACK_PATH,
   CANDIDATE_PORTS,
+  getClientId,
   LINEAR_AUTHORIZE_URL,
   LINEAR_TOKEN_URL,
-  getClientId,
 } from '../../lib/config.js';
 import { AuthError, type CliError, NetworkError } from '../../lib/errors.js';
 import { readSession, writeSession } from './session.js';

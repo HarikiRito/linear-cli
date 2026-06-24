@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
+import { exitError } from '../../lib/runner.js';
 import { runLoginFlow } from './login.js';
 import { runLogout } from './logout.js';
-import { exitError } from '../../lib/runner.js';
 
 export function registerAuthCommands(program: Command): void {
   program

@@ -34,7 +34,10 @@ export function writeSession(session: Session): Result<void, Error> {
   const dir = path.dirname(sessionPath);
   try {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2), { encoding: 'utf-8', mode: 0o600 });
+    fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2), {
+      encoding: 'utf-8',
+      mode: 0o600,
+    });
     return ok(undefined);
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));

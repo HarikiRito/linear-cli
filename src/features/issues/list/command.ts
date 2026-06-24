@@ -13,7 +13,10 @@ export function registerListCommand(issues: Command): void {
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)')
     .option('--json', 'Output as JSON')
-    .option('--state <tokens>', 'Filter by state tokens (comma-separated snake_case, e.g. todo,in_progress,dev_review; default: todo,in_progress,dev_review)')
+    .option(
+      '--state <tokens>',
+      'Filter by state tokens (comma-separated snake_case, e.g. todo,in_progress,dev_review; default: todo,in_progress,dev_review)'
+    )
     .option('--all-states', 'Return issues in ALL states (overrides --state)')
     .action(async (opts) => {
       await listIssues({
@@ -25,7 +28,10 @@ export function registerListCommand(issues: Command): void {
         all: !!opts.all,
         json: !!opts.json,
         states: opts.state
-          ? (opts.state as string).split(',').map((s) => s.trim()).filter(Boolean)
+          ? (opts.state as string)
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
           : [...DEFAULT_ISSUE_STATES],
         allStates: !!opts.allStates,
       });

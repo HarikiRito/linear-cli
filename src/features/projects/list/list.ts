@@ -38,9 +38,8 @@ async function fetchProjectsSDK(
     const conn = await client.projects({ first: opts.limit, after: cursor });
     allNodes = allNodes.concat(conn.nodes);
     lastPageInfo = normalizePageInfo(conn.pageInfo);
-    cursor = conn.pageInfo.hasNextPage && conn.pageInfo.endCursor
-      ? conn.pageInfo.endCursor
-      : undefined;
+    cursor =
+      conn.pageInfo.hasNextPage && conn.pageInfo.endCursor ? conn.pageInfo.endCursor : undefined;
   } while (cursor !== undefined);
 
   return {

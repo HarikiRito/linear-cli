@@ -1,10 +1,10 @@
 import { ResultAsync } from 'neverthrow';
 import { getClient, getRequestFn } from '../../../lib/client/index.js';
-import { NotFoundError, coerceCliError, mapLinearError } from '../../../lib/errors.js';
+import { coerceCliError, mapLinearError, NotFoundError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
-import { buildCommentResult, type CommentResult, renderComment } from './render.js';
 import { COMMENT_ISSUE_ID_QUERY } from './queries.js';
+import { buildCommentResult, type CommentResult, renderComment } from './render.js';
 
 export interface ReplyCommentOptions {
   apiKey?: string;

@@ -12,7 +12,10 @@ export function registerUpdateCommand(issues: Command): void {
     .option('--project <name-or-id>', 'Project name or ID')
     .option('--milestone <name-or-id>', 'Milestone name or ID (requires --project)')
     .option('--assignee <name-or-id>', 'Assignee name or ID')
-    .option('--labels <labels>', 'Comma-separated label names or IDs (replaces all existing labels)')
+    .option(
+      '--labels <labels>',
+      'Comma-separated label names or IDs (replaces all existing labels)'
+    )
     .option('--state <name-or-id>', 'Workflow state name or ID (requires --team)')
     .option('--priority <0-4>', 'Priority: 0=None, 1=Urgent, 2=High, 3=Medium, 4=Low')
     .option('--estimate <number>', 'Story point estimate')

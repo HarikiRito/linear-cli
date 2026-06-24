@@ -24,10 +24,7 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
   const result = await getClient({ apiKey: opts.apiKey, token: opts.token }).andThen((client) =>
     ResultAsync.fromPromise(
       (async (): Promise<WhoamiData> => {
-          const [viewer, organization] = await Promise.all([
-          client.viewer,
-          client.organization,
-        ]);
+        const [viewer, organization] = await Promise.all([client.viewer, client.organization]);
         return {
           id: viewer.id,
           name: viewer.name,

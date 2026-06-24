@@ -4,7 +4,7 @@ import { getClient } from '../../../lib/client/index.js';
 import { mapLinearError } from '../../../lib/errors.js';
 import { normalizePageInfo } from '../../../lib/pagination.js';
 import { exitError } from '../../../lib/runner.js';
-import { type TeamsResult, runAndRender, toTeamRows } from '../shared/render.js';
+import { runAndRender, type TeamsResult, toTeamRows } from '../shared/render.js';
 
 export interface ListTeamsOptions {
   apiKey?: string;
@@ -36,9 +36,8 @@ async function fetchTeamsSDK(
     const conn = await client.teams({ first: opts.limit, after: cursor });
     allNodes = allNodes.concat(conn.nodes);
     lastPageInfo = normalizePageInfo(conn.pageInfo);
-    cursor = conn.pageInfo.hasNextPage && conn.pageInfo.endCursor
-      ? conn.pageInfo.endCursor
-      : undefined;
+    cursor =
+      conn.pageInfo.hasNextPage && conn.pageInfo.endCursor ? conn.pageInfo.endCursor : undefined;
   } while (cursor !== undefined);
 
   return {
