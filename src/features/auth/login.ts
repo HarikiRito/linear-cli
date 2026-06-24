@@ -1,7 +1,9 @@
 import { intro, isCancel, outro, select, spinner, text } from '@clack/prompts';
 import { LinearClient } from '@linear/sdk';
+import { ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
 import { getProjectConfigPath, writeConfig, type LinearConfig } from '../../lib/config-file.js';
+import { toError } from '../../lib/errors.js';
 import { appendAuthToGitignore } from '../../lib/gitignore.js';
 import { startOAuthFlow } from './oauth.js';
 import {
@@ -55,25 +57,30 @@ export async function runLoginFlow(): Promise<void> {
     const s = spinner();
     s.start('Validating API key...');
 
-    try {
-      const keyStr = key.trim();
-      const client = new LinearClient({ apiKey: keyStr });
-      await client.viewer;
+    const keyStr = key.trim();
+    const validateResult = await ResultAsync.fromPromise(
+      (async () => {
+        const client = new LinearClient({ apiKey: keyStr });
+        await client.viewer;
+      })(),
+      toError
+    );
 
-      const result =
-        scope === 'project'
-          ? writeProjectSession(projectDir, { apiKey: keyStr })
-          : writeSession({ apiKey: keyStr });
-      if (result.isErr()) {
-        s.stop(pc.red(`Failed to save credentials: ${result.error.message}`));
-        process.exit(1);
-      }
-
-      s.stop(pc.green('API key validated and saved!'));
-    } catch {
+    if (validateResult.isErr()) {
       s.stop(pc.red('Invalid API key'));
       process.exit(1);
     }
+
+    const result =
+      scope === 'project'
+        ? writeProjectSession(projectDir, { apiKey: keyStr })
+        : writeSession({ apiKey: keyStr });
+    if (result.isErr()) {
+      s.stop(pc.red(`Failed to save credentials: ${result.error.message}`));
+      process.exit(1);
+    }
+
+    s.stop(pc.green('API key validated and saved!'));
   } else if (method === 'oauth') {
     const s = spinner();
     s.start('Starting OAuth2 flow — check your browser...');

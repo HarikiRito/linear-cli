@@ -62,6 +62,10 @@ export class AmbiguousMatchError extends Error {
   }
 }
 
+export function toError(e: unknown): Error {
+  return e instanceof Error ? e : new Error(String(e));
+}
+
 export type CliError =
   | UnauthenticatedError
   | RateLimitError

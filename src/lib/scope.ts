@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Result } from 'neverthrow';
 
 /** Canonical global config dir: ~/.config/.linear */
 export function getGlobalConfigDir(): string {
@@ -19,15 +20,15 @@ export function getProjectLinearDir(projectRoot: string): string {
 export function findProjectRoot(startDir: string): string | null {
   let dir = path.resolve(startDir);
   const { root } = path.parse(dir);
+  const statSync = Result.fromThrowable(
+    (p: string) => fs.statSync(p),
+    () => null
+  );
   while (true) {
     const candidate = path.join(dir, '.linear');
-    try {
-      const stat = fs.statSync(candidate);
-      if (stat.isDirectory()) {
-        return dir;
-      }
-    } catch {
-      // not found or not accessible — continue
+    const statResult = statSync(candidate);
+    if (statResult.isOk() && statResult.value.isDirectory()) {
+      return dir;
     }
     if (dir === root) return null;
     dir = path.dirname(dir);

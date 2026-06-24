@@ -9,7 +9,7 @@ import {
   LINEAR_AUTHORIZE_URL,
   LINEAR_TOKEN_URL,
 } from '../../lib/config.js';
-import { AuthError, type CliError, NetworkError } from '../../lib/errors.js';
+import { AuthError, type CliError, NetworkError, toError } from '../../lib/errors.js';
 import { readSession, writeSession } from './session.js';
 
 export function generateCodeVerifier(): string {
@@ -33,12 +33,9 @@ export async function bindFirstAvailablePort(
   ports: readonly number[]
 ): Promise<[http.Server, number]> {
   for (const port of ports) {
-    try {
-      const server = await tryBindPort(port);
-      return [server, port];
-    } catch {
-      // try next candidate
-    }
+    const result = await ResultAsync.fromPromise(tryBindPort(port), toError);
+    if (result.isOk()) return [result.value, port];
+    // try next candidate
   }
   throw new AuthError(`Could not bind to any candidate port: ${ports.join(', ')}`);
 }

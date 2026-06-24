@@ -1,23 +1,20 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { LinearClient } from '@linear/sdk';
-import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
+import { Result, type ResultAsync } from 'neverthrow';
 import { type ResolveOptions, resolveCredential } from '../../features/auth/resolve.js';
 import { type CliError, mapLinearError } from '../errors.js';
 import type { RequestFn } from '../pagination.js';
 
 export function getClient(opts: ResolveOptions = {}): ResultAsync<LinearClient, CliError> {
-  return resolveCredential(opts).andThen((cred) => {
-    let client: LinearClient;
-    try {
-      client =
+  return resolveCredential(opts).andThen((cred) =>
+    Result.fromThrowable(
+      () =>
         cred.type === 'apiKey'
           ? new LinearClient({ apiKey: cred.value })
-          : new LinearClient({ accessToken: cred.value });
-    } catch (e) {
-      return errAsync(mapLinearError(e));
-    }
-    return okAsync(client);
-  });
+          : new LinearClient({ accessToken: cred.value }),
+      mapLinearError
+    )()
+  );
 }
 
 export function getRequestFn(client: LinearClient): RequestFn {

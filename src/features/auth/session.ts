@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { err, ok, type Result } from 'neverthrow';
+import { ok, Result } from 'neverthrow';
+import { toError } from '../../lib/errors.js';
 import { getGlobalConfigDir, getProjectLinearDir } from '../../lib/scope.js';
 
 export interface ApiKeySession {
@@ -27,34 +28,32 @@ export function getProjectSessionPath(projectRoot: string): string {
 
 function writeSessionToPath(p: string, session: Session): Result<void, Error> {
   const dir = path.dirname(p);
-  try {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    fs.writeFileSync(p, JSON.stringify(session, null, 2), {
-      encoding: 'utf-8',
-      mode: 0o600,
-    });
-    return ok(undefined);
-  } catch (e) {
-    return err(e instanceof Error ? e : new Error(String(e)));
-  }
+  return Result.fromThrowable(
+    () => {
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      fs.writeFileSync(p, JSON.stringify(session, null, 2), {
+        encoding: 'utf-8',
+        mode: 0o600,
+      });
+    },
+    toError
+  )();
 }
 
 function readSessionFromPath(p: string): Session | null {
-  try {
-    const data = fs.readFileSync(p, 'utf-8');
-    return JSON.parse(data) as Session;
-  } catch {
-    return null;
-  }
+  return Result.fromThrowable(
+    () => JSON.parse(fs.readFileSync(p, 'utf-8')) as Session,
+    toError
+  )().unwrapOr(null);
 }
 
 function deleteSessionAtPath(p: string): Result<void, Error> {
-  try {
-    fs.unlinkSync(p);
-    return ok(undefined);
-  } catch {
-    return ok(undefined); // Ignore if file doesn't exist
-  }
+  // Idempotent: ignore all errors (file may not exist)
+  void Result.fromThrowable(
+    () => fs.unlinkSync(p),
+    () => undefined
+  )();
+  return ok(undefined);
 }
 
 // --- public API ---
