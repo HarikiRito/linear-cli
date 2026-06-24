@@ -9,7 +9,10 @@ export default defineConfig({
   },
   clean: true,
   sourcemap: false,
-  minify: false,
+  minify: true,
+  outputOptions: {
+    comments: false,
+  },
   dts: false,
   noExternal: [/.*/],
 })
