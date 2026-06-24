@@ -1,4 +1,4 @@
-import { getClient } from '../../../lib/client/index.js';
+import { getClient, getRequestFn } from '../../../lib/client/index.js';
 import { exitError } from '../../../lib/runner.js';
 import { fetchIssues, runAndRender } from '../shared/render.js';
 import { buildStateFilter } from '../shared/stateFilter.js';
@@ -26,7 +26,7 @@ export async function queryIssues(opts: QueryOptions): Promise<void> {
     return;
   }
   const client = clientResult.value;
-  const requestFn = (client.client as { request: (q: string, v: Record<string, unknown>) => Promise<unknown> }).request.bind(client.client);
+  const requestFn = getRequestFn(client);
 
   await runAndRender(
     fetchIssues(requestFn, SEARCH_ISSUES_QUERY, { term: opts.term, filter }, 'searchIssues', {

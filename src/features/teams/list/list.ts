@@ -1,4 +1,4 @@
-import { getClient } from '../../../lib/client/index.js';
+import { getClient, getRequestFn } from '../../../lib/client/index.js';
 import { exitError } from '../../../lib/runner.js';
 import { fetchTeams, runAndRender } from '../shared/render.js';
 import { LIST_TEAMS_QUERY } from './queries.js';
@@ -19,7 +19,7 @@ export async function listTeams(opts: ListTeamsOptions): Promise<void> {
     return;
   }
   const client = clientResult.value;
-  const requestFn = (client.client as { request: (q: string, v: Record<string, unknown>) => Promise<unknown> }).request.bind(client.client);
+  const requestFn = getRequestFn(client);
 
   await runAndRender(
     fetchTeams(requestFn, LIST_TEAMS_QUERY, {

@@ -2,6 +2,7 @@ import { LinearClient } from '@linear/sdk';
 import { ResultAsync, errAsync } from 'neverthrow';
 import { type ResolveOptions, resolveCredential } from '../../features/auth/resolve.js';
 import { type CliError, mapLinearError } from '../errors.js';
+import type { RequestFn } from '../pagination.js';
 
 export function getClient(opts: ResolveOptions = {}): ResultAsync<LinearClient, CliError> {
   return resolveCredential(opts).andThen((cred) => {
@@ -17,4 +18,8 @@ export function getClient(opts: ResolveOptions = {}): ResultAsync<LinearClient, 
     }
     return ResultAsync.fromPromise(Promise.resolve(client), (e) => mapLinearError(e));
   });
+}
+
+export function getRequestFn(client: LinearClient): RequestFn {
+  return (client.client as { request: RequestFn }).request.bind(client.client);
 }

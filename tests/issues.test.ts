@@ -31,6 +31,7 @@ function makeSearchResponse(
 function stdMocks(request: ReturnType<typeof vi.fn>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
+    getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
   }));
   vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
   vi.doMock('../src/lib/output/markdown.js', () => ({
@@ -494,6 +495,7 @@ describe('TTY output selection', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
+      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
     }));
     const printJsonCalls: unknown[] = [];
     vi.doMock('../src/lib/output/json.js', () => ({
@@ -521,6 +523,7 @@ describe('TTY output selection', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
+      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
     }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
     vi.doMock('../src/lib/output/markdown.js', () => ({
@@ -547,6 +550,7 @@ describe('TTY output selection', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
+      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
     }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
     const printMarkdownCalls: unknown[] = [];
@@ -573,6 +577,7 @@ describe('TTY output selection', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
+      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
     }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
     vi.doMock('../src/lib/output/markdown.js', () => ({
@@ -603,6 +608,7 @@ describe('TTY output selection', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
+      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
     }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
     vi.doMock('../src/lib/output/markdown.js', () => ({
@@ -676,6 +682,7 @@ describe('exit codes', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
+      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
     }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
     vi.doMock('../src/lib/output/markdown.js', () => ({
