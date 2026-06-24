@@ -32,7 +32,40 @@ export class AuthError extends Error {
   }
 }
 
-export type CliError = UnauthenticatedError | RateLimitError | NetworkError | AuthError;
+export class ValidationError extends Error {
+  readonly kind = 'ValidationError' as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+export class NotFoundError extends Error {
+  readonly kind = 'NotFoundError' as const;
+  constructor(entityType: string, value: string) {
+    super(`${entityType} '${value}' not found`);
+    this.name = 'NotFoundError';
+  }
+}
+
+export class AmbiguousMatchError extends Error {
+  readonly kind = 'AmbiguousMatchError' as const;
+  constructor(entityType: string, value: string, candidates: Array<{ name: string; id: string }>) {
+    super(
+      `Ambiguous ${entityType} '${value}': matches ${candidates.map((c) => `${c.name} (${c.id})`).join(', ')}`
+    );
+    this.name = 'AmbiguousMatchError';
+  }
+}
+
+export type CliError =
+  | UnauthenticatedError
+  | RateLimitError
+  | NetworkError
+  | AuthError
+  | ValidationError
+  | NotFoundError
+  | AmbiguousMatchError;
 
 export function mapLinearError(err: unknown): CliError {
   if (err instanceof Error) {
