@@ -1,4 +1,5 @@
 import type { Command } from 'commander';
+import { registerBranchCommand } from './branch/command.js';
 import { registerCommentCommand } from './comment/command.js';
 import { registerCreateCommand } from './create/command.js';
 import { registerDeleteCommand } from './delete/command.js';
@@ -27,4 +28,5 @@ export function registerIssues(program: Command): void {
   registerCreateCommand(issues);
   registerUpdateCommand(issues);
   registerDeleteCommand(issues);
+  registerBranchCommand(issues);
 }

@@ -13,6 +13,7 @@ import {
   coerceCliError,
   mapLinearError,
   NotFoundError,
+  ValidationError,
 } from '../../../lib/errors.js';
 import { findProjectRoot } from '../../../lib/scope.js';
 import { PROJECT_MILESTONES_QUERY } from './queries.js';
@@ -181,4 +182,37 @@ export function resolveCycle(
       },
     })
   );
+}
+
+/**
+ * Resolve an issue identifier:
+ * - Bare number (e.g. "123") → look up default team key and return "TEAM-123"
+ * - Full identifier (e.g. "ENG-123") or UUID/node ID → passthrough
+ */
+export function resolveIssueIdentifier(
+  input: string,
+  client: LinearClient
+): ResultAsync<string, CliError> {
+  if (/^\d+$/.test(input)) {
+    const teamId = getDefaultTeamId();
+    if (!teamId) {
+      return errAsync(
+        new ValidationError(
+          'No default team configured. Set a default team with LINEAR_TEAM_ID, or configure team_id in your Linear config.'
+        )
+      );
+    }
+    return ResultAsync.fromPromise(
+      client.team(teamId).then((team) => {
+        if (!team.key) {
+          throw new ValidationError(
+            `Team with id "${teamId}" has no key configured; cannot expand bare issue number "${input}"`
+          );
+        }
+        return `${team.key}-${input}`;
+      }),
+      coerceCliError
+    );
+  }
+  return okAsync(input);
 }

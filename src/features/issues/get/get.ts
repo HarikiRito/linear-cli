@@ -5,6 +5,7 @@ import { printJson } from '../../../lib/output/json.js';
 import { markdownTable, printMarkdown } from '../../../lib/output/markdown.js';
 import { prettyTable, printTable } from '../../../lib/output/table.js';
 import { exitError } from '../../../lib/runner.js';
+import { resolveIssueIdentifier } from '../shared/resolve.js';
 import { GET_ISSUE_QUERY } from './queries.js';
 
 export interface GetIssueOptions {
@@ -47,12 +48,20 @@ export async function getIssue(opts: GetIssueOptions): Promise<void> {
     return;
   }
   const client = clientResult.value;
+
+  const idResult = await resolveIssueIdentifier(opts.id, client);
+  if (idResult.isErr()) {
+    exitError(idResult.error);
+    return;
+  }
+  const resolvedId = idResult.value;
+
   const requestFn = getRequestFn(client);
 
   const result = await ResultAsync.fromPromise(
-    requestFn(GET_ISSUE_QUERY, { id: opts.id }).then((data) => {
+    requestFn(GET_ISSUE_QUERY, { id: resolvedId }).then((data) => {
       const issue = data.issue;
-      if (!issue) throw new NotFoundError('issue', opts.id);
+      if (!issue) throw new NotFoundError('issue', resolvedId);
       return {
         id: issue.id,
         identifier: issue.identifier,

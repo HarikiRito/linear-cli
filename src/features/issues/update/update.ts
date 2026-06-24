@@ -9,6 +9,7 @@ import {
   looksLikeId,
   resolveAssignee,
   resolveCycle,
+  resolveIssueIdentifier,
   resolveLabels,
   resolveMilestone,
   resolveProject,
@@ -42,6 +43,10 @@ async function resolveAndUpdate(
   opts: UpdateIssueOptions,
   description: string | undefined
 ): Promise<IssueResult> {
+  const idResult = await resolveIssueIdentifier(opts.id, client);
+  if (idResult.isErr()) throw idResult.error;
+  const resolvedId = idResult.value;
+
   const input: Record<string, unknown> = {};
 
   if (opts.title !== undefined) input.title = opts.title;
@@ -51,7 +56,6 @@ async function resolveAndUpdate(
   if (opts.parent !== undefined) input.parentId = opts.parent;
   if (opts.dueDate !== undefined) input.dueDate = opts.dueDate;
 
-  // team needed to resolve state/cycle
   let resolvedTeamId: string | undefined;
   if (opts.team !== undefined) {
     const r = await resolveTeam(opts.team, client);
@@ -69,7 +73,6 @@ async function resolveAndUpdate(
     input.projectId = resolvedProjectId;
   }
 
-  // Validate before parallel batch
   if (opts.milestone !== undefined && !resolvedProjectId) {
     throw new ValidationError('--milestone requires --project to be specified');
   }
@@ -118,7 +121,7 @@ async function resolveAndUpdate(
     input.cycleId = cycleResult.value;
   }
 
-  const payload = await client.updateIssue(opts.id, input);
+  const payload = await client.updateIssue(resolvedId, input);
   const issue = await payload.issue;
   if (!issue) throw new Error('updateIssue returned no issue');
 
