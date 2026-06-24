@@ -1,9 +1,8 @@
 import { ResultAsync } from 'neverthrow';
-import { getClient, getRequestFn } from '../../../lib/client/index.js';
+import { getClient } from '../../../lib/client/index.js';
 import { mapLinearError } from '../../../lib/errors.js';
 import { confirmDestructive } from '../../../lib/confirm.js';
 import { exitError } from '../../../lib/runner.js';
-import { COMMENT_DELETE_MUTATION } from './mutations.js';
 
 export interface DeleteCommentOptions {
   apiKey?: string;
@@ -32,10 +31,9 @@ export async function deleteComment(opts: DeleteCommentOptions): Promise<void> {
     return;
   }
   const client = clientResult.value;
-  const requestFn = getRequestFn(client);
 
   const result = await ResultAsync.fromPromise(
-    requestFn(COMMENT_DELETE_MUTATION, { id: opts.id }),
+    client.deleteComment(opts.id),
     (e) => mapLinearError(e)
   );
 

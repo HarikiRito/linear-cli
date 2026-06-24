@@ -1,10 +1,9 @@
 import { ResultAsync } from 'neverthrow';
-import { getClient, getRequestFn } from '../../../lib/client/index.js';
+import { getClient } from '../../../lib/client/index.js';
 import { mapLinearError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
-import { COMMENT_CREATE_MUTATION } from './mutations.js';
-import { type CommentNode, type CommentResult, extractCommentCreate, renderComment } from './render.js';
+import { buildCommentResult, type CommentResult, renderComment } from './render.js';
 
 export interface AddCommentOptions {
   apiKey?: string;
@@ -23,12 +22,9 @@ export async function addComment(opts: AddCommentOptions): Promise<void> {
     return;
   }
   const client = clientResult.value;
-  const requestFn = getRequestFn(client);
 
   const result = await ResultAsync.fromPromise(
-    requestFn(COMMENT_CREATE_MUTATION, { input: { issueId: opts.issueId, body } }).then((data) =>
-      extractCommentCreate(data as { commentCreate: { comment: CommentNode } })
-    ),
+    client.createComment({ issueId: opts.issueId, body }).then(buildCommentResult),
     (e) => mapLinearError(e)
   );
 

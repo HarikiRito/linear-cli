@@ -18,14 +18,6 @@ export interface ListCommentsOptions {
   json: boolean;
 }
 
-interface CommentNode {
-  id: string;
-  body: string;
-  createdAt: string;
-  parentId: string | null;
-  user: { name: string } | null;
-}
-
 interface CommentRow {
   id: string;
   author: string;
@@ -36,16 +28,6 @@ interface CommentRow {
 
 function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 3)}...` : s;
-}
-
-function toRows(nodes: CommentNode[]): CommentRow[] {
-  return nodes.map((n) => ({
-    id: n.id,
-    author: n.user?.name ?? '',
-    body: truncate(n.body, 80),
-    createdAt: n.createdAt,
-    thread: n.parentId ? `reply to ${n.parentId}` : '',
-  }));
 }
 
 const COLUMNS: ColumnConfig<CommentRow> = {
@@ -69,17 +51,17 @@ export async function listComments(opts: ListCommentsOptions): Promise<void> {
         first: opts.limit,
         after: opts.after,
       }).then((data) => {
-        const d = data as {
-          issue: {
-            comments: {
-              nodes: CommentNode[];
-              pageInfo: { hasNextPage: boolean; endCursor: string | null };
-            };
-          };
-        };
+        const nodes = data.issue.comments.nodes;
+        const pageInfo = data.issue.comments.pageInfo;
         return {
-          rows: toRows(d.issue.comments.nodes),
-          pageInfo: d.issue.comments.pageInfo,
+          rows: nodes.map((n) => ({
+            id: n.id,
+            author: n.user?.name ?? '',
+            body: truncate(n.body, 80),
+            createdAt: n.createdAt,
+            thread: n.parentId ? `reply to ${n.parentId}` : '',
+          })),
+          pageInfo: { hasNextPage: pageInfo.hasNextPage, endCursor: pageInfo.endCursor ?? null },
         };
       }),
       (e) => mapLinearError(e)

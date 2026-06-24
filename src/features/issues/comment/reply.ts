@@ -1,20 +1,10 @@
 import { ResultAsync } from 'neverthrow';
 import { getClient, getRequestFn } from '../../../lib/client/index.js';
-import { NotFoundError, mapLinearError } from '../../../lib/errors.js';
+import { NotFoundError, coerceCliError, mapLinearError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
-import { COMMENT_CREATE_MUTATION } from './mutations.js';
-import { type CommentNode, type CommentResult, extractCommentCreate, renderComment } from './render.js';
-
-const FETCH_COMMENT_ISSUE_QUERY = `
-  query FetchCommentIssue($id: String!) {
-    comment(id: $id) {
-      issue {
-        id
-      }
-    }
-  }
-`;
+import { buildCommentResult, type CommentResult, renderComment } from './render.js';
+import { COMMENT_ISSUE_ID_QUERY } from './queries.js';
 
 export interface ReplyCommentOptions {
   apiKey?: string;
@@ -33,16 +23,17 @@ export async function replyComment(opts: ReplyCommentOptions): Promise<void> {
     return;
   }
   const client = clientResult.value;
+
   const requestFn = getRequestFn(client);
 
-  // Fetch the parent comment's issue id — Linear requires issueId alongside parentId
+  // Fetch the parent comment's issueId in a single query — Linear requires issueId alongside parentId.
   const issueIdResult = await ResultAsync.fromPromise(
-    requestFn(FETCH_COMMENT_ISSUE_QUERY, { id: opts.parentId }).then((data) => {
-      const d = data as { comment: { issue: { id: string } } | null };
-      if (!d.comment) throw new NotFoundError('comment', opts.parentId);
-      return d.comment.issue.id;
+    requestFn(COMMENT_ISSUE_ID_QUERY, { id: opts.parentId }).then((data) => {
+      const issueId = data.comment?.issueId;
+      if (!issueId) throw new NotFoundError('comment', opts.parentId);
+      return issueId;
     }),
-    (e) => (e instanceof Error && 'kind' in e ? (e as ReturnType<typeof mapLinearError>) : mapLinearError(e))
+    (e) => coerceCliError(e)
   );
 
   if (issueIdResult.isErr()) {
@@ -52,11 +43,7 @@ export async function replyComment(opts: ReplyCommentOptions): Promise<void> {
   const issueId = issueIdResult.value;
 
   const result = await ResultAsync.fromPromise(
-    requestFn(COMMENT_CREATE_MUTATION, {
-      input: { issueId, parentId: opts.parentId, body },
-    }).then((data) =>
-      extractCommentCreate(data as { commentCreate: { comment: CommentNode } })
-    ),
+    client.createComment({ issueId, parentId: opts.parentId, body }).then(buildCommentResult),
     (e) => mapLinearError(e)
   );
 

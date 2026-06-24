@@ -1,3 +1,4 @@
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { ResultAsync, okAsync } from 'neverthrow';
 import { mapLinearError } from './errors.js';
 import { printJson } from './output/json.js';
@@ -26,8 +27,19 @@ export interface PagedResult<TRow> {
   pageInfo: PageInfo;
 }
 
-/** Callable wrapping client.client.request() */
-export type RequestFn = (query: string, vars: Record<string, unknown>) => Promise<unknown>;
+/**
+ * Typed callable wrapping client.client.request().
+ * Accepts a TypedDocumentNode so TData flows through from the codegen-generated types.
+ */
+export type RequestFn = <TData, TVariables extends Record<string, unknown>>(
+  doc: TypedDocumentNode<TData, TVariables>,
+  vars: TVariables
+) => Promise<TData>;
+
+/** Normalize a raw SDK pageInfo shape to our PageInfo type (coerces undefined endCursor to null). */
+export function normalizePageInfo(raw: { hasNextPage: boolean; endCursor?: string | null }): PageInfo {
+  return { hasNextPage: raw.hasNextPage, endCursor: raw.endCursor ?? null };
+}
 
 export interface PaginationOptions {
   all: boolean;
@@ -60,15 +72,16 @@ export interface ColumnConfig<TRow> {
  * Fetch one page via client.client.request(), extract the connection from
  * `data[rootKey]`, convert nodes with `toRow`, and return a PagedResult.
  */
-export function fetchOnePage<TNode, TRow>(
+export function fetchOnePage<TData, TNode, TRow>(
   requestFn: RequestFn,
-  query: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  doc: TypedDocumentNode<TData, any>,
   variables: Record<string, unknown>,
   rootKey: string,
   toRow: (nodes: TNode[]) => TRow[]
 ): ResultAsync<PagedResult<TRow>, ReturnType<typeof mapLinearError>> {
   return ResultAsync.fromPromise(
-    requestFn(query, variables).then((data) => {
+    requestFn(doc, variables).then((data) => {
       const conn = (data as Record<string, ConnectionData<TNode>>)[rootKey];
       return { rows: toRow(conn.nodes), pageInfo: conn.pageInfo };
     }),
@@ -80,9 +93,10 @@ export function fetchOnePage<TNode, TRow>(
  * Run one or all pages of a paginated GraphQL query.
  * Single GraphQL request per page — no N+1.
  */
-export function fetchPaged<TNode, TRow>(
+export function fetchPaged<TData, TNode, TRow>(
   requestFn: RequestFn,
-  query: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  doc: TypedDocumentNode<TData, any>,
   baseVariables: Record<string, unknown>,
   rootKey: string,
   toRow: (nodes: TNode[]) => TRow[],
@@ -91,7 +105,7 @@ export function fetchPaged<TNode, TRow>(
   const variables = { ...baseVariables, first: opts.limit, after: opts.after ?? undefined };
 
   if (!opts.all) {
-    return fetchOnePage(requestFn, query, variables, rootKey, toRow);
+    return fetchOnePage(requestFn, doc, variables, rootKey, toRow);
   }
 
   // Accumulate pages by chaining ResultAsync without throwing, so typed errors
@@ -101,7 +115,7 @@ export function fetchPaged<TNode, TRow>(
     cursor: string | undefined,
     accumulated: TRow[]
   ): ResultAsync<PagedResult<TRow>, ReturnType<typeof mapLinearError>> =>
-    fetchOnePage(requestFn, query, { ...variables, after: cursor }, rootKey, toRow).andThen(
+    fetchOnePage(requestFn, doc, { ...variables, after: cursor }, rootKey, toRow).andThen(
       (page) => {
         const rows = [...accumulated, ...page.rows];
         if (page.pageInfo.hasNextPage && page.pageInfo.endCursor) {

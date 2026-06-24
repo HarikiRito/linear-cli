@@ -1,14 +1,20 @@
-import { ISSUE_FIELDS } from '../shared/fields.js';
+import { graphql } from '../../../gql/gql.js';
 
 /**
  * ME_ISSUES_QUERY accepts a $filter variable so the caller can pass
  * { assignee: { isMe: { eq: true } } } merged with any additional filters
  * (e.g. backlog exclusion) using AND semantics at build time.
  */
-export const ME_ISSUES_QUERY = `
+export const ME_ISSUES_QUERY = graphql(`
   query MeIssues($first: Int, $after: String, $filter: IssueFilter) {
     issues(first: $first, after: $after, filter: $filter) {
-      ${ISSUE_FIELDS}
+      nodes {
+        ...IssueFields
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
     }
   }
-`;
+`);

@@ -1,3 +1,4 @@
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { ResultAsync } from 'neverthrow';
 import { mapLinearError } from '../../../lib/errors.js';
 import {
@@ -62,13 +63,14 @@ const ISSUE_COLUMNS: ColumnConfig<IssueRow> = {
  * Fetch one page via client.client.request(), extract the connection from
  * `data[rootKey]`, and return a flat IssuesResult.
  */
-export function fetchPage(
+export function fetchPage<TData>(
   requestFn: RequestFn,
-  query: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  doc: TypedDocumentNode<TData, any>,
   variables: Record<string, unknown>,
   rootKey: string
 ): ResultAsync<IssuesResult, ReturnType<typeof mapLinearError>> {
-  return fetchOnePage<IssueNode, IssueRow>(requestFn, query, variables, rootKey, toIssueRows).map(
+  return fetchOnePage<TData, IssueNode, IssueRow>(requestFn, doc, variables, rootKey, toIssueRows).map(
     toIssuesResult
   );
 }
@@ -77,16 +79,17 @@ export function fetchPage(
  * Run one or all pages of a paginated issues query.
  * Uses client.client.request() — one GraphQL call per page, no per-issue calls.
  */
-export function fetchIssues(
+export function fetchIssues<TData>(
   requestFn: RequestFn,
-  query: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  doc: TypedDocumentNode<TData, any>,
   baseVariables: Record<string, unknown>,
   rootKey: string,
   opts: PaginationOptions
 ): ResultAsync<IssuesResult, ReturnType<typeof mapLinearError>> {
-  return fetchPaged<IssueNode, IssueRow>(
+  return fetchPaged<TData, IssueNode, IssueRow>(
     requestFn,
-    query,
+    doc,
     baseVariables,
     rootKey,
     toIssueRows,

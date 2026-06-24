@@ -1,9 +1,8 @@
 import { ResultAsync } from 'neverthrow';
-import { getClient, getRequestFn } from '../../../lib/client/index.js';
+import { getClient } from '../../../lib/client/index.js';
 import { mapLinearError } from '../../../lib/errors.js';
 import { confirmDestructive } from '../../../lib/confirm.js';
 import { exitError } from '../../../lib/runner.js';
-import { ISSUE_DELETE_MUTATION } from './mutations.js';
 
 export interface DeleteIssueOptions {
   apiKey?: string;
@@ -29,10 +28,9 @@ export async function deleteIssue(opts: DeleteIssueOptions): Promise<void> {
     return;
   }
   const client = clientResult.value;
-  const requestFn = getRequestFn(client);
 
   const result = await ResultAsync.fromPromise(
-    requestFn(ISSUE_DELETE_MUTATION, { id: opts.id }),
+    client.deleteIssue(opts.id),
     (e) => mapLinearError(e)
   );
 

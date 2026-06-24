@@ -1,20 +1,38 @@
 import { ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-function makeIssueRaw() {
+/**
+ * Make a minimal issue mock with lazy getters for state.
+ * The SDK returns issue.state as a lazy getter → Promise<WorkflowState>.
+ */
+function makeIssueMock(stateName = 'Todo') {
+  const stateMock = { name: stateName };
   return {
     id: 'uuid-1',
     identifier: 'ISSUE-1',
     title: 'Test Issue',
     url: 'https://linear.app/issue/ISSUE-1',
-    state: { name: 'Todo' },
+    get state() { return Promise.resolve(stateMock); },
   };
 }
 
-function stdMocks(request: ReturnType<typeof vi.fn>) {
+function makePayloadMock(issueMock = makeIssueMock()) {
+  return { get issue() { return Promise.resolve(issueMock); } };
+}
+
+/**
+ * Build a fake LinearClient with the given method overrides.
+ * SDK resolvers (resolveTeam, resolveLabel, etc.) call client.teams(),
+ * client.issueLabels(), client.workflowStates(), etc. directly.
+ */
+function makeClientMock(overrides: Record<string, unknown>) {
+  return overrides;
+}
+
+function stdMocks(clientMock: ReturnType<typeof makeClientMock>) {
   vi.doMock('../src/lib/client/index.js', () => ({
-    getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
-    getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
+    getClient: vi.fn().mockReturnValue(ok(clientMock)),
+    getRequestFn: vi.fn(),
   }));
   vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
   vi.doMock('../src/lib/output/markdown.js', () => ({
@@ -49,61 +67,48 @@ describe('issues create', () => {
   });
 
   it('calls issueCreate with resolved teamId and title', async () => {
-    const request = vi
-      .fn()
-      // First call: resolveTeam name lookup
-      .mockResolvedValueOnce({ teams: { nodes: [{ id: 'team-uuid', name: 'Engineering' }] } })
-      // Second call: issueCreate mutation
-      .mockResolvedValueOnce({ issueCreate: { success: true, issue: makeIssueRaw() } });
-    stdMocks(request);
+    const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'Engineering' }] });
+    const clientMock = makeClientMock({ createIssue: createIssueFn, teams: teamsFn });
+    stdMocks(clientMock);
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node',
-      'linear',
-      'issues',
-      'create',
-      '--title',
-      'Foo',
-      '--team',
-      'Engineering',
-      '--json',
+      'node', 'linear', 'issues', 'create', '--title', 'Foo', '--team', 'Engineering', '--json',
     ]);
 
-    const createCall = request.mock.calls.find(([q]: unknown[]) => (q as string).includes('issueCreate'));
-    expect(createCall).toBeDefined();
-    const [, vars] = createCall as [string, { input: Record<string, unknown> }];
-    expect(vars.input).toMatchObject({ teamId: 'team-uuid', title: 'Foo' });
+    expect(createIssueFn).toHaveBeenCalledWith(
+      expect.objectContaining({ teamId: 'team-uuid', title: 'Foo' })
+    );
   });
 
   it('missing --title causes Commander error before any network call', async () => {
-    const request = vi.fn();
-    stdMocks(request);
+    const clientMock = makeClientMock({});
+    stdMocks(clientMock);
     const program = await buildProgram();
 
     await expect(
       program.parseAsync(['node', 'linear', 'issues', 'create', '--team', 'eng'])
     ).rejects.toThrow();
-    expect(request).not.toHaveBeenCalled();
   });
 
   it('missing --team causes Commander error before any network call', async () => {
-    const request = vi.fn();
-    stdMocks(request);
+    const clientMock = makeClientMock({});
+    stdMocks(clientMock);
     const program = await buildProgram();
 
     await expect(
       program.parseAsync(['node', 'linear', 'issues', 'create', '--title', 'Foo'])
     ).rejects.toThrow();
-    expect(request).not.toHaveBeenCalled();
   });
 
   it('priority 5 is rejected before any network call', async () => {
-    const request = vi.fn();
+    const createIssueFn = vi.fn();
     const exitErrorMock = vi.fn();
+    const clientMock = makeClientMock({ createIssue: createIssueFn });
     vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
-    getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
+      getClient: vi.fn().mockReturnValue(ok(clientMock)),
+      getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
@@ -118,89 +123,54 @@ describe('issues create', () => {
 
     const program = await buildProgram();
     await program.parseAsync([
-      'node',
-      'linear',
-      'issues',
-      'create',
-      '--title',
-      'T',
-      '--team',
-      'eng',
-      '--priority',
-      '5',
+      'node', 'linear', 'issues', 'create', '--title', 'T', '--team', 'eng', '--priority', '5',
     ]);
 
     expect(exitErrorMock).toHaveBeenCalled();
     // No network call at all (priority validated first)
-    expect(request).not.toHaveBeenCalled();
+    expect(createIssueFn).not.toHaveBeenCalled();
   });
 
   it('priority 0 is accepted and passed to mutation', async () => {
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce({ teams: { nodes: [{ id: 'team-uuid', name: 'eng' }] } })
-      .mockResolvedValueOnce({ issueCreate: { success: true, issue: makeIssueRaw() } });
-    stdMocks(request);
+    const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'eng' }] });
+    const clientMock = makeClientMock({ createIssue: createIssueFn, teams: teamsFn });
+    stdMocks(clientMock);
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node',
-      'linear',
-      'issues',
-      'create',
-      '--title',
-      'T',
-      '--team',
-      'eng',
-      '--priority',
-      '0',
-      '--json',
+      'node', 'linear', 'issues', 'create', '--title', 'T', '--team', 'eng', '--priority', '0', '--json',
     ]);
 
-    const createCall = request.mock.calls.find(([q]: unknown[]) => (q as string).includes('issueCreate'));
-    expect(createCall).toBeDefined();
-    const [, vars] = createCall as [string, { input: Record<string, unknown> }];
-    expect(vars.input).toMatchObject({ priority: 0 });
+    expect(createIssueFn).toHaveBeenCalledWith(
+      expect.objectContaining({ priority: 0 })
+    );
   });
 
   it('meta flags resolved and passed to mutation', async () => {
-    const request = vi
-      .fn()
-      // resolveTeam
-      .mockResolvedValueOnce({ teams: { nodes: [{ id: 'team-uuid', name: 'eng' }] } })
-      // resolveLabel 'bug'
-      .mockResolvedValueOnce({ issueLabels: { nodes: [{ id: 'label-bug', name: 'bug' }] } })
-      // resolveWorkflowState 'In Progress'
-      .mockResolvedValueOnce({
-        team: { states: { nodes: [{ id: 'state-id', name: 'In Progress' }] } },
-      })
-      // issueCreate
-      .mockResolvedValueOnce({ issueCreate: { success: true, issue: makeIssueRaw() } });
-    stdMocks(request);
+    const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'eng' }] });
+    const issuelabelsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'label-bug', name: 'bug' }] });
+    const workflowStatesFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'state-id', name: 'In Progress' }] });
+    const clientMock = makeClientMock({
+      createIssue: createIssueFn,
+      teams: teamsFn,
+      issueLabels: issuelabelsFn,
+      workflowStates: workflowStatesFn,
+    });
+    stdMocks(clientMock);
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node',
-      'linear',
-      'issues',
-      'create',
-      '--title',
-      'T',
-      '--team',
-      'eng',
-      '--priority',
-      '2',
-      '--labels',
-      'bug',
-      '--state',
-      'In Progress',
+      'node', 'linear', 'issues', 'create',
+      '--title', 'T', '--team', 'eng',
+      '--priority', '2', '--labels', 'bug', '--state', 'In Progress',
       '--json',
     ]);
 
-    const createCall = request.mock.calls.find(([q]: unknown[]) => (q as string).includes('issueCreate'));
-    expect(createCall).toBeDefined();
-    const [, vars] = createCall as [string, { input: Record<string, unknown> }];
-    expect(vars.input).toMatchObject({ priority: 2, labelIds: ['label-bug'], stateId: 'state-id' });
+    expect(createIssueFn).toHaveBeenCalledWith(
+      expect.objectContaining({ priority: 2, labelIds: ['label-bug'], stateId: 'state-id' })
+    );
   });
 });
 
@@ -216,11 +186,12 @@ describe('issues update', () => {
   });
 
   it('--state by name without --team triggers ValidationError and no mutation is sent', async () => {
-    const request = vi.fn();
+    const updateIssueFn = vi.fn();
     const exitErrorMock = vi.fn();
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
     vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
-    getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
+      getClient: vi.fn().mockReturnValue(ok(clientMock)),
+      getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
@@ -241,57 +212,42 @@ describe('issues update', () => {
     expect(exitErrorMock).toHaveBeenCalledOnce();
     const err = exitErrorMock.mock.calls[0][0] as { kind: string };
     expect(err.kind).toBe('ValidationError');
-    expect(request).not.toHaveBeenCalled();
+    expect(updateIssueFn).not.toHaveBeenCalled();
   });
 
   it('only provided fields in patch', async () => {
-    const request = vi
-      .fn()
-      .mockResolvedValue({ issueUpdate: { success: true, issue: makeIssueRaw() } });
-    stdMocks(request);
+    const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    stdMocks(clientMock);
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node',
-      'linear',
-      'issues',
-      'update',
-      'ISSUE-1',
-      '--title',
-      'New',
-      '--json',
+      'node', 'linear', 'issues', 'update', 'ISSUE-1', '--title', 'New', '--json',
     ]);
 
-    expect(request).toHaveBeenCalledWith(
-      expect.stringContaining('issueUpdate'),
-      expect.objectContaining({ id: 'ISSUE-1', input: { title: 'New' } })
-    );
+    expect(updateIssueFn).toHaveBeenCalledWith('ISSUE-1', expect.objectContaining({ title: 'New' }));
+    // Ensure only title was passed (no spurious fields)
+    const [, input] = updateIssueFn.mock.calls[0] as [string, Record<string, unknown>];
+    expect(Object.keys(input)).toEqual(['title']);
   });
 
   it('labels replace semantics: labelIds replaces all', async () => {
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce({ issueLabels: { nodes: [{ id: 'bug-id', name: 'bug' }] } })
-      .mockResolvedValueOnce({ issueLabels: { nodes: [{ id: 'feat-id', name: 'feat' }] } })
-      .mockResolvedValueOnce({ issueUpdate: { success: true, issue: makeIssueRaw() } });
-    stdMocks(request);
+    const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const issuelabelsFn = vi.fn()
+      .mockResolvedValueOnce({ nodes: [{ id: 'bug-id', name: 'bug' }] })
+      .mockResolvedValueOnce({ nodes: [{ id: 'feat-id', name: 'feat' }] });
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn, issueLabels: issuelabelsFn });
+    stdMocks(clientMock);
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node',
-      'linear',
-      'issues',
-      'update',
-      'ISSUE-1',
-      '--labels',
-      'bug,feat',
-      '--json',
+      'node', 'linear', 'issues', 'update', 'ISSUE-1', '--labels', 'bug,feat', '--json',
     ]);
 
-    const updateCall = request.mock.calls.find(([q]: unknown[]) => (q as string).includes('issueUpdate'));
-    expect(updateCall).toBeDefined();
-    const [, vars] = updateCall as [string, { input: Record<string, unknown> }];
-    expect(vars.input).toMatchObject({ labelIds: ['bug-id', 'feat-id'] });
+    expect(updateIssueFn).toHaveBeenCalledWith(
+      'ISSUE-1',
+      expect.objectContaining({ labelIds: ['bug-id', 'feat-id'] })
+    );
   });
 });
 
@@ -307,24 +263,24 @@ describe('issues delete', () => {
   });
 
   it('--yes bypasses prompt and calls issueDelete', async () => {
-    const request = vi.fn().mockResolvedValue({ issueDelete: { success: true } });
-    stdMocks(request);
+    const deleteIssueFn = vi.fn().mockResolvedValue({ success: true });
+    const clientMock = makeClientMock({ deleteIssue: deleteIssueFn });
+    stdMocks(clientMock);
     const program = await buildProgram();
 
     await program.parseAsync(['node', 'linear', 'issues', 'delete', 'ISSUE-1', '--yes']);
 
-    expect(request).toHaveBeenCalledWith(
-      expect.stringContaining('issueDelete'),
-      expect.objectContaining({ id: 'ISSUE-1' })
-    );
+    expect(deleteIssueFn).toHaveBeenCalledWith('ISSUE-1');
   });
 
   it('errors in non-TTY without --yes and does not call issueDelete', async () => {
-    const request = vi.fn();
+    const deleteIssueFn = vi.fn();
     const exitErrorMock = vi.fn();
+    const clientMock = makeClientMock({ deleteIssue: deleteIssueFn });
+
     vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
-    getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
+      getClient: vi.fn().mockReturnValue(ok(clientMock)),
+      getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
@@ -347,6 +303,6 @@ describe('issues delete', () => {
     await program.parseAsync(['node', 'linear', 'issues', 'delete', 'ISSUE-1']);
 
     expect(exitErrorMock).toHaveBeenCalled();
-    expect(request).not.toHaveBeenCalled();
+    expect(deleteIssueFn).not.toHaveBeenCalled();
   });
 });

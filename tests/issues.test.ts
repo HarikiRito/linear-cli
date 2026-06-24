@@ -30,8 +30,10 @@ function makeSearchResponse(
 
 function stdMocks(request: ReturnType<typeof vi.fn>) {
   vi.doMock('../src/lib/client/index.js', () => ({
-    getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
-    getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
+    // Issues list/me/query use requestFn + TypedDocumentNode — provide a stub client
+    // and return the request spy from getRequestFn.
+    getClient: vi.fn().mockReturnValue(ok({})),
+    getRequestFn: vi.fn().mockReturnValue(request),
   }));
   vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
   vi.doMock('../src/lib/output/markdown.js', () => ({
@@ -100,7 +102,7 @@ describe('issues list', () => {
 
     await program.parseAsync(['node', 'linear', 'issues', 'list', '--json', '--limit', '10']);
 
-    expect(request).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ first: 10 }));
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ kind: 'Document' }), expect.objectContaining({ first: 10 }));
   });
 
   it('--after passes cursor in variables', async () => {
@@ -111,7 +113,7 @@ describe('issues list', () => {
     await program.parseAsync(['node', 'linear', 'issues', 'list', '--json', '--after', 'cursor123']);
 
     expect(request).toHaveBeenCalledWith(
-      expect.any(String),
+      expect.objectContaining({ kind: 'Document' }),
       expect.objectContaining({ after: 'cursor123' })
     );
   });
@@ -273,7 +275,7 @@ describe('issues me', () => {
 
     await program.parseAsync(['node', 'linear', 'issues', 'me', '--json', '--limit', '7']);
 
-    expect(request).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ first: 7 }));
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ kind: 'Document' }), expect.objectContaining({ first: 7 }));
   });
 
   it('--after passes cursor in variables', async () => {
@@ -284,7 +286,7 @@ describe('issues me', () => {
     await program.parseAsync(['node', 'linear', 'issues', 'me', '--json', '--after', 'meCursor']);
 
     expect(request).toHaveBeenCalledWith(
-      expect.any(String),
+      expect.objectContaining({ kind: 'Document' }),
       expect.objectContaining({ after: 'meCursor' })
     );
   });
@@ -363,7 +365,7 @@ describe('issues query', () => {
     await program.parseAsync(['node', 'linear', 'issues', 'query', 'my search term', '--json']);
 
     expect(request).toHaveBeenCalledWith(
-      expect.any(String),
+      expect.objectContaining({ kind: 'Document' }),
       expect.objectContaining({ term: 'my search term' })
     );
   });
@@ -375,8 +377,11 @@ describe('issues query', () => {
 
     await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--json']);
 
-    const [queryArg] = request.mock.calls[0] as [string, Record<string, unknown>];
-    expect(queryArg).toContain('searchIssues');
+    // requestFn is now called with (TypedDocumentNode, vars) — check the document name
+    const [docArg] = request.mock.calls[0] as [{ kind: string; definitions: Array<{ name?: { value: string } }> }, Record<string, unknown>];
+    expect(docArg.kind).toBe('Document');
+    const opName = docArg.definitions[0]?.name?.value ?? '';
+    expect(opName).toBe('SearchIssues');
   });
 
   it('respects --limit', async () => {
@@ -386,7 +391,7 @@ describe('issues query', () => {
 
     await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--json', '--limit', '20']);
 
-    expect(request).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ first: 20 }));
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ kind: 'Document' }), expect.objectContaining({ first: 20 }));
   });
 
   it('--after passes cursor in variables', async () => {
@@ -397,7 +402,7 @@ describe('issues query', () => {
     await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--json', '--after', 'qCursor']);
 
     expect(request).toHaveBeenCalledWith(
-      expect.any(String),
+      expect.objectContaining({ kind: 'Document' }),
       expect.objectContaining({ after: 'qCursor' })
     );
   });
@@ -494,8 +499,8 @@ describe('TTY output selection', () => {
     const request = vi.fn().mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Bug')]));
 
     vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
-      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
     }));
     const printJsonCalls: unknown[] = [];
     vi.doMock('../src/lib/output/json.js', () => ({
@@ -522,8 +527,8 @@ describe('TTY output selection', () => {
     const request = vi.fn().mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Bug')]));
 
     vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
-      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
     }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
     vi.doMock('../src/lib/output/markdown.js', () => ({
@@ -549,8 +554,8 @@ describe('TTY output selection', () => {
     const request = vi.fn().mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Bug')]));
 
     vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
-      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
     }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
     const printMarkdownCalls: unknown[] = [];
@@ -576,8 +581,8 @@ describe('TTY output selection', () => {
     const request = vi.fn().mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Bug')]));
 
     vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
-      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
     }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
     vi.doMock('../src/lib/output/markdown.js', () => ({
@@ -602,13 +607,15 @@ describe('TTY output selection', () => {
 
   it('teams list: isTTY=true uses prettyTable', async () => {
     Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true, configurable: true });
-    const request = vi.fn().mockResolvedValue({
-      teams: { nodes: [{ id: 't1', name: 'Eng', key: 'ENG' }], pageInfo: { hasNextPage: false, endCursor: null } }
+    // teams/list now uses client.teams() SDK method directly (not requestFn)
+    const teamsFn = vi.fn().mockResolvedValue({
+      nodes: [{ id: 't1', name: 'Eng', key: 'ENG' }],
+      pageInfo: { hasNextPage: false, endCursor: null },
     });
 
     vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
-      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
+      getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
+      getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
     vi.doMock('../src/lib/output/markdown.js', () => ({
@@ -681,8 +688,8 @@ describe('exit codes', () => {
     const request = vi.fn().mockResolvedValue(makeListResponse([]));
 
     vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ client: { request } })),
-      getRequestFn: (c: { client: { request: typeof request } }) => c.client.request,
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
     }));
     vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
     vi.doMock('../src/lib/output/markdown.js', () => ({

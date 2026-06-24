@@ -1,3 +1,4 @@
+import type { CommentPayload } from '@linear/sdk';
 import { printJson } from '../../../lib/output/json.js';
 import { markdownTable, printMarkdown } from '../../../lib/output/markdown.js';
 import { prettyTable, printTable } from '../../../lib/output/table.js';
@@ -10,13 +11,21 @@ export interface CommentResult {
   author: string;
 }
 
-/** Raw comment node shape returned by commentCreate / commentUpdate mutations. */
-export interface CommentNode {
-  id: string;
-  body: string;
-  url: string;
-  createdAt: string;
-  user: { name: string } | null;
+/**
+ * Resolve payload.comment, null-check it, await the user relation, and return a CommentResult.
+ * Throws if the payload returns no comment (SDK contract violation).
+ */
+export async function buildCommentResult(payload: CommentPayload): Promise<CommentResult> {
+  const comment = await payload.comment;
+  if (!comment) throw new Error('comment payload returned no comment');
+  const user = await comment.user;
+  return {
+    id: comment.id,
+    body: comment.body,
+    url: comment.url,
+    createdAt: comment.createdAt.toISOString(),
+    author: user?.name ?? '',
+  };
 }
 
 const COLUMNS = ['ID', 'Body', 'URL', 'CreatedAt', 'Author'];
@@ -30,22 +39,4 @@ export function renderComment(comment: CommentResult, json: boolean): void {
   } else {
     printMarkdown(markdownTable(COLUMNS, [toRowArr(comment)]));
   }
-}
-
-export function extractComment(raw: CommentNode): CommentResult {
-  return {
-    id: raw.id,
-    body: raw.body,
-    url: raw.url,
-    createdAt: raw.createdAt,
-    author: raw.user?.name ?? '',
-  };
-}
-
-export function extractCommentCreate(data: { commentCreate: { comment: CommentNode } }): CommentResult {
-  return extractComment(data.commentCreate.comment);
-}
-
-export function extractCommentUpdate(data: { commentUpdate: { comment: CommentNode } }): CommentResult {
-  return extractComment(data.commentUpdate.comment);
 }

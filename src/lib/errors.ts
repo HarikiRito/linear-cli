@@ -50,9 +50,9 @@ export class NotFoundError extends Error {
 
 export class AmbiguousMatchError extends Error {
   readonly kind = 'AmbiguousMatchError' as const;
-  constructor(entityType: string, value: string, candidates: Array<{ name: string; id: string }>) {
+  constructor(entityType: string, value: string, candidates: Array<{ name?: string | undefined; id: string }>) {
     super(
-      `Ambiguous ${entityType} '${value}': matches ${candidates.map((c) => `${c.name} (${c.id})`).join(', ')}`
+      `Ambiguous ${entityType} '${value}': matches ${candidates.map((c) => `${c.name ?? c.id} (${c.id})`).join(', ')}`
     );
     this.name = 'AmbiguousMatchError';
   }
@@ -66,6 +66,15 @@ export type CliError =
   | ValidationError
   | NotFoundError
   | AmbiguousMatchError;
+
+/**
+ * Coerce an unknown thrown value to CliError.
+ * When code throws a CliError directly (e.g. NotFoundError from a nested helper),
+ * preserve it as-is rather than wrapping it in a generic AuthError via mapLinearError.
+ */
+export function coerceCliError(e: unknown): CliError {
+  return e instanceof Error && 'kind' in e ? (e as CliError) : mapLinearError(e);
+}
 
 export function mapLinearError(err: unknown): CliError {
   if (err instanceof Error) {

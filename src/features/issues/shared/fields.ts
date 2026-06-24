@@ -1,16 +1,14 @@
+import { graphql } from '../../../gql/gql.js';
+
 /**
- * Shared GraphQL field set for issue nodes, used across all issues subcommands.
- * Import ISSUE_FIELDS into a query string with ${ISSUE_FIELDS}.
+ * Named GraphQL fragment for issue nodes, used across all issues subcommands.
+ * Typed via @graphql-codegen/client-preset — run `pnpm run codegen` to regenerate.
  */
-export const ISSUE_FIELDS = `
-  nodes {
+export const IssueFieldsFragment = graphql(`
+  fragment IssueFields on Issue {
     identifier
     title
     state { name }
     assignee { displayName }
   }
-  pageInfo {
-    hasNextPage
-    endCursor
-  }
-`;
+`);

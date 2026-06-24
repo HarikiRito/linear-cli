@@ -10,15 +10,6 @@ export interface IssueResult {
   state: string;
 }
 
-/** Raw issue node shape returned by issueCreate / issueUpdate mutations. */
-export interface IssueNode {
-  id: string;
-  identifier: string;
-  title: string;
-  url: string;
-  state: { name: string };
-}
-
 const COLUMNS = ['ID', 'Identifier', 'Title', 'URL', 'State'];
 const toRowArr = (i: IssueResult): string[] => [i.id, i.identifier, i.title, i.url, i.state];
 
@@ -30,22 +21,4 @@ export function renderIssue(issue: IssueResult, json: boolean): void {
   } else {
     printMarkdown(markdownTable(COLUMNS, [toRowArr(issue)]));
   }
-}
-
-export function extractIssue(raw: IssueNode): IssueResult {
-  return {
-    id: raw.id,
-    identifier: raw.identifier,
-    title: raw.title,
-    url: raw.url,
-    state: raw.state.name,
-  };
-}
-
-export function extractIssueCreate(data: { issueCreate: { issue: IssueNode } }): IssueResult {
-  return extractIssue(data.issueCreate.issue);
-}
-
-export function extractIssueUpdate(data: { issueUpdate: { issue: IssueNode } }): IssueResult {
-  return extractIssue(data.issueUpdate.issue);
 }

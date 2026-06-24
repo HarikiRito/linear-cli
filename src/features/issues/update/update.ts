@@ -1,6 +1,7 @@
+import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
-import { getClient, getRequestFn } from '../../../lib/client/index.js';
-import { ValidationError, mapLinearError } from '../../../lib/errors.js';
+import { getClient } from '../../../lib/client/index.js';
+import { ValidationError, coerceCliError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
 import {
@@ -13,8 +14,7 @@ import {
   resolveTeam,
   resolveWorkflowState,
 } from '../shared/resolve.js';
-import { type IssueNode, type IssueResult, extractIssueUpdate, renderIssue } from '../shared/renderIssue.js';
-import { ISSUE_UPDATE_MUTATION } from './mutations.js';
+import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 
 export interface UpdateIssueOptions {
   apiKey?: string;
@@ -36,6 +36,104 @@ export interface UpdateIssueOptions {
   json: boolean;
 }
 
+async function resolveAndUpdate(
+  client: LinearClient,
+  opts: UpdateIssueOptions,
+  description: string | undefined
+): Promise<IssueResult> {
+  const input: Record<string, unknown> = {};
+
+  if (opts.title !== undefined) input.title = opts.title;
+  if (description !== undefined) input.description = description;
+  if (opts.priority !== undefined) input.priority = opts.priority;
+  if (opts.estimate !== undefined) input.estimate = opts.estimate;
+  if (opts.parent !== undefined) input.parentId = opts.parent;
+  if (opts.dueDate !== undefined) input.dueDate = opts.dueDate;
+
+  // team needed to resolve state/cycle
+  let resolvedTeamId: string | undefined;
+  if (opts.team !== undefined) {
+    const r = await resolveTeam(opts.team, client);
+    if (r.isErr()) throw r.error;
+    resolvedTeamId = r.value;
+    input.teamId = resolvedTeamId;
+  }
+
+  // Resolve project — milestone depends on projectId
+  let resolvedProjectId: string | undefined;
+  if (opts.project !== undefined) {
+    const r = await resolveProject(opts.project, client);
+    if (r.isErr()) throw r.error;
+    resolvedProjectId = r.value;
+    input.projectId = resolvedProjectId;
+  }
+
+  // Validate before parallel batch
+  if (opts.milestone !== undefined && !resolvedProjectId) {
+    throw new ValidationError('--milestone requires --project to be specified');
+  }
+  if (opts.state !== undefined && !looksLikeId(opts.state) && !resolvedTeamId) {
+    throw new ValidationError('--state by name requires --team to be specified for resolution');
+  }
+  if (opts.cycle !== undefined && !looksLikeId(opts.cycle) && !resolvedTeamId) {
+    throw new ValidationError('--cycle by name requires --team to be specified for resolution');
+  }
+
+  const [milestoneResult, assigneeResult, labelsResult, stateResult, cycleResult] =
+    await Promise.all([
+      opts.milestone !== undefined
+        ? resolveMilestone(opts.milestone, resolvedProjectId as string, client)
+        : Promise.resolve(null),
+      opts.assignee !== undefined
+        ? resolveAssignee(opts.assignee, client)
+        : Promise.resolve(null),
+      opts.labels !== undefined && opts.labels.length > 0
+        ? resolveLabels(opts.labels, client)
+        : Promise.resolve(null),
+      opts.state !== undefined
+        ? resolveWorkflowState(opts.state, resolvedTeamId ?? '', client)
+        : Promise.resolve(null),
+      opts.cycle !== undefined
+        ? resolveCycle(opts.cycle, resolvedTeamId ?? '', client)
+        : Promise.resolve(null),
+    ]);
+
+  if (milestoneResult !== null) {
+    if (milestoneResult.isErr()) throw milestoneResult.error;
+    input.projectMilestoneId = milestoneResult.value;
+  }
+  if (assigneeResult !== null) {
+    if (assigneeResult.isErr()) throw assigneeResult.error;
+    input.assigneeId = assigneeResult.value;
+  }
+  if (labelsResult !== null) {
+    if (labelsResult.isErr()) throw labelsResult.error;
+    input.labelIds = labelsResult.value;
+  }
+  if (stateResult !== null) {
+    if (stateResult.isErr()) throw stateResult.error;
+    input.stateId = stateResult.value;
+  }
+  if (cycleResult !== null) {
+    if (cycleResult.isErr()) throw cycleResult.error;
+    input.cycleId = cycleResult.value;
+  }
+
+  const payload = await client.updateIssue(opts.id, input as Parameters<typeof client.updateIssue>[1]);
+  const issue = await payload.issue;
+  if (!issue) throw new Error('updateIssue returned no issue');
+
+  const stateObj = await issue.state;
+
+  return {
+    id: issue.id,
+    identifier: issue.identifier,
+    title: issue.title,
+    url: issue.url,
+    state: stateObj?.name ?? '',
+  };
+}
+
 export async function updateIssue(opts: UpdateIssueOptions): Promise<void> {
   if (opts.priority !== undefined && (opts.priority < 0 || opts.priority > 4)) {
     exitError(new ValidationError(`Priority must be between 0 and 4, got ${opts.priority}`));
@@ -50,102 +148,10 @@ export async function updateIssue(opts: UpdateIssueOptions): Promise<void> {
     return;
   }
   const client = clientResult.value;
-  const requestFn = getRequestFn(client);
-
-  const input: Record<string, unknown> = {};
-
-  if (opts.title !== undefined) input.title = opts.title;
-  if (description !== undefined) input.description = description;
-  if (opts.priority !== undefined) input.priority = opts.priority;
-  if (opts.estimate !== undefined) input.estimate = opts.estimate;
-  if (opts.parent !== undefined) input.parentId = opts.parent;
-  if (opts.dueDate !== undefined) input.dueDate = opts.dueDate;
-
-  // team needed to resolve state/cycle
-  let resolvedTeamId: string | undefined;
-  if (opts.team !== undefined) {
-    const r = await resolveTeam(opts.team, requestFn);
-    if (r.isErr()) {
-      exitError(r.error);
-      return;
-    }
-    resolvedTeamId = r.value;
-    input.teamId = resolvedTeamId;
-  }
-
-  // Resolve project — milestone depends on projectId
-  let resolvedProjectId: string | undefined;
-  if (opts.project !== undefined) {
-    const r = await resolveProject(opts.project, requestFn);
-    if (r.isErr()) {
-      exitError(r.error);
-      return;
-    }
-    resolvedProjectId = r.value;
-    input.projectId = resolvedProjectId;
-  }
-
-  // Validate before parallel batch
-  if (opts.milestone !== undefined && !resolvedProjectId) {
-    exitError(new ValidationError('--milestone requires --project to be specified'));
-    return;
-  }
-  if (opts.state !== undefined && !looksLikeId(opts.state) && !resolvedTeamId) {
-    exitError(new ValidationError('--state by name requires --team to be specified for resolution'));
-    return;
-  }
-  if (opts.cycle !== undefined && !looksLikeId(opts.cycle) && !resolvedTeamId) {
-    exitError(new ValidationError('--cycle by name requires --team to be specified for resolution'));
-    return;
-  }
-
-  // Resolve independent entities concurrently
-  const [milestoneResult, assigneeResult, labelsResult, stateResult, cycleResult] =
-    await Promise.all([
-      opts.milestone !== undefined
-        ? resolveMilestone(opts.milestone, resolvedProjectId as string, requestFn)
-        : Promise.resolve(null),
-      opts.assignee !== undefined
-        ? resolveAssignee(opts.assignee, requestFn)
-        : Promise.resolve(null),
-      opts.labels !== undefined && opts.labels.length > 0
-        ? resolveLabels(opts.labels, requestFn)
-        : Promise.resolve(null),
-      opts.state !== undefined
-        ? resolveWorkflowState(opts.state, resolvedTeamId ?? '', requestFn)
-        : Promise.resolve(null),
-      opts.cycle !== undefined
-        ? resolveCycle(opts.cycle, resolvedTeamId ?? '', requestFn)
-        : Promise.resolve(null),
-    ]);
-
-  // Check results in original order: milestone, assignee, labels, state, cycle
-  if (milestoneResult !== null) {
-    if (milestoneResult.isErr()) { exitError(milestoneResult.error); return; }
-    input.projectMilestoneId = milestoneResult.value;
-  }
-  if (assigneeResult !== null) {
-    if (assigneeResult.isErr()) { exitError(assigneeResult.error); return; }
-    input.assigneeId = assigneeResult.value;
-  }
-  if (labelsResult !== null) {
-    if (labelsResult.isErr()) { exitError(labelsResult.error); return; }
-    input.labelIds = labelsResult.value;
-  }
-  if (stateResult !== null) {
-    if (stateResult.isErr()) { exitError(stateResult.error); return; }
-    input.stateId = stateResult.value;
-  }
-  if (cycleResult !== null) {
-    if (cycleResult.isErr()) { exitError(cycleResult.error); return; }
-    input.cycleId = cycleResult.value;
-  }
 
   const result = await ResultAsync.fromPromise(
-    requestFn(ISSUE_UPDATE_MUTATION, { id: opts.id, input }).then((data) =>
-      extractIssueUpdate(data as { issueUpdate: { issue: IssueNode } })
-    ),
-    (e) => mapLinearError(e)
+    resolveAndUpdate(client, opts, description),
+    coerceCliError
   );
 
   result.match(

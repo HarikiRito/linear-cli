@@ -1,4 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { LinearClient } from '@linear/sdk';
+
+/**
+ * Create a minimal LinearClient mock with only the methods used by resolvers.
+ * Typed via `as unknown as LinearClient` since we only need a subset of methods.
+ */
+function makeClient(overrides: Partial<{
+  teams: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+  projects: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+  project: (id: string) => Promise<{ projectMilestones: () => Promise<{ nodes: { id: string; name: string }[] }> } | null>;
+  users: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+  issueLabels: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+  workflowStates: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+  cycles: (args?: unknown) => Promise<{ nodes: { id: string; name?: string }[] }>;
+}>): LinearClient {
+  return overrides as unknown as LinearClient;
+}
 
 describe('resolveTeam', () => {
   afterEach(() => {
@@ -8,30 +25,32 @@ describe('resolveTeam', () => {
   });
 
   it('node ID (UUID) passes through without name search', async () => {
-    const requestFn = vi.fn();
+    const client = makeClient({ teams: vi.fn() });
     const { resolveTeam } = await import('../src/features/issues/shared/resolve.js');
-    const result = await resolveTeam('12345678-1234-1234-1234-123456789012', requestFn);
+    const result = await resolveTeam('12345678-1234-1234-1234-123456789012', client);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe('12345678-1234-1234-1234-123456789012');
-    expect(requestFn).not.toHaveBeenCalled();
+    expect(client.teams).not.toHaveBeenCalled();
   });
 
   it('name resolves to ID case-insensitively', async () => {
-    const requestFn = vi
-      .fn()
-      .mockResolvedValue({ teams: { nodes: [{ id: 'tid', name: 'Engineering' }] } });
+    const client = makeClient({
+      teams: vi.fn().mockResolvedValue({ nodes: [{ id: 'tid', name: 'Engineering' }] }),
+    });
     const { resolveTeam } = await import('../src/features/issues/shared/resolve.js');
-    const result = await resolveTeam('engineering', requestFn);
+    const result = await resolveTeam('engineering', client);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe('tid');
   });
 
   it('ambiguous name returns AmbiguousMatchError with candidates', async () => {
-    const requestFn = vi.fn().mockResolvedValue({
-      teams: { nodes: [{ id: 't1', name: 'Engineering' }, { id: 't2', name: 'Engineering' }] },
+    const client = makeClient({
+      teams: vi.fn().mockResolvedValue({
+        nodes: [{ id: 't1', name: 'Engineering' }, { id: 't2', name: 'Engineering' }],
+      }),
     });
     const { resolveTeam } = await import('../src/features/issues/shared/resolve.js');
-    const result = await resolveTeam('engineering', requestFn);
+    const result = await resolveTeam('engineering', client);
     expect(result.isErr()).toBe(true);
     const e = result._unsafeUnwrapErr();
     expect(e.name).toBe('AmbiguousMatchError');
@@ -40,9 +59,11 @@ describe('resolveTeam', () => {
   });
 
   it('not found returns NotFoundError with entity type and value', async () => {
-    const requestFn = vi.fn().mockResolvedValue({ teams: { nodes: [] } });
+    const client = makeClient({
+      teams: vi.fn().mockResolvedValue({ nodes: [] }),
+    });
     const { resolveTeam } = await import('../src/features/issues/shared/resolve.js');
-    const result = await resolveTeam('nope', requestFn);
+    const result = await resolveTeam('nope', client);
     expect(result.isErr()).toBe(true);
     const e = result._unsafeUnwrapErr();
     expect(e.name).toBe('NotFoundError');
@@ -58,16 +79,26 @@ describe('resolveMilestone', () => {
     vi.resetModules();
   });
 
-  it('scopes query to projectId', async () => {
-    const requestFn = vi
-      .fn()
-      .mockResolvedValue({ project: { milestones: { nodes: [{ id: 'mid', name: 'M1' }] } } });
+  it('scopes query to projectId via single raw GraphQL query', async () => {
+    const requestFn = vi.fn().mockResolvedValue({
+      project: {
+        projectMilestones: {
+          nodes: [{ id: 'mid', name: 'M1' }],
+        },
+      },
+    });
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getRequestFn: vi.fn().mockReturnValue(requestFn),
+    }));
+    const client = makeClient({}) as unknown as import('@linear/sdk').LinearClient;
     const { resolveMilestone } = await import('../src/features/issues/shared/resolve.js');
-    const result = await resolveMilestone('M1', 'proj-1', requestFn);
+    const result = await resolveMilestone('M1', 'proj-1', client);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe('mid');
-    const [, vars] = requestFn.mock.calls[0] as [string, Record<string, unknown>];
-    expect(vars).toMatchObject({ projectId: 'proj-1' });
+    expect(requestFn).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'Document' }),
+      expect.objectContaining({ id: 'proj-1' })
+    );
   });
 });
 
@@ -79,15 +110,15 @@ describe('resolveWorkflowState', () => {
   });
 
   it('scopes query to teamId', async () => {
-    const requestFn = vi
-      .fn()
-      .mockResolvedValue({ team: { states: { nodes: [{ id: 'sid', name: 'In Progress' }] } } });
+    const workflowStatesFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'sid', name: 'In Progress' }] });
+    const client = makeClient({ workflowStates: workflowStatesFn });
     const { resolveWorkflowState } = await import('../src/features/issues/shared/resolve.js');
-    const result = await resolveWorkflowState('In Progress', 'team-1', requestFn);
+    const result = await resolveWorkflowState('In Progress', 'team-1', client);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe('sid');
-    const [, vars] = requestFn.mock.calls[0] as [string, Record<string, unknown>];
-    expect(vars).toMatchObject({ teamId: 'team-1' });
+    expect(workflowStatesFn).toHaveBeenCalledWith(
+      expect.objectContaining({ filter: expect.objectContaining({ team: { id: { eq: 'team-1' } } }) })
+    );
   });
 });
 
@@ -99,15 +130,15 @@ describe('resolveCycle', () => {
   });
 
   it('scopes query to teamId', async () => {
-    const requestFn = vi
-      .fn()
-      .mockResolvedValue({ team: { cycles: { nodes: [{ id: 'cid', name: 'Sprint 5' }] } } });
+    const cyclesFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'cid', name: 'Sprint 5' }] });
+    const client = makeClient({ cycles: cyclesFn });
     const { resolveCycle } = await import('../src/features/issues/shared/resolve.js');
-    const result = await resolveCycle('Sprint 5', 'team-1', requestFn);
+    const result = await resolveCycle('Sprint 5', 'team-1', client);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe('cid');
-    const [, vars] = requestFn.mock.calls[0] as [string, Record<string, unknown>];
-    expect(vars).toMatchObject({ teamId: 'team-1' });
+    expect(cyclesFn).toHaveBeenCalledWith(
+      expect.objectContaining({ filter: expect.objectContaining({ team: { id: { eq: 'team-1' } } }) })
+    );
   });
 });
 
@@ -119,23 +150,23 @@ describe('resolveLabels', () => {
   });
 
   it('returns array of IDs for multiple labels', async () => {
-    const requestFn = vi
-      .fn()
-      .mockResolvedValueOnce({ issueLabels: { nodes: [{ id: 'label-id-1', name: 'bug' }] } })
-      .mockResolvedValueOnce({ issueLabels: { nodes: [{ id: 'label-id-2', name: 'feat' }] } });
+    const issuelabelsFn = vi.fn()
+      .mockResolvedValueOnce({ nodes: [{ id: 'label-id-1', name: 'bug' }] })
+      .mockResolvedValueOnce({ nodes: [{ id: 'label-id-2', name: 'feat' }] });
+    const client = makeClient({ issueLabels: issuelabelsFn });
     const { resolveLabels } = await import('../src/features/issues/shared/resolve.js');
-    const r = await resolveLabels(['bug', 'feat'], requestFn);
+    const r = await resolveLabels(['bug', 'feat'], client);
     expect(r.isOk()).toBe(true);
     expect(r._unsafeUnwrap()).toEqual(['label-id-1', 'label-id-2']);
   });
 
   it('propagates NotFoundError for unknown label', async () => {
-    const requestFn = vi
-      .fn()
-      .mockResolvedValueOnce({ issueLabels: { nodes: [{ id: 'label-id-1', name: 'bug' }] } })
-      .mockResolvedValueOnce({ issueLabels: { nodes: [] } });
+    const issuelabelsFn = vi.fn()
+      .mockResolvedValueOnce({ nodes: [{ id: 'label-id-1', name: 'bug' }] })
+      .mockResolvedValueOnce({ nodes: [] });
+    const client = makeClient({ issueLabels: issuelabelsFn });
     const { resolveLabels } = await import('../src/features/issues/shared/resolve.js');
-    const r = await resolveLabels(['bug', 'unknown'], requestFn);
+    const r = await resolveLabels(['bug', 'unknown'], client);
     expect(r.isErr()).toBe(true);
     const e = r._unsafeUnwrapErr();
     expect(e.name).toBe('NotFoundError');

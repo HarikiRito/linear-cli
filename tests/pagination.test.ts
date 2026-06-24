@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { RateLimitError } from '../src/lib/errors.js';
+import type { RequestFn } from '../src/lib/pagination.js';
 import { fetchPaged } from '../src/lib/pagination.js';
+
+// Minimal stub document — only needs to satisfy the TypedDocumentNode structural type.
+// The `definitions: []` body is intentionally empty; tests mock requestFn so the doc
+// is never serialised or sent to a server.
+function stubDoc<TData>(): TypedDocumentNode<TData, Record<string, unknown>> {
+  return { kind: 'Document', definitions: [] } as TypedDocumentNode<TData, Record<string, unknown>>;
+}
 
 describe('fetchPaged --all typed error propagation', () => {
   it('propagates RateLimitError unchanged when a page fails mid-all-fetch', async () => {
@@ -8,7 +17,8 @@ describe('fetchPaged --all typed error propagation', () => {
     // (as Linear's GraphQL client throws it). The --all loop must NOT destroy the
     // typed error by wrapping it through a fromPromise catch.
     let callCount = 0;
-    const requestFn = vi.fn(() => {
+    type ItemData = { items: { nodes: { id: string }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } };
+    const requestFn: RequestFn = vi.fn(() => {
       callCount++;
       if (callCount === 1) {
         return Promise.resolve({
@@ -16,15 +26,15 @@ describe('fetchPaged --all typed error propagation', () => {
             nodes: [{ id: 'r1' }],
             pageInfo: { hasNextPage: true, endCursor: 'cur1' },
           },
-        });
+        } as ItemData) as ReturnType<RequestFn>;
       }
       // Linear returns RATELIMITED in the error message
       return Promise.reject(new Error('RATELIMITED: too many requests'));
-    });
+    }) as RequestFn;
 
     const result = await fetchPaged(
       requestFn,
-      'query { items { nodes { id } pageInfo { hasNextPage endCursor } } }',
+      stubDoc<ItemData>(),
       {},
       'items',
       (nodes: { id: string }[]) => nodes.map((n) => ({ id: n.id })),
@@ -44,7 +54,8 @@ describe('fetchPaged --all typed error propagation', () => {
 
   it('accumulates rows across pages and returns correct pageInfo on success', async () => {
     let callCount = 0;
-    const requestFn = vi.fn((_query: string, _vars: Record<string, unknown>) => {
+    type ItemData = { items: { nodes: { id: string }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } };
+    const requestFn: RequestFn = vi.fn((_doc: unknown, _vars: Record<string, unknown>) => {
       callCount++;
       if (callCount === 1) {
         return Promise.resolve({
@@ -52,19 +63,19 @@ describe('fetchPaged --all typed error propagation', () => {
             nodes: [{ id: 'r1' }, { id: 'r2' }],
             pageInfo: { hasNextPage: true, endCursor: 'cur1' },
           },
-        });
+        } as ItemData) as ReturnType<RequestFn>;
       }
       return Promise.resolve({
         items: {
           nodes: [{ id: 'r3' }],
           pageInfo: { hasNextPage: false, endCursor: null },
         },
-      });
-    });
+      } as ItemData) as ReturnType<RequestFn>;
+    }) as RequestFn;
 
     const result = await fetchPaged(
       requestFn,
-      'query',
+      stubDoc<ItemData>(),
       {},
       'items',
       (nodes: { id: string }[]) => nodes.map((n) => ({ id: n.id })),

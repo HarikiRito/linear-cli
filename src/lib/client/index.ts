@@ -1,12 +1,12 @@
 import { LinearClient } from '@linear/sdk';
-import { ResultAsync, errAsync } from 'neverthrow';
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+import { ResultAsync, errAsync, okAsync } from 'neverthrow';
 import { type ResolveOptions, resolveCredential } from '../../features/auth/resolve.js';
 import { type CliError, mapLinearError } from '../errors.js';
 import type { RequestFn } from '../pagination.js';
 
 export function getClient(opts: ResolveOptions = {}): ResultAsync<LinearClient, CliError> {
   return resolveCredential(opts).andThen((cred) => {
-    // Fix #5: wrap synchronous constructor so any thrown error becomes err()
     let client: LinearClient;
     try {
       client =
@@ -16,10 +16,17 @@ export function getClient(opts: ResolveOptions = {}): ResultAsync<LinearClient, 
     } catch (e) {
       return errAsync(mapLinearError(e));
     }
-    return ResultAsync.fromPromise(Promise.resolve(client), (e) => mapLinearError(e));
+    return okAsync(client);
   });
 }
 
 export function getRequestFn(client: LinearClient): RequestFn {
-  return (client.client as { request: RequestFn }).request.bind(client.client);
+  return <TData, TVariables extends Record<string, unknown>>(
+    doc: TypedDocumentNode<TData, TVariables>,
+    vars: TVariables
+  ): Promise<TData> =>
+    client.client.request<TData, TVariables>(
+      doc as unknown as Parameters<typeof client.client.request>[0],
+      vars
+    );
 }
