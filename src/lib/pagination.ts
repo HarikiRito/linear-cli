@@ -146,11 +146,12 @@ export function renderPaged<TRow>(
   json: boolean,
   jsonKey: string,
   columns: ColumnConfig<TRow>,
-  countLabel?: string
+  countLabel?: string,
+  pretty = false
 ): void {
   const { rows, pageInfo } = result;
   if (json) {
-    printJson({ [jsonKey]: rows, pageInfo });
+    printJson({ [jsonKey]: rows, pageInfo }, pretty);
   } else if (process.stdout.isTTY) {
     const headers = columns.ttyHeaders ?? columns.headers;
     const rowMapper = columns.ttyToRow ?? columns.toRow;
@@ -175,11 +176,12 @@ export async function runAndRenderPaged<TRow>(
   json: boolean,
   jsonKey: string,
   columns: ColumnConfig<TRow>,
-  countLabel?: string
+  countLabel?: string,
+  pretty = false
 ): Promise<void> {
   const result = await resultAsync;
   result.match(
-    (data) => renderPaged(data, json, jsonKey, columns, countLabel),
+    (data) => renderPaged(data, json, jsonKey, columns, countLabel, pretty),
     (e) => exitError(e)
   );
 }
