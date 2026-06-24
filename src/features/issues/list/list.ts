@@ -2,6 +2,7 @@ import { getClient, getRequestFn } from '../../../lib/client/index.js';
 import { exitError } from '../../../lib/runner.js';
 import { buildFilter, type IssueFilterInput } from '../shared/filters.js';
 import { fetchIssues, runAndRender } from '../shared/render.js';
+import { getDefaultTeamId } from '../shared/resolve.js';
 import { buildStateFilter, type StateFilter } from '../shared/stateFilter.js';
 import { LIST_ISSUES_QUERY } from './queries.js';
 
@@ -19,7 +20,9 @@ export interface ListOptions {
 }
 
 export async function listIssues(opts: ListOptions): Promise<void> {
-  const teamFilter = opts.team ? { team: { key: { eq: opts.team } } } : undefined;
+  // Resolve team: flag → env/config fallback
+  const effectiveTeam = opts.team ?? getDefaultTeamId() ?? undefined;
+  const teamFilter = effectiveTeam ? { team: { key: { eq: effectiveTeam } } } : undefined;
   const stateFilter: StateFilter | undefined = opts.allStates
     ? undefined
     : buildStateFilter(opts.states);

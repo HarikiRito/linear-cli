@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Fix #7: mock session, login and oauth before importing resolve to ensure hermetic tests.
-// Without this, tests may fall through to readSession() and hit the real ~/.config/linear-cli/auth.json
+// Without this, tests may fall through to readSession() and hit the real ~/.config/.linear/auth.json
 
 vi.mock('../src/features/auth/session.js', () => ({
   readSession: vi.fn().mockReturnValue(null),

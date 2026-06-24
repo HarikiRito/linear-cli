@@ -9,3 +9,4 @@ auth.json
 .biome-cache
 .eslintcache
 /linear
+.linear/auth.json

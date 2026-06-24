@@ -2,12 +2,19 @@ import type { LinearClient } from '@linear/sdk';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { getRequestFn } from '../../../lib/client/index.js';
 import {
+  getGlobalConfigPath,
+  getProjectConfigPath,
+  readConfig,
+  type LinearConfig,
+} from '../../../lib/config-file.js';
+import {
   AmbiguousMatchError,
   type CliError,
   coerceCliError,
   mapLinearError,
   NotFoundError,
 } from '../../../lib/errors.js';
+import { findProjectRoot } from '../../../lib/scope.js';
 import { PROJECT_MILESTONES_QUERY } from './queries.js';
 
 /**
@@ -50,6 +57,39 @@ export function resolveTeam(input: string, client: LinearClient): ResultAsync<st
   return resolveByName(input, 'team', () =>
     client.teams({ filter: { name: { containsIgnoreCase: input } } })
   );
+}
+
+/**
+ * Resolve a config value from precedence chain:
+ * env var → project config → global config → null
+ */
+function resolveConfigValue(envVar: string, key: keyof LinearConfig): string | null {
+  const envVal = process.env[envVar];
+  if (envVal) return envVal;
+  const projectRoot = findProjectRoot(process.cwd());
+  if (projectRoot) {
+    const projectConfig = readConfig(getProjectConfigPath(projectRoot));
+    if (projectConfig[key]) return projectConfig[key]!;
+  }
+  const globalConfig = readConfig(getGlobalConfigPath());
+  if (globalConfig[key]) return globalConfig[key]!;
+  return null;
+}
+
+/**
+ * Resolve team ID from precedence chain (no API lookup):
+ * env LINEAR_TEAM_ID → project config team_id → global config team_id → null
+ */
+export function getDefaultTeamId(): string | null {
+  return resolveConfigValue('LINEAR_TEAM_ID', 'team_id');
+}
+
+/**
+ * Resolve workspace from precedence chain:
+ * env LINEAR_WORKSPACE → project config workspace → global config workspace → null
+ */
+export function getDefaultWorkspace(): string | null {
+  return resolveConfigValue('LINEAR_WORKSPACE', 'workspace');
 }
 
 export function resolveProject(input: string, client: LinearClient): ResultAsync<string, CliError> {
