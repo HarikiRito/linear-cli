@@ -56,8 +56,8 @@ export default tseslint.config(
     },
   },
 
-  // Ignore built artifacts and config files
+  // Ignore built artifacts, config files, and codegen output
   {
-    ignores: ['dist/**', 'node_modules/**', '*.config.js', '*.config.ts', '*.config.mjs', '*.config.mts'],
+    ignores: ['dist/**', 'node_modules/**', '*.config.js', '*.config.ts', '*.config.mjs', '*.config.mts', 'src/gql/**'],
   }
 )

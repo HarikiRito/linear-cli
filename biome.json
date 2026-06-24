@@ -5,7 +5,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!dist/**", "!node_modules/**", "!coverage/**"]
+    "includes": ["**", "!dist/**", "!node_modules/**", "!coverage/**", "!src/gql/**"]
   },
   "formatter": {
     "enabled": true,
