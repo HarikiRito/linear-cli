@@ -10,7 +10,8 @@
   "files": [
     "dist",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "skill/**"
   ],
   "engines": {
     "node": ">=20"
@@ -21,12 +22,13 @@
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "build": "tsdown",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm run build && npm run generate:skill",
     "dev": "tsdown --watch",
     "codegen": "graphql-codegen --config codegen.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "pnpm build && RUN_E2E=1 vitest run tests/e2e",
+    "generate:skill": "tsx scripts/generate-skill.ts",
     "format": "biome format --write src tests",
     "lint": "biome check src tests && eslint src tests",
     "lint:fix": "biome check --write --unsafe src tests && eslint --fix src tests"
@@ -51,6 +53,7 @@
     "eslint": "^10.5.0",
     "graphql": "^16.0.0",
     "tsdown": "^0.22.3",
+    "tsx": "^4.22.4",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.62.0",
     "vitest": "^3.0.0"
