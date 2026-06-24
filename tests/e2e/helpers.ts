@@ -132,15 +132,27 @@ export function makeRegistry(): CleanupRegistry {
 
   afterAll(async () => {
     for (const id of [...commentIds]) {
-      try { await runCLI(['issues', 'comment', 'delete', id, '--yes']); } catch { /* best-effort */ }
+      try {
+        await runCLI(['issues', 'comment', 'delete', id, '--yes']);
+      } catch {
+        /* best-effort */
+      }
     }
     for (const id of [...issueIds]) {
-      try { await runCLI(['issues', 'delete', id, '--yes']); } catch { /* best-effort */ }
+      try {
+        await runCLI(['issues', 'delete', id, '--yes']);
+      } catch {
+        /* best-effort */
+      }
     }
   }, CMD_TIMEOUT * 3);
 
   return {
-    trackIssue(id: string) { issueIds.push(id); },
-    trackComment(id: string) { commentIds.push(id); },
+    trackIssue(id: string) {
+      issueIds.push(id);
+    },
+    trackComment(id: string) {
+      commentIds.push(id);
+    },
   };
 }

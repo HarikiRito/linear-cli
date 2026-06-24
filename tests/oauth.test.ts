@@ -82,7 +82,7 @@ describe('OAuth token refresh (PKCE)', () => {
 
     // Must NOT have an Authorization header (no Basic auth for PKCE)
     const headers = opts.headers as Record<string, string>;
-    expect(headers['Authorization']).toBeUndefined();
+    expect(headers.Authorization).toBeUndefined();
 
     // Body must contain client_id and grant_type=refresh_token
     const body = new URLSearchParams(opts.body as string);
@@ -242,10 +242,13 @@ describe('OAuth startOAuthFlow (PKCE)', () => {
     capturedHandler?.({ url: `/callback?code=test-code&state=${state}` }, mockRes);
 
     // Mock fetch for token exchange
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ access_token: 'a', refresh_token: 'r', expires_in: 3600 }),
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ access_token: 'a', refresh_token: 'r', expires_in: 3600 }),
+      })
+    );
 
     // flowPromise is a ResultAsync — await it (may be ok or err, either is fine here)
     await flowPromise;
@@ -258,8 +261,14 @@ describe('OAuth startOAuthFlow (PKCE)', () => {
     let capturedState = '';
 
     const mockServer = {
-      listen: vi.fn((_port: unknown, cb: () => void) => { cb(); return mockServer; }),
-      close: vi.fn((cb?: () => void) => { cb?.(); return mockServer; }),
+      listen: vi.fn((_port: unknown, cb: () => void) => {
+        cb();
+        return mockServer;
+      }),
+      close: vi.fn((cb?: () => void) => {
+        cb?.();
+        return mockServer;
+      }),
       on: vi.fn((event: string, cb: unknown) => {
         if (event === 'request') capturedHandler = cb as (req: unknown, res: unknown) => void;
         return mockServer;
@@ -308,8 +317,14 @@ describe('OAuth startOAuthFlow (PKCE)', () => {
     let capturedHandler: ((req: unknown, res: unknown) => void) | undefined;
 
     const mockServer = {
-      listen: vi.fn((_port: unknown, cb: () => void) => { cb(); return mockServer; }),
-      close: vi.fn((cb?: () => void) => { cb?.(); return mockServer; }),
+      listen: vi.fn((_port: unknown, cb: () => void) => {
+        cb();
+        return mockServer;
+      }),
+      close: vi.fn((cb?: () => void) => {
+        cb?.();
+        return mockServer;
+      }),
       on: vi.fn((event: string, cb: unknown) => {
         if (event === 'request') capturedHandler = cb as (req: unknown, res: unknown) => void;
         return mockServer;
@@ -378,8 +393,18 @@ describe('OAuth startOAuthFlow (PKCE)', () => {
     const realHttp = require('node:http') as typeof import('node:http');
     await new Promise<void>((resolve, reject) => {
       const req = realHttp.request(
-        { hostname: 'localhost', port, path: `/callback?code=auth-code-123&state=${state}`, method: 'GET' },
-        (res) => { res.on('data', () => { /* consume */ }); res.on('end', resolve); }
+        {
+          hostname: 'localhost',
+          port,
+          path: `/callback?code=auth-code-123&state=${state}`,
+          method: 'GET',
+        },
+        (res) => {
+          res.on('data', () => {
+            /* consume */
+          });
+          res.on('end', resolve);
+        }
       );
       req.on('error', reject);
       req.end();
@@ -492,10 +517,13 @@ describe('OAuth startOAuthFlow — workspace-switching safety', () => {
 
     // Stub fetch BEFORE triggering the callback so the mock is in place when
     // the token-exchange microtask runs.
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ access_token: 'a', refresh_token: 'r', expires_in: 3600 }),
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ access_token: 'a', refresh_token: 'r', expires_in: 3600 }),
+      })
+    );
 
     // Resolve so the flow doesn't hang the test suite
     const state = authorizeUrl.searchParams.get('state') ?? '';
@@ -562,17 +590,22 @@ describe('OAuth startOAuthFlow — workspace-switching safety', () => {
     }));
 
     // Token exchange will fail
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: false,
-      text: () => Promise.resolve('invalid_client'),
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        text: () => Promise.resolve('invalid_client'),
+      })
+    );
 
     const { startOAuthFlow } = await import('../src/features/auth/oauth.js');
     const flowPromise = startOAuthFlow();
     await new Promise((r) => setTimeout(r, 30));
 
     // Send a valid-looking callback (good state) so the code proceeds to token exchange
-    const state = new URL(capturedOpenUrl || 'http://x/?state=fallback').searchParams.get('state') ?? 'fallback';
+    const state =
+      new URL(capturedOpenUrl || 'http://x/?state=fallback').searchParams.get('state') ??
+      'fallback';
     const mockRes = { writeHead: vi.fn(), end: vi.fn() };
     mockServer.getHandler()?.({ url: `/callback?code=some-code&state=${state}` }, mockRes);
 
@@ -607,20 +640,26 @@ describe('OAuth startOAuthFlow — workspace-switching safety', () => {
       },
     }));
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        access_token: 'new-access-token',
-        refresh_token: 'new-refresh-token',
-        expires_in: 3600,
-      }),
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            access_token: 'new-access-token',
+            refresh_token: 'new-refresh-token',
+            expires_in: 3600,
+          }),
+      })
+    );
 
     const { startOAuthFlow } = await import('../src/features/auth/oauth.js');
     const flowPromise = startOAuthFlow();
     await new Promise((r) => setTimeout(r, 30));
 
-    const state = new URL(capturedOpenUrl || 'http://x/?state=fallback').searchParams.get('state') ?? 'fallback';
+    const state =
+      new URL(capturedOpenUrl || 'http://x/?state=fallback').searchParams.get('state') ??
+      'fallback';
     const mockRes = { writeHead: vi.fn(), end: vi.fn() };
     mockServer.getHandler()?.({ url: `/callback?code=valid-code&state=${state}` }, mockRes);
 
@@ -675,9 +714,11 @@ describe('login.ts — API-key path writes session only on success', () => {
 
     const { runLoginFlow } = await import('../src/features/auth/login.js');
 
-    const mockExit = vi.spyOn(process, 'exit').mockImplementation((_code?: number | string | null) => {
-      throw new Error(`process.exit(${String(_code)})`);
-    });
+    const mockExit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((_code?: number | string | null) => {
+        throw new Error(`process.exit(${String(_code)})`);
+      });
 
     await expect(runLoginFlow()).rejects.toThrow('process.exit(1)');
     expect(writeSession).not.toHaveBeenCalled();

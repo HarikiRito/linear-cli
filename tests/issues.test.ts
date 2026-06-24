@@ -67,7 +67,9 @@ describe('issues list', () => {
   });
 
   it('makes exactly ONE request call (no N+1)', async () => {
-    const request = vi.fn().mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Issue 1')]));
+    const request = vi
+      .fn()
+      .mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Issue 1')]));
     stdMocks(request);
     const program = await buildProgram();
 
@@ -77,7 +79,9 @@ describe('issues list', () => {
   });
 
   it('reads state and assignee inline from response (no extra requests)', async () => {
-    const nodes = Array.from({ length: 5 }, (_, i) => makeIssueNode(`ENG-${i + 1}`, `Issue ${i + 1}`));
+    const nodes = Array.from({ length: 5 }, (_, i) =>
+      makeIssueNode(`ENG-${i + 1}`, `Issue ${i + 1}`)
+    );
     const request = vi.fn().mockResolvedValue(makeListResponse(nodes));
     stdMocks(request);
 
@@ -102,7 +106,10 @@ describe('issues list', () => {
 
     await program.parseAsync(['node', 'linear', 'issues', 'list', '--json', '--limit', '10']);
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ kind: 'Document' }), expect.objectContaining({ first: 10 }));
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'Document' }),
+      expect.objectContaining({ first: 10 })
+    );
   });
 
   it('--after passes cursor in variables', async () => {
@@ -110,7 +117,15 @@ describe('issues list', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json', '--after', 'cursor123']);
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'list',
+      '--json',
+      '--after',
+      'cursor123',
+    ]);
 
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'Document' }),
@@ -150,7 +165,10 @@ describe('issues list', () => {
 
   it('--json output includes pageInfo with hasNextPage and endCursor', async () => {
     const request = vi.fn().mockResolvedValue(
-      makeListResponse([makeIssueNode('ENG-1', 'Issue 1')], { hasNextPage: true, endCursor: 'abc123' })
+      makeListResponse([makeIssueNode('ENG-1', 'Issue 1')], {
+        hasNextPage: true,
+        endCursor: 'abc123',
+      })
     );
     stdMocks(request);
 
@@ -199,7 +217,15 @@ describe('issues list', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json', '--state', 'in_progress,dev_review']);
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'list',
+      '--json',
+      '--state',
+      'in_progress,dev_review',
+    ]);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
     const json = JSON.stringify(vars);
@@ -245,7 +271,9 @@ describe('issues me', () => {
   });
 
   it('makes exactly ONE request call (no N+1)', async () => {
-    const request = vi.fn().mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Issue 1')]));
+    const request = vi
+      .fn()
+      .mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Issue 1')]));
     stdMocks(request);
     const program = await buildProgram();
 
@@ -275,7 +303,10 @@ describe('issues me', () => {
 
     await program.parseAsync(['node', 'linear', 'issues', 'me', '--json', '--limit', '7']);
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ kind: 'Document' }), expect.objectContaining({ first: 7 }));
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'Document' }),
+      expect.objectContaining({ first: 7 })
+    );
   });
 
   it('--after passes cursor in variables', async () => {
@@ -293,7 +324,10 @@ describe('issues me', () => {
 
   it('--json output includes pageInfo', async () => {
     const request = vi.fn().mockResolvedValue(
-      makeListResponse([makeIssueNode('ENG-1', 'Issue 1')], { hasNextPage: true, endCursor: 'meNext' })
+      makeListResponse([makeIssueNode('ENG-1', 'Issue 1')], {
+        hasNextPage: true,
+        endCursor: 'meNext',
+      })
     );
     stdMocks(request);
 
@@ -348,7 +382,9 @@ describe('issues query', () => {
   });
 
   it('makes exactly ONE request call per page (no N+1)', async () => {
-    const request = vi.fn().mockResolvedValue(makeSearchResponse([makeIssueNode('ENG-1', 'Issue 1')]));
+    const request = vi
+      .fn()
+      .mockResolvedValue(makeSearchResponse([makeIssueNode('ENG-1', 'Issue 1')]));
     stdMocks(request);
     const program = await buildProgram();
 
@@ -378,7 +414,10 @@ describe('issues query', () => {
     await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--json']);
 
     // requestFn is now called with (TypedDocumentNode, vars) — check the document name
-    const [docArg] = request.mock.calls[0] as [{ kind: string; definitions: Array<{ name?: { value: string } }> }, Record<string, unknown>];
+    const [docArg] = request.mock.calls[0] as [
+      { kind: string; definitions: Array<{ name?: { value: string } }> },
+      Record<string, unknown>,
+    ];
     expect(docArg.kind).toBe('Document');
     const opName = docArg.definitions[0]?.name?.value ?? '';
     expect(opName).toBe('SearchIssues');
@@ -389,9 +428,21 @@ describe('issues query', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--json', '--limit', '20']);
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'query',
+      'bug',
+      '--json',
+      '--limit',
+      '20',
+    ]);
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ kind: 'Document' }), expect.objectContaining({ first: 20 }));
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'Document' }),
+      expect.objectContaining({ first: 20 })
+    );
   });
 
   it('--after passes cursor in variables', async () => {
@@ -399,7 +450,16 @@ describe('issues query', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--json', '--after', 'qCursor']);
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'query',
+      'bug',
+      '--json',
+      '--after',
+      'qCursor',
+    ]);
 
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'Document' }),
@@ -439,7 +499,10 @@ describe('issues query', () => {
 
   it('--json output includes pageInfo', async () => {
     const request = vi.fn().mockResolvedValue(
-      makeSearchResponse([makeIssueNode('ENG-1', 'Bug')], { hasNextPage: true, endCursor: 'qNext' })
+      makeSearchResponse([makeIssueNode('ENG-1', 'Bug')], {
+        hasNextPage: true,
+        endCursor: 'qNext',
+      })
     );
     stdMocks(request);
 
@@ -474,7 +537,15 @@ describe('issues query', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--json', '--all-states']);
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'query',
+      'bug',
+      '--json',
+      '--all-states',
+    ]);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
     const json = JSON.stringify(vars);
@@ -495,7 +566,11 @@ describe('TTY output selection', () => {
   });
 
   it('issues list: --json always outputs JSON regardless of isTTY', async () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+      configurable: true,
+    });
     const request = vi.fn().mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Bug')]));
 
     vi.doMock('../src/lib/client/index.js', () => ({
@@ -523,7 +598,11 @@ describe('TTY output selection', () => {
   });
 
   it('issues list: isTTY=true uses prettyTable (cli-table3)', async () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+      configurable: true,
+    });
     const request = vi.fn().mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Bug')]));
 
     vi.doMock('../src/lib/client/index.js', () => ({
@@ -550,7 +629,11 @@ describe('TTY output selection', () => {
   });
 
   it('issues list: isTTY=false uses markdown', async () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: false, writable: true, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: false,
+      writable: true,
+      configurable: true,
+    });
     const request = vi.fn().mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Bug')]));
 
     vi.doMock('../src/lib/client/index.js', () => ({
@@ -577,7 +660,11 @@ describe('TTY output selection', () => {
   });
 
   it('issues list: isTTY=false emits console.error with count label (non-TTY countLabel path)', async () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: false, writable: true, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: false,
+      writable: true,
+      configurable: true,
+    });
     const request = vi.fn().mockResolvedValue(makeListResponse([makeIssueNode('ENG-1', 'Bug')]));
 
     vi.doMock('../src/lib/client/index.js', () => ({
@@ -606,7 +693,11 @@ describe('TTY output selection', () => {
   });
 
   it('teams list: isTTY=true uses prettyTable', async () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+      configurable: true,
+    });
     // teams/list now uses client.teams() SDK method directly (not requestFn)
     const teamsFn = vi.fn().mockResolvedValue({
       nodes: [{ id: 't1', name: 'Eng', key: 'ENG' }],

@@ -11,8 +11,12 @@ const mockOrg = { id: 'org1', name: 'Acme Corp', urlKey: 'acme' };
  */
 function makeClientMock() {
   return {
-    get viewer() { return Promise.resolve(mockViewer); },
-    get organization() { return Promise.resolve(mockOrg); },
+    get viewer() {
+      return Promise.resolve(mockViewer);
+    },
+    get organization() {
+      return Promise.resolve(mockOrg);
+    },
   };
 }
 
@@ -51,7 +55,11 @@ describe('whoami command', () => {
   });
 
   it('uses prettyTable when stdout is a TTY (default path)', async () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+      configurable: true,
+    });
     const clientMock = makeClientMock();
     stdMocks(clientMock);
 
@@ -69,7 +77,11 @@ describe('whoami command', () => {
   });
 
   it('uses markdownTable when stdout is NOT a TTY', async () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: false, writable: true, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: false,
+      writable: true,
+      configurable: true,
+    });
     const clientMock = makeClientMock();
     stdMocks(clientMock);
 
@@ -87,7 +99,11 @@ describe('whoami command', () => {
   });
 
   it('table output includes workspace row', async () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+      configurable: true,
+    });
     const clientMock = makeClientMock();
     stdMocks(clientMock);
 

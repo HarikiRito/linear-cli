@@ -52,7 +52,9 @@ describe('projects list', () => {
   });
 
   it('makes exactly ONE request call per page (no N+1)', async () => {
-    const projectsFn = vi.fn().mockResolvedValue(makeConn([makeProjectNode('p1', 'Alpha', 'started')]));
+    const projectsFn = vi
+      .fn()
+      .mockResolvedValue(makeConn([makeProjectNode('p1', 'Alpha', 'started')]));
     stdMocks(projectsFn);
     const program = await buildProgram();
 
@@ -62,7 +64,10 @@ describe('projects list', () => {
   });
 
   it('reads id, name, state inline from response', async () => {
-    const nodes = [makeProjectNode('p1', 'Alpha', 'started'), makeProjectNode('p2', 'Beta', 'planned')];
+    const nodes = [
+      makeProjectNode('p1', 'Alpha', 'started'),
+      makeProjectNode('p2', 'Beta', 'planned'),
+    ];
     const projectsFn = vi.fn().mockResolvedValue(makeConn(nodes));
 
     const printJsonCalls: unknown[] = [];
@@ -103,7 +108,15 @@ describe('projects list', () => {
     stdMocks(projectsFn);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'projects', 'list', '--json', '--after', 'projCursor']);
+    await program.parseAsync([
+      'node',
+      'linear',
+      'projects',
+      'list',
+      '--json',
+      '--after',
+      'projCursor',
+    ]);
 
     expect(projectsFn).toHaveBeenCalledWith(expect.objectContaining({ after: 'projCursor' }));
   });
@@ -113,13 +126,17 @@ describe('projects list', () => {
       .fn()
       .mockResolvedValueOnce(
         makeConn(
-          Array.from({ length: 50 }, (_, i) => makeProjectNode(`p${i + 1}`, `Project ${i + 1}`, 'started')),
+          Array.from({ length: 50 }, (_, i) =>
+            makeProjectNode(`p${i + 1}`, `Project ${i + 1}`, 'started')
+          ),
           { hasNextPage: true, endCursor: 'pCur1' }
         )
       )
       .mockResolvedValueOnce(
         makeConn(
-          Array.from({ length: 4 }, (_, i) => makeProjectNode(`p${i + 51}`, `Project ${i + 51}`, 'planned')),
+          Array.from({ length: 4 }, (_, i) =>
+            makeProjectNode(`p${i + 51}`, `Project ${i + 51}`, 'planned')
+          ),
           { hasNextPage: false, endCursor: null }
         )
       );
@@ -147,9 +164,12 @@ describe('projects list', () => {
   });
 
   it('--json output includes pageInfo with hasNextPage and endCursor', async () => {
-    const projectsFn = vi
-      .fn()
-      .mockResolvedValue(makeConn([makeProjectNode('p1', 'Alpha', 'started')], { hasNextPage: true, endCursor: 'pNext' }));
+    const projectsFn = vi.fn().mockResolvedValue(
+      makeConn([makeProjectNode('p1', 'Alpha', 'started')], {
+        hasNextPage: true,
+        endCursor: 'pNext',
+      })
+    );
 
     const printJsonCalls: unknown[] = [];
     vi.doMock('../src/lib/client/index.js', () => ({
@@ -174,7 +194,9 @@ describe('projects list', () => {
   });
 
   it('renders Markdown by default', async () => {
-    const projectsFn = vi.fn().mockResolvedValue(makeConn([makeProjectNode('p1', 'Alpha', 'started')]));
+    const projectsFn = vi
+      .fn()
+      .mockResolvedValue(makeConn([makeProjectNode('p1', 'Alpha', 'started')]));
 
     const printMarkdownCalls: unknown[] = [];
     vi.doMock('../src/lib/client/index.js', () => ({
@@ -220,7 +242,11 @@ describe('projects exit codes', () => {
     const applyIndexCatch = (e: unknown) => {
       if (e instanceof Error && 'code' in e) {
         const code = (e as { code: string }).code;
-        if (code === 'commander.helpDisplayed' || code === 'commander.help' || code === 'commander.version') {
+        if (
+          code === 'commander.helpDisplayed' ||
+          code === 'commander.help' ||
+          code === 'commander.version'
+        ) {
           return;
         }
       }

@@ -8,8 +8,8 @@
  * Gate: RUN_E2E=1
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { RUN_E2E, CMD_TIMEOUT, runCLI, discoverTeam, makeRegistry, uniqueName } from './helpers.js';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { CMD_TIMEOUT, discoverTeam, makeRegistry, RUN_E2E, runCLI, uniqueName } from './helpers.js';
 
 describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
   const reg = makeRegistry();
@@ -27,132 +27,190 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
 
   // ── create ───────────────────────────────────────────────────────────────
 
-  it('issues create --json returns issue with id, identifier, url, title', async () => {
-    expect(teamName, 'team must be discovered').not.toBe('');
-    const r = await runCLI([
-      'issues', 'create',
-      '--title', createTitle,
-      '--team', teamName,
-      '--description', `E2E test created at ${new Date().toISOString()}`,
-      '--priority', '3',
-      '--json',
-    ]);
-    expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-    const data = r.json as { issue?: { id: string; identifier: string; title: string; url: string; state: string } };
-    expect(data?.issue).toBeDefined();
-    expect(typeof data.issue!.id).toBe('string');
-    expect(data.issue!.id).not.toBe('');
-    // identifier matches generic pattern — no team key hardcoded
-    expect(data.issue!.identifier).toMatch(/^[A-Z0-9]+-\d+$/);
-    expect(data.issue!.title).toBe(createTitle);
-    expect(data.issue!.url).toContain('linear.app');
-    expect(typeof data.issue!.state).toBe('string');
+  it(
+    'issues create --json returns issue with id, identifier, url, title',
+    async () => {
+      expect(teamName, 'team must be discovered').not.toBe('');
+      const r = await runCLI([
+        'issues',
+        'create',
+        '--title',
+        createTitle,
+        '--team',
+        teamName,
+        '--description',
+        `E2E test created at ${new Date().toISOString()}`,
+        '--priority',
+        '3',
+        '--json',
+      ]);
+      expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
+      const data = r.json as {
+        issue?: { id: string; identifier: string; title: string; url: string; state: string };
+      };
+      expect(data?.issue).toBeDefined();
+      expect(typeof data.issue?.id).toBe('string');
+      expect(data.issue?.id).not.toBe('');
+      // identifier matches generic pattern — no team key hardcoded
+      expect(data.issue?.identifier).toMatch(/^[A-Z0-9]+-\d+$/);
+      expect(data.issue?.title).toBe(createTitle);
+      expect(data.issue?.url).toContain('linear.app');
+      expect(typeof data.issue?.state).toBe('string');
 
-    issueId = data.issue!.id;
-    issueIdentifier = data.issue!.identifier;
-    reg.trackIssue(issueId);
-  }, CMD_TIMEOUT);
+      issueId = data.issue?.id;
+      issueIdentifier = data.issue?.identifier;
+      reg.trackIssue(issueId);
+    },
+    CMD_TIMEOUT
+  );
 
   // ── update ───────────────────────────────────────────────────────────────
 
-  it('issues update --title --priority --json reflects changes', async () => {
-    expect(issueId, 'depends on create').not.toBe('');
+  it(
+    'issues update --title --priority --json reflects changes',
+    async () => {
+      expect(issueId, 'depends on create').not.toBe('');
 
-    const r = await runCLI([
-      'issues', 'update', issueId,
-      '--title', updatedTitle,
-      '--priority', '2',
-      '--json',
-    ]);
-    expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-    const data = r.json as { issue?: { id: string; title: string } };
-    expect(data?.issue).toBeDefined();
-    expect(data.issue!.id).toBe(issueId);
-    expect(data.issue!.title).toBe(updatedTitle);
-  }, CMD_TIMEOUT);
+      const r = await runCLI([
+        'issues',
+        'update',
+        issueId,
+        '--title',
+        updatedTitle,
+        '--priority',
+        '2',
+        '--json',
+      ]);
+      expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
+      const data = r.json as { issue?: { id: string; title: string } };
+      expect(data?.issue).toBeDefined();
+      expect(data.issue?.id).toBe(issueId);
+      expect(data.issue?.title).toBe(updatedTitle);
+    },
+    CMD_TIMEOUT
+  );
 
-  it('issues update by identifier (e.g. KEY-N, discovered at runtime) also works', async () => {
-    expect(issueIdentifier, 'depends on create').not.toBe('');
+  it(
+    'issues update by identifier (e.g. KEY-N, discovered at runtime) also works',
+    async () => {
+      expect(issueIdentifier, 'depends on create').not.toBe('');
 
-    const newTitle = uniqueName('e2e-by-identifier');
-    const r = await runCLI([
-      'issues', 'update', issueIdentifier,
-      '--title', newTitle,
-      '--json',
-    ]);
-    expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-    const data = r.json as { issue?: { id: string; title: string } };
-    expect(data?.issue?.title).toBe(newTitle);
-  }, CMD_TIMEOUT);
+      const newTitle = uniqueName('e2e-by-identifier');
+      const r = await runCLI(['issues', 'update', issueIdentifier, '--title', newTitle, '--json']);
+      expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
+      const data = r.json as { issue?: { id: string; title: string } };
+      expect(data?.issue?.title).toBe(newTitle);
+    },
+    CMD_TIMEOUT
+  );
 
   // ── negative / agent-first ───────────────────────────────────────────────
 
-  it('issues create without --team exits non-zero with error about required option', async () => {
-    const r = await runCLI(['issues', 'create', '--title', 'no-team-e2e']);
-    expect(r.code).not.toBe(0);
-    expect(r.stderr + r.stdout).toMatch(/team|required|missing/i);
-  }, CMD_TIMEOUT);
+  it(
+    'issues create without --team exits non-zero with error about required option',
+    async () => {
+      const r = await runCLI(['issues', 'create', '--title', 'no-team-e2e']);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr + r.stdout).toMatch(/team|required|missing/i);
+    },
+    CMD_TIMEOUT
+  );
 
-  it('issues create without --title exits non-zero', async () => {
-    expect(teamName).not.toBe('');
-    const r = await runCLI(['issues', 'create', '--team', teamName]);
-    expect(r.code).not.toBe(0);
-    expect(r.stderr + r.stdout).toMatch(/title|required|missing/i);
-  }, CMD_TIMEOUT);
+  it(
+    'issues create without --title exits non-zero',
+    async () => {
+      expect(teamName).not.toBe('');
+      const r = await runCLI(['issues', 'create', '--team', teamName]);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr + r.stdout).toMatch(/title|required|missing/i);
+    },
+    CMD_TIMEOUT
+  );
 
-  it('issues create --priority 9 exits non-zero (out of range)', async () => {
-    expect(teamName).not.toBe('');
-    const r = await runCLI([
-      'issues', 'create',
-      '--title', uniqueName('e2e-bad-priority'),
-      '--team', teamName,
-      '--priority', '9',
-    ]);
-    expect(r.code).not.toBe(0);
-    expect(r.stderr + r.stdout).toMatch(/priority/i);
-  }, CMD_TIMEOUT);
+  it(
+    'issues create --priority 9 exits non-zero (out of range)',
+    async () => {
+      expect(teamName).not.toBe('');
+      const r = await runCLI([
+        'issues',
+        'create',
+        '--title',
+        uniqueName('e2e-bad-priority'),
+        '--team',
+        teamName,
+        '--priority',
+        '9',
+      ]);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr + r.stdout).toMatch(/priority/i);
+    },
+    CMD_TIMEOUT
+  );
 
-  it('issues create --priority -1 exits non-zero (out of range)', async () => {
-    expect(teamName).not.toBe('');
-    const r = await runCLI([
-      'issues', 'create',
-      '--title', uniqueName('e2e-bad-priority-neg'),
-      '--team', teamName,
-      '--priority', '-1',
-    ]);
-    expect(r.code).not.toBe(0);
-    expect(r.stderr + r.stdout).toMatch(/priority/i);
-  }, CMD_TIMEOUT);
+  it(
+    'issues create --priority -1 exits non-zero (out of range)',
+    async () => {
+      expect(teamName).not.toBe('');
+      const r = await runCLI([
+        'issues',
+        'create',
+        '--title',
+        uniqueName('e2e-bad-priority-neg'),
+        '--team',
+        teamName,
+        '--priority',
+        '-1',
+      ]);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr + r.stdout).toMatch(/priority/i);
+    },
+    CMD_TIMEOUT
+  );
 
-  it('issues create --team nonexistent exits non-zero with not-found error', async () => {
-    const r = await runCLI([
-      'issues', 'create',
-      '--title', uniqueName('e2e-bad-team'),
-      '--team', `xyzzy-nonexistent-team-${Date.now()}`,
-    ]);
-    expect(r.code).not.toBe(0);
-    expect(r.stderr + r.stdout).toMatch(/not found|team/i);
-  }, CMD_TIMEOUT);
+  it(
+    'issues create --team nonexistent exits non-zero with not-found error',
+    async () => {
+      const r = await runCLI([
+        'issues',
+        'create',
+        '--title',
+        uniqueName('e2e-bad-team'),
+        '--team',
+        `xyzzy-nonexistent-team-${Date.now()}`,
+      ]);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr + r.stdout).toMatch(/not found|team/i);
+    },
+    CMD_TIMEOUT
+  );
 
-  it('issues delete without --yes in non-TTY exits non-zero; issue still exists after', async () => {
-    expect(issueId, 'depends on create').not.toBe('');
+  it(
+    'issues delete without --yes in non-TTY exits non-zero; issue still exists after',
+    async () => {
+      expect(issueId, 'depends on create').not.toBe('');
 
-    const r = await runCLI(['issues', 'delete', issueId]);
-    expect(r.code).not.toBe(0);
-    expect(r.stderr + r.stdout).toMatch(/--yes|non-interactively/i);
+      const r = await runCLI(['issues', 'delete', issueId]);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr + r.stdout).toMatch(/--yes|non-interactively/i);
 
-    // Issue must still exist — verify by listing its comments (errors if issue deleted)
-    const listR = await runCLI(['issues', 'comment', 'list', issueId, '--json']);
-    expect(listR.code, 'issue should still exist after aborted delete').toBe(0);
-  }, CMD_TIMEOUT);
+      // Issue must still exist — verify by listing its comments (errors if issue deleted)
+      const listR = await runCLI(['issues', 'comment', 'list', issueId, '--json']);
+      expect(listR.code, 'issue should still exist after aborted delete').toBe(0);
+    },
+    CMD_TIMEOUT
+  );
 
   // ── delete ───────────────────────────────────────────────────────────────
 
-  it('issues delete --yes exits 0', async () => {
-    expect(issueId, 'depends on create').not.toBe('');
+  it(
+    'issues delete --yes exits 0',
+    async () => {
+      expect(issueId, 'depends on create').not.toBe('');
 
-    const r = await runCLI(['issues', 'delete', issueId, '--yes']);
-    expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-    // afterAll will attempt deletion again — that's fine, it's best-effort
-  }, CMD_TIMEOUT);
+      const r = await runCLI(['issues', 'delete', issueId, '--yes']);
+      expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
+      // afterAll will attempt deletion again — that's fine, it's best-effort
+    },
+    CMD_TIMEOUT
+  );
 });

@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+import { describe, expect, it, vi } from 'vitest';
 import { RateLimitError } from '../src/lib/errors.js';
 import type { RequestFn } from '../src/lib/pagination.js';
 import { fetchPaged } from '../src/lib/pagination.js';
@@ -17,7 +17,12 @@ describe('fetchPaged --all typed error propagation', () => {
     // (as Linear's GraphQL client throws it). The --all loop must NOT destroy the
     // typed error by wrapping it through a fromPromise catch.
     let callCount = 0;
-    type ItemData = { items: { nodes: { id: string }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } };
+    type ItemData = {
+      items: {
+        nodes: { id: string }[];
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    };
     const requestFn: RequestFn = vi.fn(() => {
       callCount++;
       if (callCount === 1) {
@@ -26,7 +31,7 @@ describe('fetchPaged --all typed error propagation', () => {
             nodes: [{ id: 'r1' }],
             pageInfo: { hasNextPage: true, endCursor: 'cur1' },
           },
-        } as ItemData) as ReturnType<RequestFn>;
+        } as ItemData);
       }
       // Linear returns RATELIMITED in the error message
       return Promise.reject(new Error('RATELIMITED: too many requests'));
@@ -54,7 +59,12 @@ describe('fetchPaged --all typed error propagation', () => {
 
   it('accumulates rows across pages and returns correct pageInfo on success', async () => {
     let callCount = 0;
-    type ItemData = { items: { nodes: { id: string }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } };
+    type ItemData = {
+      items: {
+        nodes: { id: string }[];
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    };
     const requestFn: RequestFn = vi.fn((_doc: unknown, _vars: Record<string, unknown>) => {
       callCount++;
       if (callCount === 1) {
@@ -63,14 +73,14 @@ describe('fetchPaged --all typed error propagation', () => {
             nodes: [{ id: 'r1' }, { id: 'r2' }],
             pageInfo: { hasNextPage: true, endCursor: 'cur1' },
           },
-        } as ItemData) as ReturnType<RequestFn>;
+        } as ItemData);
       }
       return Promise.resolve({
         items: {
           nodes: [{ id: 'r3' }],
           pageInfo: { hasNextPage: false, endCursor: null },
         },
-      } as ItemData) as ReturnType<RequestFn>;
+      } as ItemData);
     }) as RequestFn;
 
     const result = await fetchPaged(

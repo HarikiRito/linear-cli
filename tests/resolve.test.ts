@@ -1,19 +1,23 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LinearClient } from '@linear/sdk';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Create a minimal LinearClient mock with only the methods used by resolvers.
  * Typed via `as unknown as LinearClient` since we only need a subset of methods.
  */
-function makeClient(overrides: Partial<{
-  teams: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
-  projects: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
-  project: (id: string) => Promise<{ projectMilestones: () => Promise<{ nodes: { id: string; name: string }[] }> } | null>;
-  users: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
-  issueLabels: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
-  workflowStates: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
-  cycles: (args?: unknown) => Promise<{ nodes: { id: string; name?: string }[] }>;
-}>): LinearClient {
+function makeClient(
+  overrides: Partial<{
+    teams: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+    projects: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+    project: (id: string) => Promise<{
+      projectMilestones: () => Promise<{ nodes: { id: string; name: string }[] }>;
+    } | null>;
+    users: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+    issueLabels: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+    workflowStates: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+    cycles: (args?: unknown) => Promise<{ nodes: { id: string; name?: string }[] }>;
+  }>
+): LinearClient {
   return overrides as unknown as LinearClient;
 }
 
@@ -30,6 +34,7 @@ describe('resolveTeam', () => {
     const result = await resolveTeam('12345678-1234-1234-1234-123456789012', client);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe('12345678-1234-1234-1234-123456789012');
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(client.teams).not.toHaveBeenCalled();
   });
 
@@ -46,7 +51,10 @@ describe('resolveTeam', () => {
   it('ambiguous name returns AmbiguousMatchError with candidates', async () => {
     const client = makeClient({
       teams: vi.fn().mockResolvedValue({
-        nodes: [{ id: 't1', name: 'Engineering' }, { id: 't2', name: 'Engineering' }],
+        nodes: [
+          { id: 't1', name: 'Engineering' },
+          { id: 't2', name: 'Engineering' },
+        ],
       }),
     });
     const { resolveTeam } = await import('../src/features/issues/shared/resolve.js');
@@ -90,7 +98,7 @@ describe('resolveMilestone', () => {
     vi.doMock('../src/lib/client/index.js', () => ({
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
-    const client = makeClient({}) as unknown as import('@linear/sdk').LinearClient;
+    const client = makeClient({});
     const { resolveMilestone } = await import('../src/features/issues/shared/resolve.js');
     const result = await resolveMilestone('M1', 'proj-1', client);
     expect(result.isOk()).toBe(true);
@@ -110,14 +118,18 @@ describe('resolveWorkflowState', () => {
   });
 
   it('scopes query to teamId', async () => {
-    const workflowStatesFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'sid', name: 'In Progress' }] });
+    const workflowStatesFn = vi
+      .fn()
+      .mockResolvedValue({ nodes: [{ id: 'sid', name: 'In Progress' }] });
     const client = makeClient({ workflowStates: workflowStatesFn });
     const { resolveWorkflowState } = await import('../src/features/issues/shared/resolve.js');
     const result = await resolveWorkflowState('In Progress', 'team-1', client);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe('sid');
     expect(workflowStatesFn).toHaveBeenCalledWith(
-      expect.objectContaining({ filter: expect.objectContaining({ team: { id: { eq: 'team-1' } } }) })
+      expect.objectContaining({
+        filter: expect.objectContaining({ team: { id: { eq: 'team-1' } } }),
+      })
     );
   });
 });
@@ -137,7 +149,9 @@ describe('resolveCycle', () => {
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe('cid');
     expect(cyclesFn).toHaveBeenCalledWith(
-      expect.objectContaining({ filter: expect.objectContaining({ team: { id: { eq: 'team-1' } } }) })
+      expect.objectContaining({
+        filter: expect.objectContaining({ team: { id: { eq: 'team-1' } } }),
+      })
     );
   });
 });
@@ -150,7 +164,8 @@ describe('resolveLabels', () => {
   });
 
   it('returns array of IDs for multiple labels', async () => {
-    const issuelabelsFn = vi.fn()
+    const issuelabelsFn = vi
+      .fn()
       .mockResolvedValueOnce({ nodes: [{ id: 'label-id-1', name: 'bug' }] })
       .mockResolvedValueOnce({ nodes: [{ id: 'label-id-2', name: 'feat' }] });
     const client = makeClient({ issueLabels: issuelabelsFn });
@@ -161,7 +176,8 @@ describe('resolveLabels', () => {
   });
 
   it('propagates NotFoundError for unknown label', async () => {
-    const issuelabelsFn = vi.fn()
+    const issuelabelsFn = vi
+      .fn()
       .mockResolvedValueOnce({ nodes: [{ id: 'label-id-1', name: 'bug' }] })
       .mockResolvedValueOnce({ nodes: [] });
     const client = makeClient({ issueLabels: issuelabelsFn });

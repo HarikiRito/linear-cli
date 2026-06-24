@@ -17,7 +17,10 @@ function makeClientMock(
   return overrides;
 }
 
-function stdMocks(clientMock: ReturnType<typeof makeClientMock>, requestFn?: ReturnType<typeof vi.fn>) {
+function stdMocks(
+  clientMock: ReturnType<typeof makeClientMock>,
+  requestFn?: ReturnType<typeof vi.fn>
+) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: requestFn ? vi.fn().mockReturnValue(requestFn) : vi.fn(),
@@ -104,15 +107,29 @@ describe('comment add', () => {
       body: 'hi',
       url: 'https://linear.app/c1',
       createdAt: new Date('2024-01-01'),
-      get user() { return Promise.resolve(userMock); },
+      get user() {
+        return Promise.resolve(userMock);
+      },
     };
-    const payloadMock = { get comment() { return Promise.resolve(commentMock); } };
+    const payloadMock = {
+      get comment() {
+        return Promise.resolve(commentMock);
+      },
+    };
     const createCommentFn = vi.fn().mockResolvedValue(payloadMock);
     stdMocks(makeClientMock({ createComment: createCommentFn }));
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'comment', 'add', 'ISSUE-1', '--body', 'hi', '--json',
+      'node',
+      'linear',
+      'issues',
+      'comment',
+      'add',
+      'ISSUE-1',
+      '--body',
+      'hi',
+      '--json',
     ]);
 
     expect(createCommentFn).toHaveBeenCalledWith(
@@ -127,9 +144,15 @@ describe('comment add', () => {
       body: 'stdin body',
       url: '',
       createdAt: new Date('2024-01-01'),
-      get user() { return Promise.resolve(userMock); },
+      get user() {
+        return Promise.resolve(userMock);
+      },
     };
-    const payloadMock = { get comment() { return Promise.resolve(commentMock); } };
+    const payloadMock = {
+      get comment() {
+        return Promise.resolve(commentMock);
+      },
+    };
     const createCommentFn = vi.fn().mockResolvedValue(payloadMock);
     stdMocks(makeClientMock({ createComment: createCommentFn }));
     vi.doMock('../src/lib/stdin.js', () => ({
@@ -139,12 +162,18 @@ describe('comment add', () => {
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'comment', 'add', 'ISSUE-1', '--body', '-', '--json',
+      'node',
+      'linear',
+      'issues',
+      'comment',
+      'add',
+      'ISSUE-1',
+      '--body',
+      '-',
+      '--json',
     ]);
 
-    expect(createCommentFn).toHaveBeenCalledWith(
-      expect.objectContaining({ body: 'stdin body' })
-    );
+    expect(createCommentFn).toHaveBeenCalledWith(expect.objectContaining({ body: 'stdin body' }));
   });
 });
 
@@ -182,7 +211,14 @@ describe('comment reply', () => {
 
     const program = await buildProgram();
     await program.parseAsync([
-      'node', 'linear', 'issues', 'comment', 'reply', 'MISSING-COMMENT', '--body', 'hi',
+      'node',
+      'linear',
+      'issues',
+      'comment',
+      'reply',
+      'MISSING-COMMENT',
+      '--body',
+      'hi',
     ]);
 
     expect(exitErrorMock).toHaveBeenCalledOnce();
@@ -200,16 +236,30 @@ describe('comment reply', () => {
       body: 'reply',
       url: '',
       createdAt: new Date('2024-01-01'),
-      get user() { return Promise.resolve(null); },
+      get user() {
+        return Promise.resolve(null);
+      },
     };
-    const payloadMock = { get comment() { return Promise.resolve(replyCommentMock); } };
+    const payloadMock = {
+      get comment() {
+        return Promise.resolve(replyCommentMock);
+      },
+    };
     const createCommentFn = vi.fn().mockResolvedValue(payloadMock);
 
     stdMocks(makeClientMock({ createComment: createCommentFn }), requestFn);
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'comment', 'reply', 'COMMENT-1', '--body', 'reply', '--json',
+      'node',
+      'linear',
+      'issues',
+      'comment',
+      'reply',
+      'COMMENT-1',
+      '--body',
+      'reply',
+      '--json',
     ]);
 
     // requestFn called with the typed document and parentId variable
@@ -241,18 +291,35 @@ describe('comment update', () => {
       body: 'edited',
       url: '',
       createdAt: new Date('2024-01-01'),
-      get user() { return Promise.resolve(null); },
+      get user() {
+        return Promise.resolve(null);
+      },
     };
-    const payloadMock = { get comment() { return Promise.resolve(commentMock); } };
+    const payloadMock = {
+      get comment() {
+        return Promise.resolve(commentMock);
+      },
+    };
     const updateCommentFn = vi.fn().mockResolvedValue(payloadMock);
     stdMocks(makeClientMock({ updateComment: updateCommentFn }));
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'comment', 'update', 'COMMENT-1', '--body', 'edited', '--json',
+      'node',
+      'linear',
+      'issues',
+      'comment',
+      'update',
+      'COMMENT-1',
+      '--body',
+      'edited',
+      '--json',
     ]);
 
-    expect(updateCommentFn).toHaveBeenCalledWith('COMMENT-1', expect.objectContaining({ body: 'edited' }));
+    expect(updateCommentFn).toHaveBeenCalledWith(
+      'COMMENT-1',
+      expect.objectContaining({ body: 'edited' })
+    );
   });
 });
 
@@ -273,7 +340,13 @@ describe('comment delete', () => {
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'comment', 'delete', 'COMMENT-1', '--yes',
+      'node',
+      'linear',
+      'issues',
+      'comment',
+      'delete',
+      'COMMENT-1',
+      '--yes',
     ]);
 
     expect(deleteCommentFn).toHaveBeenCalledWith('COMMENT-1');

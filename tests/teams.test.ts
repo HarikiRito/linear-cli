@@ -103,7 +103,15 @@ describe('teams list', () => {
     stdMocks(teamsFn);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'teams', 'list', '--json', '--after', 'teamCursor']);
+    await program.parseAsync([
+      'node',
+      'linear',
+      'teams',
+      'list',
+      '--json',
+      '--after',
+      'teamCursor',
+    ]);
 
     expect(teamsFn).toHaveBeenCalledWith(expect.objectContaining({ after: 'teamCursor' }));
   });
@@ -113,13 +121,17 @@ describe('teams list', () => {
       .fn()
       .mockResolvedValueOnce(
         makeConn(
-          Array.from({ length: 50 }, (_, i) => makeTeamNode(`t${i + 1}`, `Team ${i + 1}`, `T${i + 1}`)),
+          Array.from({ length: 50 }, (_, i) =>
+            makeTeamNode(`t${i + 1}`, `Team ${i + 1}`, `T${i + 1}`)
+          ),
           { hasNextPage: true, endCursor: 'tCur1' }
         )
       )
       .mockResolvedValueOnce(
         makeConn(
-          Array.from({ length: 3 }, (_, i) => makeTeamNode(`t${i + 51}`, `Team ${i + 51}`, `T${i + 51}`)),
+          Array.from({ length: 3 }, (_, i) =>
+            makeTeamNode(`t${i + 51}`, `Team ${i + 51}`, `T${i + 51}`)
+          ),
           { hasNextPage: false, endCursor: null }
         )
       );
@@ -147,9 +159,12 @@ describe('teams list', () => {
   });
 
   it('--json output includes pageInfo with hasNextPage and endCursor', async () => {
-    const teamsFn = vi
-      .fn()
-      .mockResolvedValue(makeConn([makeTeamNode('t1', 'Engineering', 'ENG')], { hasNextPage: true, endCursor: 'tNext' }));
+    const teamsFn = vi.fn().mockResolvedValue(
+      makeConn([makeTeamNode('t1', 'Engineering', 'ENG')], {
+        hasNextPage: true,
+        endCursor: 'tNext',
+      })
+    );
 
     const printJsonCalls: unknown[] = [];
     vi.doMock('../src/lib/client/index.js', () => ({
@@ -220,7 +235,11 @@ describe('teams exit codes', () => {
     const applyIndexCatch = (e: unknown) => {
       if (e instanceof Error && 'code' in e) {
         const code = (e as { code: string }).code;
-        if (code === 'commander.helpDisplayed' || code === 'commander.help' || code === 'commander.version') {
+        if (
+          code === 'commander.helpDisplayed' ||
+          code === 'commander.help' ||
+          code === 'commander.version'
+        ) {
           return;
         }
       }

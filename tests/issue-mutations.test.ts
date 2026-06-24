@@ -12,12 +12,18 @@ function makeIssueMock(stateName = 'Todo') {
     identifier: 'ISSUE-1',
     title: 'Test Issue',
     url: 'https://linear.app/issue/ISSUE-1',
-    get state() { return Promise.resolve(stateMock); },
+    get state() {
+      return Promise.resolve(stateMock);
+    },
   };
 }
 
 function makePayloadMock(issueMock = makeIssueMock()) {
-  return { get issue() { return Promise.resolve(issueMock); } };
+  return {
+    get issue() {
+      return Promise.resolve(issueMock);
+    },
+  };
 }
 
 /**
@@ -68,13 +74,23 @@ describe('issues create', () => {
 
   it('calls issueCreate with resolved teamId and title', async () => {
     const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
-    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'Engineering' }] });
+    const teamsFn = vi
+      .fn()
+      .mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'Engineering' }] });
     const clientMock = makeClientMock({ createIssue: createIssueFn, teams: teamsFn });
     stdMocks(clientMock);
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'create', '--title', 'Foo', '--team', 'Engineering', '--json',
+      'node',
+      'linear',
+      'issues',
+      'create',
+      '--title',
+      'Foo',
+      '--team',
+      'Engineering',
+      '--json',
     ]);
 
     expect(createIssueFn).toHaveBeenCalledWith(
@@ -123,7 +139,16 @@ describe('issues create', () => {
 
     const program = await buildProgram();
     await program.parseAsync([
-      'node', 'linear', 'issues', 'create', '--title', 'T', '--team', 'eng', '--priority', '5',
+      'node',
+      'linear',
+      'issues',
+      'create',
+      '--title',
+      'T',
+      '--team',
+      'eng',
+      '--priority',
+      '5',
     ]);
 
     expect(exitErrorMock).toHaveBeenCalled();
@@ -139,19 +164,29 @@ describe('issues create', () => {
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'create', '--title', 'T', '--team', 'eng', '--priority', '0', '--json',
+      'node',
+      'linear',
+      'issues',
+      'create',
+      '--title',
+      'T',
+      '--team',
+      'eng',
+      '--priority',
+      '0',
+      '--json',
     ]);
 
-    expect(createIssueFn).toHaveBeenCalledWith(
-      expect.objectContaining({ priority: 0 })
-    );
+    expect(createIssueFn).toHaveBeenCalledWith(expect.objectContaining({ priority: 0 }));
   });
 
   it('meta flags resolved and passed to mutation', async () => {
     const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
     const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'eng' }] });
     const issuelabelsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'label-bug', name: 'bug' }] });
-    const workflowStatesFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'state-id', name: 'In Progress' }] });
+    const workflowStatesFn = vi
+      .fn()
+      .mockResolvedValue({ nodes: [{ id: 'state-id', name: 'In Progress' }] });
     const clientMock = makeClientMock({
       createIssue: createIssueFn,
       teams: teamsFn,
@@ -162,9 +197,20 @@ describe('issues create', () => {
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'create',
-      '--title', 'T', '--team', 'eng',
-      '--priority', '2', '--labels', 'bug', '--state', 'In Progress',
+      'node',
+      'linear',
+      'issues',
+      'create',
+      '--title',
+      'T',
+      '--team',
+      'eng',
+      '--priority',
+      '2',
+      '--labels',
+      'bug',
+      '--state',
+      'In Progress',
       '--json',
     ]);
 
@@ -206,7 +252,13 @@ describe('issues update', () => {
 
     const program = await buildProgram();
     await program.parseAsync([
-      'node', 'linear', 'issues', 'update', 'ISSUE-1', '--state', 'In Progress',
+      'node',
+      'linear',
+      'issues',
+      'update',
+      'ISSUE-1',
+      '--state',
+      'In Progress',
     ]);
 
     expect(exitErrorMock).toHaveBeenCalledOnce();
@@ -222,10 +274,20 @@ describe('issues update', () => {
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'update', 'ISSUE-1', '--title', 'New', '--json',
+      'node',
+      'linear',
+      'issues',
+      'update',
+      'ISSUE-1',
+      '--title',
+      'New',
+      '--json',
     ]);
 
-    expect(updateIssueFn).toHaveBeenCalledWith('ISSUE-1', expect.objectContaining({ title: 'New' }));
+    expect(updateIssueFn).toHaveBeenCalledWith(
+      'ISSUE-1',
+      expect.objectContaining({ title: 'New' })
+    );
     // Ensure only title was passed (no spurious fields)
     const [, input] = updateIssueFn.mock.calls[0] as [string, Record<string, unknown>];
     expect(Object.keys(input)).toEqual(['title']);
@@ -233,7 +295,8 @@ describe('issues update', () => {
 
   it('labels replace semantics: labelIds replaces all', async () => {
     const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
-    const issuelabelsFn = vi.fn()
+    const issuelabelsFn = vi
+      .fn()
       .mockResolvedValueOnce({ nodes: [{ id: 'bug-id', name: 'bug' }] })
       .mockResolvedValueOnce({ nodes: [{ id: 'feat-id', name: 'feat' }] });
     const clientMock = makeClientMock({ updateIssue: updateIssueFn, issueLabels: issuelabelsFn });
@@ -241,7 +304,14 @@ describe('issues update', () => {
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'update', 'ISSUE-1', '--labels', 'bug,feat', '--json',
+      'node',
+      'linear',
+      'issues',
+      'update',
+      'ISSUE-1',
+      '--labels',
+      'bug,feat',
+      '--json',
     ]);
 
     expect(updateIssueFn).toHaveBeenCalledWith(

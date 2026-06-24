@@ -35,8 +35,8 @@ vi.mock('../src/features/auth/oauth.js', () => ({
 
 import { isCancel, select, text } from '@clack/prompts';
 import { LinearClient } from '@linear/sdk';
-import { writeSession } from '../src/features/auth/session.js';
 import { runLoginFlow } from '../src/features/auth/login.js';
+import { writeSession } from '../src/features/auth/session.js';
 
 const mockSelect = vi.mocked(select);
 const mockText = vi.mocked(text);
@@ -55,13 +55,18 @@ describe('runLoginFlow — invalid API key', () => {
     mockText.mockResolvedValue('lin_api_bad_key');
     mockIsCancel.mockReturnValue(false);
 
-    MockLinearClient.mockImplementation(() => ({
-      viewer: Promise.reject(new Error('Authentication failed')),
-    }) as unknown as InstanceType<typeof LinearClient>);
+    MockLinearClient.mockImplementation(
+      () =>
+        ({
+          viewer: Promise.reject(new Error('Authentication failed')),
+        }) as unknown as InstanceType<typeof LinearClient>
+    );
 
-    const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((_code?: number | string | null) => {
-      throw new Error(`process.exit(${String(_code)})`);
-    });
+    const mockProcessExit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((_code?: number | string | null) => {
+        throw new Error(`process.exit(${String(_code)})`);
+      });
 
     // Act: runLoginFlow will reach process.exit(1) on auth failure — we intercept it
     await expect(runLoginFlow()).rejects.toThrow('process.exit(1)');
@@ -82,9 +87,11 @@ describe('runLoginFlow — invalid API key', () => {
       throw new Error('Invalid API key format');
     });
 
-    const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((_code?: number | string | null) => {
-      throw new Error(`process.exit(${String(_code)})`);
-    });
+    const mockProcessExit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((_code?: number | string | null) => {
+        throw new Error(`process.exit(${String(_code)})`);
+      });
 
     await expect(runLoginFlow()).rejects.toThrow('process.exit(1)');
 
@@ -98,11 +105,16 @@ describe('runLoginFlow — invalid API key', () => {
     mockText.mockResolvedValue('lin_api_valid_key');
     mockIsCancel.mockReturnValue(false);
 
-    MockLinearClient.mockImplementation(() => ({
-      viewer: Promise.resolve({ id: 'user-1', name: 'Test User', email: 'test@example.com' }),
-    }) as unknown as InstanceType<typeof LinearClient>);
+    MockLinearClient.mockImplementation(
+      () =>
+        ({
+          viewer: Promise.resolve({ id: 'user-1', name: 'Test User', email: 'test@example.com' }),
+        }) as unknown as InstanceType<typeof LinearClient>
+    );
 
-    mockWriteSession.mockReturnValue({ isErr: () => false, isOk: () => true } as ReturnType<typeof writeSession>);
+    mockWriteSession.mockReturnValue({ isErr: () => false, isOk: () => true } as ReturnType<
+      typeof writeSession
+    >);
 
     await runLoginFlow();
 
