@@ -50,7 +50,11 @@ export class NotFoundError extends Error {
 
 export class AmbiguousMatchError extends Error {
   readonly kind = 'AmbiguousMatchError' as const;
-  constructor(entityType: string, value: string, candidates: Array<{ name?: string | undefined; id: string }>) {
+  constructor(
+    entityType: string,
+    value: string,
+    candidates: Array<{ name?: string | undefined; id: string }>
+  ) {
     super(
       `Ambiguous ${entityType} '${value}': matches ${candidates.map((c) => `${c.name ?? c.id} (${c.id})`).join(', ')}`
     );

@@ -1,6 +1,6 @@
-import { LinearClient } from '@linear/sdk';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { ResultAsync, errAsync, okAsync } from 'neverthrow';
+import { LinearClient } from '@linear/sdk';
+import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 import { type ResolveOptions, resolveCredential } from '../../features/auth/resolve.js';
 import { type CliError, mapLinearError } from '../errors.js';
 import type { RequestFn } from '../pagination.js';

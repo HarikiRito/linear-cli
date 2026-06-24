@@ -1,5 +1,5 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { ResultAsync, okAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 import { mapLinearError } from './errors.js';
 import { printJson } from './output/json.js';
 import { markdownTable, printMarkdown } from './output/markdown.js';
@@ -37,7 +37,10 @@ export type RequestFn = <TData, TVariables extends Record<string, unknown>>(
 ) => Promise<TData>;
 
 /** Normalize a raw SDK pageInfo shape to our PageInfo type (coerces undefined endCursor to null). */
-export function normalizePageInfo(raw: { hasNextPage: boolean; endCursor?: string | null }): PageInfo {
+export function normalizePageInfo(raw: {
+  hasNextPage: boolean;
+  endCursor?: string | null;
+}): PageInfo {
   return { hasNextPage: raw.hasNextPage, endCursor: raw.endCursor ?? null };
 }
 

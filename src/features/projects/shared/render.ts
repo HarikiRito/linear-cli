@@ -1,10 +1,12 @@
 import type { Project } from '@linear/sdk';
-import { ResultAsync } from 'neverthrow';
-import { mapLinearError } from '../../../lib/errors.js';
+import type { ResultAsync } from 'neverthrow';
+import type { mapLinearError } from '../../../lib/errors.js';
+import { printJson } from '../../../lib/output/json.js';
+import { markdownTable, printMarkdown } from '../../../lib/output/markdown.js';
+import { prettyTable, printTable } from '../../../lib/output/table.js';
 import {
   type ColumnConfig,
   type PageInfo,
-  type PagedResult,
   renderPaged,
   runAndRenderPaged,
 } from '../../../lib/pagination.js';
@@ -34,7 +36,38 @@ const PROJECT_COLUMNS: ColumnConfig<ProjectRow> = {
 };
 
 export function renderProjects(result: ProjectsResult, json: boolean): void {
-  renderPaged({ rows: result.projects, pageInfo: result.pageInfo }, json, 'projects', PROJECT_COLUMNS);
+  renderPaged(
+    { rows: result.projects, pageInfo: result.pageInfo },
+    json,
+    'projects',
+    PROJECT_COLUMNS
+  );
+}
+
+/** Shape returned by project create / update mutations. */
+export interface ProjectResult {
+  id: string;
+  name: string;
+  state: string;
+  url: string;
+}
+
+export function renderProjectResult(p: ProjectResult, json: boolean): void {
+  if (json) {
+    printJson({ project: p });
+    return;
+  }
+  const rows: [string, string][] = [
+    ['ID', p.id],
+    ['Name', p.name],
+    ['State', p.state],
+    ['URL', p.url],
+  ];
+  if (process.stdout.isTTY) {
+    printTable(prettyTable(['Field', 'Value'], rows));
+  } else {
+    printMarkdown(markdownTable(['Field', 'Value'], rows));
+  }
 }
 
 export async function runAndRender(

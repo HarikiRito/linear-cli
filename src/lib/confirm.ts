@@ -11,18 +11,13 @@ export interface ConfirmResult {
  * - If non-TTY and yes=false: return an error (agent must pass --yes).
  * - If TTY and yes=false: prompt interactively; proceed only on "y".
  */
-export async function confirmDestructive(
-  message: string,
-  yes: boolean
-): Promise<ConfirmResult> {
+export async function confirmDestructive(message: string, yes: boolean): Promise<ConfirmResult> {
   if (yes) return { proceed: true };
 
   if (!process.stdin.isTTY) {
     return {
       proceed: false,
-      error: new ValidationError(
-        `${message} Pass --yes to confirm non-interactively.`
-      ),
+      error: new ValidationError(`${message} Pass --yes to confirm non-interactively.`),
     };
   }
 

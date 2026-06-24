@@ -1,7 +1,13 @@
 import type { LinearClient } from '@linear/sdk';
-import { ResultAsync, errAsync, okAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { getRequestFn } from '../../../lib/client/index.js';
-import { AmbiguousMatchError, type CliError, NotFoundError, coerceCliError, mapLinearError } from '../../../lib/errors.js';
+import {
+  AmbiguousMatchError,
+  type CliError,
+  coerceCliError,
+  mapLinearError,
+  NotFoundError,
+} from '../../../lib/errors.js';
 import { PROJECT_MILESTONES_QUERY } from './queries.js';
 
 /**
@@ -68,7 +74,16 @@ export function resolveMilestone(
   ).andThen((nodes) => findOne('milestone', input, nodes));
 }
 
-export function resolveAssignee(input: string, client: LinearClient): ResultAsync<string, CliError> {
+export function resolveAssignee(
+  input: string,
+  client: LinearClient
+): ResultAsync<string, CliError> {
+  if (input === 'me') {
+    return ResultAsync.fromPromise(
+      client.viewer.then((v) => v.id),
+      (e) => mapLinearError(e)
+    );
+  }
   return resolveByName(input, 'user', () =>
     client.users({ filter: { name: { containsIgnoreCase: input } } })
   );
