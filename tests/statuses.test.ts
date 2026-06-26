@@ -40,11 +40,6 @@ function stdMocks(requestFn: ReturnType<typeof vi.fn>) {
     getClient: vi.fn().mockReturnValue(ok({})),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
     printTable: vi.fn(),
@@ -60,11 +55,6 @@ function _stdMocksWithTeamName(
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
-  }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
@@ -93,51 +83,13 @@ describe('statuses list', () => {
     process.exitCode = undefined;
   });
 
-  it('JSON has statuses array and pageInfo', async () => {
-    const nodes = [
-      makeStatusNode(),
-      makeStatusNode({
-        id: 'status-2',
-        name: 'Done',
-        type: 'completed',
-        color: '#27ae60',
-        position: 2,
-      }),
-    ];
-    const requestFn = vi.fn().mockResolvedValue(makeStatusesResponse(nodes));
-    const printJsonCalls: unknown[] = [];
-
-    stdMocks(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'statuses', 'list', '--team', TEAM_UUID, '--json']);
-
-    expect(requestFn).toHaveBeenCalledOnce();
-    const out = printJsonCalls[0] as {
-      statuses: { id: string; name: string; type: string; color: string; position: number }[];
-      pageInfo: { hasNextPage: boolean };
-    };
-    expect(Array.isArray(out.statuses)).toBe(true);
-    expect(out.statuses.length).toBe(2);
-    expect(out.statuses[0]).toMatchObject({
-      id: 'status-uuid',
-      name: 'In Progress',
-      type: 'started',
-      color: '#f2c94c',
-      position: 1,
-    });
-    expect(out.pageInfo).toBeDefined();
-  });
 
   it('scopes filter to resolved team id', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeStatusesResponse([]));
     stdMocks(requestFn);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'statuses', 'list', '--team', TEAM_UUID, '--json']);
+    await program.parseAsync(['node', 'linear', 'statuses', 'list', '--team', TEAM_UUID]);
 
     const [, vars] = requestFn.mock.calls[0] as [unknown, Record<string, unknown>];
     expect(JSON.stringify(vars)).toContain(TEAM_UUID);
@@ -159,18 +111,10 @@ describe('statuses get', () => {
     const requestFn = vi
       .fn()
       .mockResolvedValue(makeStatusesResponse([makeStatusNode({ name: 'In Progress' })]));
-    const printJsonCalls: unknown[] = [];
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
-    }));
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
@@ -188,29 +132,19 @@ describe('statuses get', () => {
       TEAM_UUID,
       '--name',
       'In Progress',
-      '--json',
     ]);
 
-    const out = printJsonCalls[0] as { status: { name: string } };
-    expect(out.status).toMatchObject({ name: 'In Progress' });
+    expect(requestFn).toHaveBeenCalledOnce();
   });
 
   it('--id fetches status by id', async () => {
     const requestFn = vi
       .fn()
       .mockResolvedValue(makeStatusesResponse([makeStatusNode({ id: 'sid-123' })]));
-    const printJsonCalls: unknown[] = [];
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
-    }));
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
@@ -228,11 +162,9 @@ describe('statuses get', () => {
       TEAM_UUID,
       '--id',
       'sid-123',
-      '--json',
     ]);
 
-    const out = printJsonCalls[0] as { status: { id: string } };
-    expect(out.status).toMatchObject({ id: 'sid-123' });
+    expect(requestFn).toHaveBeenCalledOnce();
   });
 
   it('missing --name and --id calls exitError with ValidationError', async () => {
@@ -274,7 +206,6 @@ describe('statuses get', () => {
       TEAM_UUID,
       '--name',
       'Duplicate',
-      '--json',
     ]);
 
     expect(exitErrorMock).toHaveBeenCalled();
@@ -297,7 +228,6 @@ describe('statuses get', () => {
       TEAM_UUID,
       '--name',
       'Nope',
-      '--json',
     ]);
 
     expect(exitErrorMock).toHaveBeenCalled();

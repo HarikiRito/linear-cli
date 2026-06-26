@@ -1,8 +1,8 @@
 import { errAsync, okAsync } from 'neverthrow';
 import { getClient, getRequestFn } from '../../lib/client/index.js';
 import { AmbiguousMatchError, NotFoundError, ValidationError } from '../../lib/errors.js';
-import { printJson } from '../../lib/output/json.js';
-import { markdownTable, printMarkdown } from '../../lib/output/markdown.js';
+import type { PlainField } from '../../lib/output/plain.js';
+import { renderPlainRecord } from '../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../lib/output/table.js';
 import { fetchPaged } from '../../lib/pagination.js';
 import { exitError } from '../../lib/runner.js';
@@ -16,8 +16,7 @@ export interface GetStatusOptions {
   team: string;
   name?: string;
   id?: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 type StatusDetail = StatusRow;
@@ -78,28 +77,28 @@ export async function getStatus(opts: GetStatusOptions): Promise<void> {
   });
 
   result.match(
-    (status) => renderStatusDetail(status, opts.json, opts.pretty),
+    (status) => renderStatusDetail(status, opts.plain),
     (e) => exitError(e)
   );
 }
 
-function renderStatusDetail(status: StatusDetail, json: boolean, pretty = false): void {
-  if (json) {
-    printJson({ status }, pretty);
+function renderStatusDetail(status: StatusDetail, plain: boolean): void {
+  if (plain) {
+    const fields: PlainField[] = [
+      { key: 'type', value: status.type },
+      { key: 'color', value: status.color },
+      { key: 'position', value: String(status.position) },
+    ];
+    console.log(renderPlainRecord('Status', status.name, fields));
     return;
   }
 
   const rows: [string, string][] = [
-    ['ID', status.id],
     ['Name', status.name],
     ['Type', status.type],
     ['Color', status.color],
     ['Position', String(status.position)],
   ];
 
-  if (process.stdout.isTTY) {
-    printTable(prettyTable(['Field', 'Value'], rows));
-  } else {
-    printMarkdown(markdownTable(['Field', 'Value'], rows));
-  }
+  printTable(prettyTable(['Field', 'Value'], rows));
 }

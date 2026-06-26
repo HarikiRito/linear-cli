@@ -29,11 +29,6 @@ function stdMocks(clientMock: ReturnType<typeof makeClientMock>) {
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: vi.fn(),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
     printTable: vi.fn(),
@@ -76,7 +71,6 @@ describe('labels create', () => {
       'bug',
       '--team',
       'Engineering',
-      '--json',
     ]);
 
     expect(createIssueLabelFn).toHaveBeenCalledWith(
@@ -106,7 +100,6 @@ describe('labels create', () => {
       'Engineering',
       '--color',
       '#ff0000',
-      '--json',
     ]);
 
     expect(createIssueLabelFn).toHaveBeenCalledWith(expect.objectContaining({ color: '#ff0000' }));
@@ -140,7 +133,7 @@ describe('labels create', () => {
     stdMocks(clientMock);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'labels', 'create', '--name', 'global', '--json']);
+    await program.parseAsync(['node', 'linear', 'labels', 'create', '--name', 'global']);
 
     expect(createIssueLabelFn).toHaveBeenCalledWith(expect.objectContaining({ name: 'global' }));
     const callArg = createIssueLabelFn.mock.calls[0][0];

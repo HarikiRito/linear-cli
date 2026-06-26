@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addJsonOptions } from '../../../lib/commandOptions.js';
+import { addAuthOptions, addPlainOption } from '../../../lib/commandOptions.js';
 import { createProject } from './create.js';
 
 export function registerCreateCommand(projects: Command): void {
@@ -15,7 +15,7 @@ export function registerCreateCommand(projects: Command): void {
     .option('--state <id>', 'Project status ID')
     .option('--status <id>', 'Project status ID (alias for --state)');
 
-  addAuthOptions(addJsonOptions(cmd)).action(
+  addAuthOptions(addPlainOption(cmd)).action(
     async (opts: {
       name: string;
       team: string;
@@ -27,8 +27,7 @@ export function registerCreateCommand(projects: Command): void {
       status?: string;
       apiKey?: string;
       token?: string;
-      json?: boolean;
-      pretty?: boolean;
+      plain?: boolean;
     }) => {
       await createProject({
         apiKey: opts.apiKey,
@@ -40,8 +39,7 @@ export function registerCreateCommand(projects: Command): void {
         targetDate: opts.targetDate,
         startDate: opts.startDate,
         state: opts.state ?? opts.status,
-        json: !!opts.json,
-        pretty: !!opts.pretty,
+        plain: !!opts.plain,
       });
     }
   );

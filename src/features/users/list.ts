@@ -1,4 +1,5 @@
 import { getClient, getRequestFn } from '../../lib/client/index.js';
+import type { PlainField } from '../../lib/output/plain.js';
 import { type ColumnConfig, fetchPaged, runAndRenderPaged } from '../../lib/pagination.js';
 import { exitError } from '../../lib/runner.js';
 import { LIST_USERS_QUERY } from './queries.js';
@@ -9,8 +10,7 @@ export interface ListUsersOptions {
   limit: number;
   after?: string;
   all: boolean;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface UserRow {
@@ -21,11 +21,20 @@ interface UserRow {
   active: boolean;
 }
 
+function userPlainFields(u: UserRow): PlainField[] {
+  return [
+    { key: 'displayName', value: u.displayName },
+    { key: 'email', value: u.email },
+    { key: 'active', value: u.active ? 'yes' : 'no' },
+  ];
+}
+
 const USER_COLUMNS: ColumnConfig<UserRow> = {
-  headers: ['ID', 'Name', 'Display Name', 'Email', 'Active'],
-  toRow: (u) => [u.id, u.name, u.displayName, u.email, u.active ? 'true' : 'false'],
-  ttyHeaders: ['Name', 'Display Name', 'Email', 'Active'],
-  ttyToRow: (u) => [u.name, u.displayName, u.email, u.active ? 'yes' : 'no'],
+  headers: ['Name', 'Display Name', 'Email', 'Active'],
+  toRow: (u) => [u.name, u.displayName, u.email, u.active ? 'yes' : 'no'],
+  plainType: 'User',
+  plainPrimaryId: (u) => u.name,
+  toPlainFields: userPlainFields,
 };
 
 function toUserRows(
@@ -55,5 +64,5 @@ export async function listUsers(opts: ListUsersOptions): Promise<void> {
     limit: opts.limit,
   });
 
-  await runAndRenderPaged(resultAsync, opts.json, 'users', USER_COLUMNS, 'users', opts.pretty);
+  await runAndRenderPaged(resultAsync, opts.plain, USER_COLUMNS, 'users');
 }

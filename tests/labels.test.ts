@@ -42,11 +42,6 @@ function stdMocksWithRequestAndClient(
     getClient: vi.fn().mockReturnValue(ok({ ...clientExtra })),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
     printTable: vi.fn(),
@@ -74,37 +69,6 @@ describe('labels list', () => {
     process.exitCode = undefined;
   });
 
-  it('JSON has labels array and pageInfo', async () => {
-    const nodes = [
-      makeLabelNode(),
-      makeLabelNode({ id: 'label-2', name: 'feature', color: '#00ff00' }),
-    ];
-    const requestFn = vi.fn().mockResolvedValue(makeLabelsResponse(nodes));
-    const printJsonCalls: unknown[] = [];
-
-    stdMocksWithRequestAndClient(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'labels', 'list', '--json']);
-
-    expect(requestFn).toHaveBeenCalledOnce();
-    const out = printJsonCalls[0] as {
-      labels: { id: string; name: string; color: string; parentId: string | null }[];
-      pageInfo: { hasNextPage: boolean };
-    };
-    expect(Array.isArray(out.labels)).toBe(true);
-    expect(out.labels.length).toBe(2);
-    expect(out.labels[0]).toMatchObject({
-      id: 'label-uuid',
-      name: 'bug',
-      color: '#ff0000',
-      parentId: null,
-    });
-    expect(out.pageInfo).toBeDefined();
-  });
 
   it('--team passes team filter in request variables', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeLabelsResponse([]));
@@ -113,7 +77,7 @@ describe('labels list', () => {
     stdMocksWithRequestAndClient(requestFn, { teams: teamsFn });
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'labels', 'list', '--team', 'ENG', '--json']);
+    await program.parseAsync(['node', 'linear', 'labels', 'list', '--team', 'ENG']);
 
     // resolveTeam was called
     expect(teamsFn).toHaveBeenCalled();
@@ -131,11 +95,6 @@ describe('labels list', () => {
       getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),
@@ -143,28 +102,12 @@ describe('labels list', () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'labels', 'list', '--team', 'NOPE', '--json']);
+    await program.parseAsync(['node', 'linear', 'labels', 'list', '--team', 'NOPE']);
 
     expect(exitErrorMock).toHaveBeenCalled();
     expect(requestFn).not.toHaveBeenCalled();
   });
 
-  it('empty result exits 0 with empty labels array', async () => {
-    const requestFn = vi.fn().mockResolvedValue(makeLabelsResponse([]));
-    const printJsonCalls: unknown[] = [];
-
-    stdMocksWithRequestAndClient(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'labels', 'list', '--json']);
-
-    const out = printJsonCalls[0] as { labels: unknown[] };
-    expect(out.labels).toEqual([]);
-    expect(process.exitCode).toBeUndefined();
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -192,18 +135,10 @@ describe('labels create', () => {
       },
     };
     const createFn = vi.fn().mockResolvedValue(labelPayload);
-    const printJsonCalls: unknown[] = [];
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ createIssueLabel: createFn })),
       getRequestFn: vi.fn(),
-    }));
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
@@ -219,17 +154,12 @@ describe('labels create', () => {
       'create',
       '--name',
       'enhancement',
-      '--json',
     ]);
 
     expect(createFn).toHaveBeenCalledOnce();
     const callArg = createFn.mock.calls[0][0] as Record<string, unknown>;
     expect(callArg).toMatchObject({ name: 'enhancement' });
     expect(callArg).not.toHaveProperty('teamId');
-
-    const out = printJsonCalls[0] as { label: { id: string; name: string; teamId: string | null } };
-    expect(out.label.id).toBe('label-new');
-    expect(out.label.teamId).toBeNull();
   });
 
   it('missing --name causes Commander error', async () => {

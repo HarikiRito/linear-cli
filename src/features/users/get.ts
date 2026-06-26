@@ -1,8 +1,8 @@
 import { ResultAsync } from 'neverthrow';
 import { getClient, getRequestFn } from '../../lib/client/index.js';
 import { coerceCliError, NotFoundError } from '../../lib/errors.js';
-import { printJson } from '../../lib/output/json.js';
-import { markdownTable, printMarkdown } from '../../lib/output/markdown.js';
+import type { PlainField } from '../../lib/output/plain.js';
+import { renderPlainRecord } from '../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../lib/output/table.js';
 import { exitError } from '../../lib/runner.js';
 import { GET_USER_QUERY } from './queries.js';
@@ -11,8 +11,7 @@ export interface GetUserOptions {
   apiKey?: string;
   token?: string;
   id: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface UserDetail {
@@ -52,30 +51,30 @@ export async function getUser(opts: GetUserOptions): Promise<void> {
   );
 
   result.match(
-    (user) => renderUserDetail(user, opts.json, opts.pretty),
+    (user) => renderUserDetail(user, opts.plain),
     (e) => exitError(e)
   );
 }
 
-function renderUserDetail(user: UserDetail, json: boolean, pretty = false): void {
-  if (json) {
-    printJson({ user }, pretty);
+function renderUserDetail(user: UserDetail, plain: boolean): void {
+  if (plain) {
+    const fields: PlainField[] = [
+      { key: 'displayName', value: user.displayName },
+      { key: 'email', value: user.email },
+      { key: 'active', value: user.active ? 'yes' : 'no' },
+      { key: 'url', value: user.url },
+    ];
+    console.log(renderPlainRecord('User', user.name, fields));
     return;
   }
 
   const rows: [string, string][] = [
-    ['ID', user.id],
     ['Name', user.name],
     ['Display Name', user.displayName],
     ['Email', user.email],
     ['Active', user.active ? 'yes' : 'no'],
     ['URL', user.url],
-    ['Avatar', user.avatarUrl ?? ''],
   ];
 
-  if (process.stdout.isTTY) {
-    printTable(prettyTable(['Field', 'Value'], rows));
-  } else {
-    printMarkdown(markdownTable(['Field', 'Value'], rows));
-  }
+  printTable(prettyTable(['Field', 'Value'], rows));
 }

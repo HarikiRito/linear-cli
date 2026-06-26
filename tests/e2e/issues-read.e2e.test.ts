@@ -10,7 +10,16 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { CMD_TIMEOUT, discoverTeam, makeRegistry, RUN_E2E, runCLI, uniqueName } from './helpers.js';
+import {
+  CMD_TIMEOUT,
+  discoverTeam,
+  makeRegistry,
+  parsePlainList,
+  parsePlainRecord,
+  RUN_E2E,
+  runCLI,
+  uniqueName,
+} from './helpers.js';
 
 describe.skipIf(!RUN_E2E)('issues read E2E', () => {
   const reg = makeRegistry();
@@ -34,32 +43,31 @@ describe.skipIf(!RUN_E2E)('issues read E2E', () => {
       uniqueName(`e2e-read-${queryToken}`),
       '--team',
       teamName,
-      '--json',
+      '--plain',
     ]);
     if (r.code !== 0) {
       throw new Error(`Setup: could not create query-probe issue\nstderr: ${r.stderr}`);
     }
-    const data = r.json as { issue: { id: string } };
-    queryIssueId = data.issue.id;
+    const data = parsePlainRecord(r.stdout);
+    queryIssueId = data['id'];
     reg.trackIssue(queryIssueId);
   }, CMD_TIMEOUT);
 
   // ── issues list ──────────────────────────────────────────────────────────
 
   it(
-    'issues list --json --all-states exits 0 and returns issues array with pageInfo',
+    'issues list --plain --all-states exits 0 and returns issues array',
     async () => {
-      const r = await runCLI(['issues', 'list', '--json', '--all-states', '--limit', '10']);
+      const r = await runCLI(['issues', 'list', '--plain', '--all-states', '--limit', '10']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { issues?: unknown[]; pageInfo?: unknown };
-      expect(Array.isArray(data?.issues)).toBe(true);
-      expect(data.pageInfo).toBeDefined();
+      const records = parsePlainList(r.stdout);
+      expect(Array.isArray(records)).toBe(true);
     },
     CMD_TIMEOUT
   );
 
   it(
-    'issues list --team <discovered> --json filters to that team',
+    'issues list --team <discovered> --plain filters to that team',
     async () => {
       expect(teamName).not.toBe('');
       const r = await runCLI([
@@ -67,36 +75,36 @@ describe.skipIf(!RUN_E2E)('issues read E2E', () => {
         'list',
         '--team',
         teamName,
-        '--json',
+        '--plain',
         '--all-states',
         '--limit',
         '5',
       ]);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { issues: unknown[] };
-      expect(Array.isArray(data.issues)).toBe(true);
+      const records = parsePlainList(r.stdout);
+      expect(Array.isArray(records)).toBe(true);
     },
     CMD_TIMEOUT
   );
 
   it(
-    'issues list --limit 1 --json --all-states returns at most 1 issue',
+    'issues list --limit 1 --plain --all-states returns at most 1 issue',
     async () => {
-      const r = await runCLI(['issues', 'list', '--json', '--all-states', '--limit', '1']);
+      const r = await runCLI(['issues', 'list', '--plain', '--all-states', '--limit', '1']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { issues: unknown[] };
-      expect(data.issues.length).toBeLessThanOrEqual(1);
+      const records = parsePlainList(r.stdout);
+      expect(records.length).toBeLessThanOrEqual(1);
     },
     CMD_TIMEOUT
   );
 
   it(
-    'issues list --state todo --json exits 0',
+    'issues list --state todo --plain exits 0',
     async () => {
-      const r = await runCLI(['issues', 'list', '--json', '--state', 'todo', '--limit', '5']);
+      const r = await runCLI(['issues', 'list', '--plain', '--state', 'todo', '--limit', '5']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { issues: unknown[] };
-      expect(Array.isArray(data.issues)).toBe(true);
+      const records = parsePlainList(r.stdout);
+      expect(Array.isArray(records)).toBe(true);
     },
     CMD_TIMEOUT
   );
@@ -104,18 +112,15 @@ describe.skipIf(!RUN_E2E)('issues read E2E', () => {
   it(
     'issues list rows have identifier, title, state, assignee string fields',
     async () => {
-      const r = await runCLI(['issues', 'list', '--json', '--all-states', '--limit', '5']);
+      const r = await runCLI(['issues', 'list', '--plain', '--all-states', '--limit', '5']);
       expect(r.code).toBe(0);
-      const data = r.json as {
-        issues: Array<{ identifier: string; title: string; state: string; assignee: string }>;
-      };
-      for (const issue of data.issues) {
-        expect(typeof issue.identifier).toBe('string');
-        expect(typeof issue.title).toBe('string');
-        expect(typeof issue.state).toBe('string');
-        expect(typeof issue.assignee).toBe('string');
+      const records = parsePlainList(r.stdout);
+      for (const issue of records) {
+        expect(typeof issue['_primaryId']).toBe('string');  // identifier
+        expect(typeof issue['title']).toBe('string');
+        expect(typeof issue['state']).toBe('string');
         // identifier must match generic team-key + number pattern
-        expect(issue.identifier).toMatch(/^[A-Z0-9]+-\d+$/);
+        expect(issue['_primaryId']).toMatch(/^[A-Z0-9]+-\d+$/);
       }
     },
     CMD_TIMEOUT
@@ -124,24 +129,23 @@ describe.skipIf(!RUN_E2E)('issues read E2E', () => {
   // ── issues me ────────────────────────────────────────────────────────────
 
   it(
-    'issues me --json --all-states exits 0 and returns issues array with pageInfo',
+    'issues me --plain --all-states exits 0 and returns issues array',
     async () => {
-      const r = await runCLI(['issues', 'me', '--json', '--all-states', '--limit', '10']);
+      const r = await runCLI(['issues', 'me', '--plain', '--all-states', '--limit', '10']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { issues?: unknown[]; pageInfo?: unknown };
-      expect(Array.isArray(data?.issues)).toBe(true);
-      expect(data.pageInfo).toBeDefined();
+      const records = parsePlainList(r.stdout);
+      expect(Array.isArray(records)).toBe(true);
     },
     CMD_TIMEOUT
   );
 
   it(
-    'issues me --limit 1 --json --all-states returns at most 1 issue',
+    'issues me --limit 1 --plain --all-states returns at most 1 issue',
     async () => {
-      const r = await runCLI(['issues', 'me', '--json', '--all-states', '--limit', '1']);
+      const r = await runCLI(['issues', 'me', '--plain', '--all-states', '--limit', '1']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { issues: unknown[] };
-      expect(data.issues.length).toBeLessThanOrEqual(1);
+      const records = parsePlainList(r.stdout);
+      expect(records.length).toBeLessThanOrEqual(1);
     },
     CMD_TIMEOUT
   );
@@ -149,39 +153,35 @@ describe.skipIf(!RUN_E2E)('issues read E2E', () => {
   // ── issues query ─────────────────────────────────────────────────────────
 
   it(
-    'issues query <discovered-token> --json --all-states finds the probe issue',
+    'issues query <discovered-token> --plain --all-states finds the probe issue',
     async () => {
       expect(queryToken).not.toBe('');
       const r = await runCLI([
         'issues',
         'query',
         queryToken,
-        '--json',
+        '--plain',
         '--all-states',
         '--limit',
         '10',
       ]);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { issues?: Array<{ identifier: string }> };
-      expect(Array.isArray(data?.issues)).toBe(true);
+      const records = parsePlainList(r.stdout);
+      expect(Array.isArray(records)).toBe(true);
       // The probe issue we created must appear in results
-      const ids = (r.json as { issues: Array<{ identifier: string }> }).issues;
-      expect(ids.length).toBeGreaterThan(0);
+      expect(records.length).toBeGreaterThan(0);
     },
     CMD_TIMEOUT
   );
 
   it(
-    'issues query with a gibberish no-match token exits 0 with empty array',
+    'issues query with a gibberish no-match token exits 0 with empty output',
     async () => {
-      // Use a token with no common words — random hex that cannot fuzzy-match real titles.
-      // We use crypto.randomUUID so there's no substring overlap with our created issues.
       const noMatchToken = `zqxvw-${Math.random().toString(36).slice(2, 10)}-kfjmbnp`;
-      const r = await runCLI(['issues', 'query', noMatchToken, '--json', '--all-states']);
+      const r = await runCLI(['issues', 'query', noMatchToken, '--plain', '--all-states']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { issues: unknown[] };
-      expect(Array.isArray(data.issues)).toBe(true);
-      expect(data.issues.length).toBe(0);
+      const records = parsePlainList(r.stdout);
+      expect(records.length).toBe(0);
     },
     CMD_TIMEOUT
   );

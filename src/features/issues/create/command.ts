@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addJsonOptions } from '../../../lib/commandOptions.js';
+import { addAuthOptions, addPlainOption } from '../../../lib/commandOptions.js';
 import { createIssue } from './create.js';
 
 export function registerCreateCommand(issues: Command): void {
@@ -20,7 +20,7 @@ export function registerCreateCommand(issues: Command): void {
     .option('--parent <id>', 'Parent issue ID')
     .option('--due-date <YYYY-MM-DD>', 'Due date');
 
-  addAuthOptions(addJsonOptions(cmd)).action(
+  addAuthOptions(addPlainOption(cmd)).action(
     async (opts: {
       title: string;
       team: string;
@@ -37,8 +37,7 @@ export function registerCreateCommand(issues: Command): void {
       dueDate?: string;
       apiKey?: string;
       token?: string;
-      json?: boolean;
-      pretty?: boolean;
+      plain?: boolean;
     }) => {
       const labels = opts.labels
         ? opts.labels
@@ -62,8 +61,7 @@ export function registerCreateCommand(issues: Command): void {
         cycle: opts.cycle,
         parent: opts.parent,
         dueDate: opts.dueDate,
-        json: !!opts.json,
-        pretty: !!opts.pretty,
+        plain: !!opts.plain,
       });
     }
   );

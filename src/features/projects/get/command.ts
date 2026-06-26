@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addJsonOptions } from '../../../lib/commandOptions.js';
+import { addAuthOptions, addPlainOption } from '../../../lib/commandOptions.js';
 import { getProject } from './get.js';
 
 export function registerGetCommand(projects: Command): void {
@@ -7,14 +7,13 @@ export function registerGetCommand(projects: Command): void {
     .command('get <id>')
     .description('Get project detail by name or UUID');
 
-  addAuthOptions(addJsonOptions(cmd)).action(
-    async (id: string, opts: { apiKey?: string; token?: string; json?: boolean; pretty?: boolean }) => {
+  addAuthOptions(addPlainOption(cmd)).action(
+    async (id: string, opts: { apiKey?: string; token?: string; plain?: boolean }) => {
       await getProject({
         apiKey: opts.apiKey,
         token: opts.token,
         id,
-        json: !!opts.json,
-        pretty: !!opts.pretty,
+        plain: !!opts.plain,
       });
     }
   );

@@ -12,8 +12,7 @@ export interface ListTeamsOptions {
   limit: number;
   after?: string;
   all: boolean;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 async function fetchTeamsSDK(
@@ -60,5 +59,5 @@ export async function listTeams(opts: ListTeamsOptions): Promise<void> {
     (e) => mapLinearError(e)
   );
 
-  await runAndRender(resultAsync, opts.json, opts.pretty);
+  await runAndRender(resultAsync, opts.plain);
 }

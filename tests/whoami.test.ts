@@ -26,11 +26,6 @@ function stdMocks(clientMock: ReturnType<typeof makeClientMock>) {
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: vi.fn(),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue('MD_TABLE'),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue('PRETTY_TABLE'),
     printTable: vi.fn(),
@@ -77,7 +72,7 @@ describe('whoami command', () => {
     expect(printTableCalls[0]).toBe('PRETTY_TABLE');
   });
 
-  it('uses markdownTable when stdout is NOT a TTY', async () => {
+  it('isTTY=false still uses prettyTable', async () => {
     Object.defineProperty(process.stdout, 'isTTY', {
       value: false,
       writable: true,
@@ -86,17 +81,16 @@ describe('whoami command', () => {
     const clientMock = makeClientMock();
     stdMocks(clientMock);
 
-    const printMarkdownCalls: unknown[] = [];
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue('MD_TABLE'),
-      printMarkdown: vi.fn().mockImplementation((s: unknown) => printMarkdownCalls.push(s)),
+    const printTableCalls: unknown[] = [];
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue('TABLE'),
+      printTable: vi.fn().mockImplementation((s: unknown) => printTableCalls.push(s)),
     }));
 
     const program = await buildProgram();
     await program.parseAsync(['node', 'linear', 'whoami', '--api-key', 'test-key']);
 
-    expect(printMarkdownCalls.length).toBeGreaterThan(0);
-    expect(printMarkdownCalls[0]).toBe('MD_TABLE');
+    expect(printTableCalls.length).toBeGreaterThan(0);
   });
 
   it('table output includes workspace row', async () => {
@@ -125,40 +119,21 @@ describe('whoami command', () => {
     expect(workspaceRow?.[1]).toBe('Acme Corp');
   });
 
-  it('calls printJson when --json flag is used', async () => {
+  it('--plain output includes user name', async () => {
     const clientMock = makeClientMock();
     stdMocks(clientMock);
 
-    const jsonOutputs: unknown[] = [];
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => jsonOutputs.push(d)),
-    }));
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'whoami', '--api-key', 'test-key', '--json']);
+    await program.parseAsync(['node', 'linear', 'whoami', '--api-key', 'test-key', '--plain']);
 
-    expect(jsonOutputs[0]).toMatchObject({
-      id: 'u1',
-      name: 'Alice',
-      email: 'alice@example.com',
-      workspace: 'Acme Corp',
-    });
-  });
+    const output = consoleSpy.mock.calls.map((c) => c[0] as string).join('\n');
+    expect(output).toContain('User: Alice');
+    expect(output).toContain('email: alice@example.com');
+    expect(output).toContain('workspace: Acme Corp');
 
-  it('--json output includes user id', async () => {
-    const clientMock = makeClientMock();
-    stdMocks(clientMock);
-
-    const jsonOutputs: unknown[] = [];
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => jsonOutputs.push(d)),
-    }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'whoami', '--api-key', 'test-key', '--json']);
-
-    const out = jsonOutputs[0] as { id: string };
-    expect(out.id).toBe('u1');
+    consoleSpy.mockRestore();
   });
 
   it('unauthenticated: console.error contains "Not authenticated" and exitCode === 1', async () => {
@@ -200,7 +175,7 @@ describe('whoami command', () => {
     stdMocks(clientMock);
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'whoami', '--api-key', 'test-key', '--json']);
+    await program.parseAsync(['node', 'linear', 'whoami', '--api-key', 'test-key']);
 
     // Both getter properties must have been accessed exactly once
     expect(viewerCalls.length).toBe(1);

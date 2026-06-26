@@ -1,4 +1,5 @@
 import { getClient, getRequestFn } from '../../lib/client/index.js';
+import type { PlainField } from '../../lib/output/plain.js';
 import { type ColumnConfig, fetchPaged, runAndRenderPaged } from '../../lib/pagination.js';
 import { exitError } from '../../lib/runner.js';
 import { resolveTeam } from '../issues/shared/resolve.js';
@@ -11,8 +12,7 @@ export interface ListLabelsOptions {
   limit: number;
   after?: string;
   all: boolean;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface LabelRow {
@@ -22,11 +22,16 @@ interface LabelRow {
   parentId: string | null;
 }
 
+function labelPlainFields(l: LabelRow): PlainField[] {
+  return [{ key: 'color', value: l.color }];
+}
+
 const LABEL_COLUMNS: ColumnConfig<LabelRow> = {
-  headers: ['ID', 'Name', 'Color', 'Parent ID'],
-  toRow: (l) => [l.id, l.name, l.color, l.parentId ?? ''],
-  ttyHeaders: ['Name', 'Color'],
-  ttyToRow: (l) => [l.name, l.color],
+  headers: ['Name', 'Color'],
+  toRow: (l) => [l.name, l.color],
+  plainType: 'Label',
+  plainPrimaryId: (l) => l.name,
+  toPlainFields: labelPlainFields,
 };
 
 function toLabelRows(
@@ -71,5 +76,5 @@ export async function listLabels(opts: ListLabelsOptions): Promise<void> {
     { all: opts.all, after: opts.after, limit: opts.limit }
   );
 
-  await runAndRenderPaged(resultAsync, opts.json, 'labels', LABEL_COLUMNS, 'labels', opts.pretty);
+  await runAndRenderPaged(resultAsync, opts.plain, LABEL_COLUMNS, 'labels');
 }

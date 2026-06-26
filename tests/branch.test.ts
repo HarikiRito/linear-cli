@@ -15,7 +15,6 @@ function stdMocks(requestFn: ReturnType<typeof vi.fn>) {
     getClient: vi.fn().mockReturnValue(ok({})),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
   vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 }
 
@@ -58,28 +57,6 @@ describe('issues branch', () => {
     expect(stdoutSpy).toHaveBeenCalledWith('eng-123-fix-thing\n');
   });
 
-  it('--json outputs JSON with branchName', async () => {
-    const requestFn = vi.fn().mockResolvedValue(makeBranchResponse());
-    const printJsonCalls: unknown[] = [];
-
-    stdMocks(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
-      const actual =
-        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
-      return {
-        ...actual,
-        resolveIssueIdentifier: vi.fn().mockResolvedValue(ok('ENG-123')),
-      };
-    });
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'branch', 'ENG-123', '--json']);
-
-    expect(printJsonCalls[0]).toMatchObject({ branchName: 'eng-123-fix-thing' });
-  });
 
   it('--checkout runs git checkout -b', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeBranchResponse());
@@ -142,7 +119,6 @@ describe('issues branch', () => {
       getClient: vi.fn().mockReturnValue(ok({ team: teamMock })),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     // Use the real resolve module (don't let stale doMock from previous tests override it)

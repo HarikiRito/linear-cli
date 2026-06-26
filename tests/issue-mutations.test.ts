@@ -40,11 +40,6 @@ function stdMocks(clientMock: ReturnType<typeof makeClientMock>) {
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: vi.fn(),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
     printTable: vi.fn(),
@@ -90,7 +85,6 @@ describe('issues create', () => {
       'Foo',
       '--team',
       'Engineering',
-      '--json',
     ]);
 
     expect(createIssueFn).toHaveBeenCalledWith(
@@ -127,11 +121,6 @@ describe('issues create', () => {
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),
@@ -174,7 +163,6 @@ describe('issues create', () => {
       'eng',
       '--priority',
       '0',
-      '--json',
     ]);
 
     expect(createIssueFn).toHaveBeenCalledWith(expect.objectContaining({ priority: 0 }));
@@ -211,7 +199,6 @@ describe('issues create', () => {
       'bug',
       '--state',
       'In Progress',
-      '--json',
     ]);
 
     expect(createIssueFn).toHaveBeenCalledWith(
@@ -240,11 +227,6 @@ describe('issues update', () => {
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),
@@ -281,7 +263,6 @@ describe('issues update', () => {
       'ISSUE-1',
       '--title',
       'New',
-      '--json',
     ]);
 
     expect(updateIssueFn).toHaveBeenCalledWith(
@@ -311,7 +292,6 @@ describe('issues update', () => {
       'ISSUE-1',
       '--labels',
       'bug,feat',
-      '--json',
     ]);
 
     expect(updateIssueFn).toHaveBeenCalledWith(
@@ -353,11 +333,6 @@ describe('issues delete', () => {
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),

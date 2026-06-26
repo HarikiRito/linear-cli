@@ -1,5 +1,4 @@
 import type { Command } from 'commander';
-import { addJsonOptions } from '../../lib/commandOptions.js';
 import { searchDocumentation } from './search.js';
 
 export function registerSearchDocumentation(program: Command): void {
@@ -12,7 +11,7 @@ export function registerSearchDocumentation(program: Command): void {
         'query and no stable public HTTPS search endpoint are available.'
     );
 
-  addJsonOptions(cmd).action((query: string, opts: { json?: boolean; pretty?: boolean }) => {
-    searchDocumentation({ query, json: !!opts.json, pretty: !!opts.pretty });
+  cmd.action((query: string) => {
+    searchDocumentation({ query });
   });
 }

@@ -1,8 +1,8 @@
 import { ResultAsync } from 'neverthrow';
 import { getClient, getRequestFn } from '../../lib/client/index.js';
 import { coerceCliError, NotFoundError } from '../../lib/errors.js';
-import { printJson } from '../../lib/output/json.js';
-import { markdownTable, printMarkdown } from '../../lib/output/markdown.js';
+import type { PlainField } from '../../lib/output/plain.js';
+import { renderPlainRecord } from '../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../lib/output/table.js';
 import { exitError } from '../../lib/runner.js';
 import { GET_DOCUMENT_QUERY } from './queries.js';
@@ -11,8 +11,7 @@ export interface GetDocumentOptions {
   apiKey?: string;
   token?: string;
   id: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface DocumentDetail {
@@ -54,19 +53,26 @@ export async function getDocument(opts: GetDocumentOptions): Promise<void> {
   );
 
   result.match(
-    (doc) => renderDocumentDetail(doc, opts.json, opts.pretty),
+    (doc) => renderDocumentDetail(doc, opts.plain),
     (e) => exitError(e)
   );
 }
 
-function renderDocumentDetail(doc: DocumentDetail, json: boolean, pretty = false): void {
-  if (json) {
-    printJson({ document: doc }, pretty);
+function renderDocumentDetail(doc: DocumentDetail, plain: boolean): void {
+  if (plain) {
+    const fields: PlainField[] = [
+      { key: 'id', value: doc.id },
+      { key: 'slugId', value: doc.slugId },
+      { key: 'project', value: doc.project?.name ?? null },
+      { key: 'creator', value: doc.creator?.displayName ?? null },
+      { key: 'updatedAt', value: doc.updatedAt },
+      { key: 'content', value: doc.content },
+    ];
+    console.log(renderPlainRecord('Document', doc.title, fields));
     return;
   }
 
   const rows: [string, string][] = [
-    ['ID', doc.id],
     ['Title', doc.title],
     ['Slug', doc.slugId],
     ['Project', doc.project?.name ?? ''],
@@ -74,12 +80,8 @@ function renderDocumentDetail(doc: DocumentDetail, json: boolean, pretty = false
     ['Updated', doc.updatedAt],
   ];
 
-  if (process.stdout.isTTY) {
-    printTable(prettyTable(['Field', 'Value'], rows));
-  } else {
-    printMarkdown(markdownTable(['Field', 'Value'], rows));
-    if (doc.content) {
-      printMarkdown(`\n## Content\n\n${doc.content}`);
-    }
+  printTable(prettyTable(['Field', 'Value'], rows));
+  if (doc.content) {
+    console.log(`\nContent:\n${doc.content}`);
   }
 }

@@ -16,8 +16,7 @@ export interface CreateProjectOptions {
   targetDate?: string;
   startDate?: string;
   state?: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 async function resolveAndCreate(
@@ -58,7 +57,7 @@ export async function createProject(opts: CreateProjectOptions): Promise<void> {
   const result = await ResultAsync.fromPromise(resolveAndCreate(client, opts), coerceCliError);
 
   result.match(
-    (p) => renderProjectResult(p, opts.json, opts.pretty),
+    (p) => renderProjectResult(p, opts.plain),
     (e) => exitError(e)
   );
 }

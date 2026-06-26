@@ -13,8 +13,7 @@ export interface CreateMilestoneOptions {
   name: string;
   targetDate?: string;
   description?: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 async function doCreate(
@@ -61,7 +60,7 @@ export async function createMilestone(opts: CreateMilestoneOptions): Promise<voi
   const result = await ResultAsync.fromPromise(doCreate(client, projectId, opts), coerceCliError);
 
   result.match(
-    (milestone) => renderMilestoneResult(milestone, opts.json, opts.pretty),
+    (milestone) => renderMilestoneResult(milestone, opts.plain),
     (e) => exitError(e)
   );
 }

@@ -2,8 +2,8 @@ import { ResultAsync } from 'neverthrow';
 import { resolveTeam } from '../../../features/issues/shared/resolve.js';
 import { getClient } from '../../../lib/client/index.js';
 import { coerceCliError, NotFoundError } from '../../../lib/errors.js';
-import { printJson } from '../../../lib/output/json.js';
-import { markdownTable, printMarkdown } from '../../../lib/output/markdown.js';
+import type { PlainField } from '../../../lib/output/plain.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../../lib/output/table.js';
 import { exitError } from '../../../lib/runner.js';
 
@@ -11,8 +11,7 @@ export interface GetTeamOptions {
   apiKey?: string;
   token?: string;
   id: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface TeamDetail {
@@ -66,19 +65,24 @@ export async function getTeam(opts: GetTeamOptions): Promise<void> {
   );
 
   result.match(
-    (team) => renderTeamDetail(team, opts.json, opts.pretty),
+    (team) => renderTeamDetail(team, opts.plain),
     (e) => exitError(e)
   );
 }
 
-function renderTeamDetail(team: TeamDetail, json: boolean, pretty = false): void {
-  if (json) {
-    printJson({ team }, pretty);
+function renderTeamDetail(team: TeamDetail, plain: boolean): void {
+  if (plain) {
+    const fields: PlainField[] = [
+      { key: 'key', value: team.key },
+      { key: 'description', value: team.description },
+      { key: 'timezone', value: team.timezone },
+      { key: 'members', value: team.memberCount >= 0 ? String(team.memberCount) : '(many)' },
+    ];
+    console.log(renderPlainRecord('Team', team.name, fields));
     return;
   }
 
   const rows: [string, string][] = [
-    ['ID', team.id],
     ['Name', team.name],
     ['Key', team.key],
     ['Description', team.description ?? ''],
@@ -86,9 +90,5 @@ function renderTeamDetail(team: TeamDetail, json: boolean, pretty = false): void
     ['Members', team.memberCount >= 0 ? String(team.memberCount) : '(many)'],
   ];
 
-  if (process.stdout.isTTY) {
-    printTable(prettyTable(['Field', 'Value'], rows));
-  } else {
-    printMarkdown(markdownTable(['Field', 'Value'], rows));
-  }
+  printTable(prettyTable(['Field', 'Value'], rows));
 }

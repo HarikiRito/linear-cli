@@ -1,5 +1,5 @@
-import { printJson } from '../../lib/output/json.js';
-import { markdownTable, printMarkdown } from '../../lib/output/markdown.js';
+import type { PlainField } from '../../lib/output/plain.js';
+import { renderPlainRecord } from '../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../lib/output/table.js';
 
 export interface DocumentResult {
@@ -11,22 +11,27 @@ export interface DocumentResult {
   updatedAt: string;
 }
 
-export function renderDocumentResult(doc: DocumentResult, json: boolean, pretty = false): void {
-  if (json) {
-    printJson({ document: doc }, pretty);
+export function renderDocumentResult(doc: DocumentResult, plain: boolean): void {
+  if (plain) {
+    const fields: PlainField[] = [
+      { key: 'id', value: doc.id },
+      { key: 'slugId', value: doc.slugId },
+      { key: 'project', value: doc.project?.name ?? null },
+      { key: 'updatedAt', value: doc.updatedAt },
+      { key: 'content', value: doc.content },
+    ];
+    console.log(renderPlainRecord('Document', doc.title, fields));
     return;
   }
   const rows: [string, string][] = [
-    ['ID', doc.id],
     ['Title', doc.title],
     ['Slug', doc.slugId],
     ['Project', doc.project?.name ?? ''],
     ['Updated', doc.updatedAt],
   ];
-  if (process.stdout.isTTY) {
-    printTable(prettyTable(['Field', 'Value'], rows));
-  } else {
-    printMarkdown(markdownTable(['Field', 'Value'], rows));
+  printTable(prettyTable(['Field', 'Value'], rows));
+  if (doc.content) {
+    console.log(`\nContent:\n${doc.content}`);
   }
 }
 

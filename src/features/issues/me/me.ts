@@ -11,8 +11,7 @@ export interface MeOptions {
   limit: number;
   after?: string;
   all: boolean;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
   states: string[];
   allStates: boolean;
 }
@@ -39,7 +38,6 @@ export async function myIssues(opts: MeOptions): Promise<void> {
       after: opts.after,
       limit: opts.limit,
     }),
-    opts.json,
-    opts.pretty
+    opts.plain
   );
 }

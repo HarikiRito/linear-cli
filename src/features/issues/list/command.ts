@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addJsonOptions } from '../../../lib/commandOptions.js';
+import { addAuthOptions, addPlainOption } from '../../../lib/commandOptions.js';
 import { DEFAULT_ISSUE_STATES } from '../../../lib/config.js';
 import { listIssues } from './list.js';
 
@@ -17,7 +17,7 @@ export function registerListCommand(issues: Command): void {
     )
     .option('--all-states', 'Return issues in ALL states (overrides --state)');
 
-  addAuthOptions(addJsonOptions(cmd)).action(async (opts) => {
+  addAuthOptions(addPlainOption(cmd)).action(async (opts) => {
     await listIssues({
       apiKey: opts.apiKey,
       token: opts.token,
@@ -25,8 +25,7 @@ export function registerListCommand(issues: Command): void {
       limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
       after: opts.after,
       all: !!opts.all,
-      json: !!opts.json,
-      pretty: !!opts.pretty,
+      plain: !!opts.plain,
       states: opts.state
         ? (opts.state as string)
             .split(',')

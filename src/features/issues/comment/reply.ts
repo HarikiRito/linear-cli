@@ -11,8 +11,7 @@ export interface ReplyCommentOptions {
   token?: string;
   parentId: string;
   body: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 export async function replyComment(opts: ReplyCommentOptions): Promise<void> {
@@ -49,7 +48,7 @@ export async function replyComment(opts: ReplyCommentOptions): Promise<void> {
   );
 
   result.match(
-    (comment: CommentResult) => renderComment(comment, opts.json, opts.pretty),
+    (comment: CommentResult) => renderComment(comment, opts.plain),
     (e) => exitError(e)
   );
 }

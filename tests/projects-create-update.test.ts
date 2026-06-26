@@ -30,11 +30,6 @@ function stdMocks(clientMock: ReturnType<typeof makeClientMock>) {
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: vi.fn(),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
     printTable: vi.fn(),
@@ -77,7 +72,6 @@ describe('projects create', () => {
       'My Project',
       '--team',
       'Engineering',
-      '--json',
     ]);
 
     expect(createProjectFn).toHaveBeenCalledWith(
@@ -125,7 +119,6 @@ describe('projects create', () => {
       'Engineering',
       '--description',
       'A nice project',
-      '--json',
     ]);
 
     expect(createProjectFn).toHaveBeenCalledWith(
@@ -161,7 +154,6 @@ describe('projects update', () => {
       'Old Name',
       '--name',
       'Bar',
-      '--json',
     ]);
 
     // Should be called with only { name: 'Bar' } — no other spurious fields

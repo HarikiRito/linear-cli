@@ -1,6 +1,7 @@
 import { ResultAsync } from 'neverthrow';
 import { getClient, getRequestFn } from '../../../lib/client/index.js';
 import { mapLinearError } from '../../../lib/errors.js';
+import type { PlainField } from '../../../lib/output/plain.js';
 import { type ColumnConfig, type PagedResult, renderPaged } from '../../../lib/pagination.js';
 import { exitError } from '../../../lib/runner.js';
 import { LIST_COMMENTS_QUERY } from './queries.js';
@@ -11,8 +12,7 @@ export interface ListCommentsOptions {
   issueId: string;
   limit: number;
   after?: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface CommentRow {
@@ -27,9 +27,21 @@ function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 3)}...` : s;
 }
 
+function commentPlainFields(r: CommentRow): PlainField[] {
+  return [
+    { key: 'author', value: r.author },
+    { key: 'body', value: r.body },
+    { key: 'createdAt', value: r.createdAt },
+    { key: 'thread', value: r.thread },
+  ];
+}
+
 const COLUMNS: ColumnConfig<CommentRow> = {
   headers: ['ID', 'Author', 'Body', 'CreatedAt', 'Thread'],
   toRow: (r) => [r.id, r.author, r.body, r.createdAt, r.thread],
+  plainType: 'Comment',
+  plainPrimaryId: (r) => r.id,
+  toPlainFields: commentPlainFields,
 };
 
 export async function listComments(opts: ListCommentsOptions): Promise<void> {
@@ -68,7 +80,7 @@ export async function listComments(opts: ListCommentsOptions): Promise<void> {
 
   const r = await result;
   r.match(
-    (data) => renderPaged(data, opts.json, 'comments', COLUMNS, undefined, opts.pretty),
+    (data) => renderPaged(data, opts.plain, COLUMNS),
     (e) => exitError(e)
   );
 }

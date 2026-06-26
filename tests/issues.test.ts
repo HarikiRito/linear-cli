@@ -10,6 +10,7 @@ function makeIssueNode(id: string, title: string) {
     title,
     state: { name: 'Todo' },
     assignee: { displayName: 'Alice' },
+    priority: 0,
   };
 }
 
@@ -34,11 +35,6 @@ function stdMocks(request: ReturnType<typeof vi.fn>) {
     // and return the request spy from getRequestFn.
     getClient: vi.fn().mockReturnValue(ok({})),
     getRequestFn: vi.fn().mockReturnValue(request),
-  }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
@@ -73,7 +69,7 @@ describe('issues list', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list']);
 
     expect(request).toHaveBeenCalledOnce();
   });
@@ -85,18 +81,10 @@ describe('issues list', () => {
     const request = vi.fn().mockResolvedValue(makeListResponse(nodes));
     stdMocks(request);
 
-    const printJsonCalls: unknown[] = [];
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list']);
 
     expect(request).toHaveBeenCalledOnce();
-    const out = printJsonCalls[0] as { issues: { state: string; assignee: string }[] };
-    expect(out.issues[0].state).toBe('Todo');
-    expect(out.issues[0].assignee).toBe('Alice');
   });
 
   it('respects --limit (passes as "first" variable)', async () => {
@@ -104,7 +92,7 @@ describe('issues list', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json', '--limit', '10']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--limit', '10']);
 
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'Document' }),
@@ -122,7 +110,6 @@ describe('issues list', () => {
       'linear',
       'issues',
       'list',
-      '--json',
       '--after',
       'cursor123',
     ]);
@@ -150,39 +137,36 @@ describe('issues list', () => {
       );
     stdMocks(request);
 
-    const printJsonCalls: unknown[] = [];
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--all', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--all']);
 
     expect(request).toHaveBeenCalledTimes(2);
-    const result = printJsonCalls[0] as { issues: unknown[] };
-    expect(result.issues.length).toBe(60);
   });
 
-  it('--json output includes pageInfo with hasNextPage and endCursor', async () => {
+  it('table output produced for issues list', async () => {
     const request = vi.fn().mockResolvedValue(
       makeListResponse([makeIssueNode('ENG-1', 'Issue 1')], {
         hasNextPage: true,
         endCursor: 'abc123',
       })
     );
-    stdMocks(request);
-
-    const printJsonCalls: unknown[] = [];
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
+    const printTableCalls: unknown[] = [];
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
     }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue('TABLE'),
+      printTable: vi.fn().mockImplementation((s: unknown) => printTableCalls.push(s)),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list']);
 
-    const out = printJsonCalls[0] as { pageInfo: { hasNextPage: boolean; endCursor: string } };
-    expect(out.pageInfo.hasNextPage).toBe(true);
-    expect(out.pageInfo.endCursor).toBe('abc123');
+    expect(request).toHaveBeenCalledOnce();
+    expect(printTableCalls.length).toBeGreaterThan(0);
   });
 
   it('filters by --team server-side', async () => {
@@ -190,7 +174,7 @@ describe('issues list', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json', '--team', 'ENG']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--team', 'ENG']);
 
     // With default state filter, team filter is AND-merged with state filter
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
@@ -202,7 +186,7 @@ describe('issues list', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list']);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
     const json = JSON.stringify(vars);
@@ -222,7 +206,6 @@ describe('issues list', () => {
       'linear',
       'issues',
       'list',
-      '--json',
       '--state',
       'in_progress,dev_review',
     ]);
@@ -239,7 +222,7 @@ describe('issues list', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json', '--all-states']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--all-states']);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
     expect(JSON.stringify(vars)).not.toContain('eqIgnoreCase');
@@ -250,13 +233,57 @@ describe('issues list', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json', '--team', 'ENG']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--team', 'ENG']);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
     const json = JSON.stringify(vars);
     expect(json).toContain('"ENG"');
     expect(json).toContain('eqIgnoreCase');
     expect(json).toContain('"and"');
+  });
+
+  it('--json is an unknown option (errors after removal)', async () => {
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+    const program = await buildProgram();
+
+    await expect(
+      program.parseAsync(['node', 'linear', 'issues', 'list', '--json'])
+    ).rejects.toThrow(/unknown option/i);
+  });
+
+  it('--plain outputs Issue block-format with --- separator between records', async () => {
+    const nodes = [
+      makeIssueNode('ENG-1', 'First Issue'),
+      makeIssueNode('ENG-2', 'Second Issue'),
+    ];
+    const request = vi.fn().mockResolvedValue(makeListResponse(nodes));
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
+    }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue(''),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--plain', '--all-states']);
+
+    const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+
+    expect(output).toContain('Issue: ENG-1');
+    expect(output).toContain('title: First Issue');
+    expect(output).toContain('state: Todo');
+    expect(output).toContain('priority: 0');
+    expect(output).toContain('assignee: Alice');
+    expect(output).toContain('Issue: ENG-2');
+    expect(output).toContain('title: Second Issue');
+    expect(output).toContain('---');
+
+    consoleSpy.mockRestore();
   });
 });
 
@@ -277,7 +304,7 @@ describe('issues me', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'me', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'me']);
 
     expect(request).toHaveBeenCalledOnce();
   });
@@ -287,7 +314,7 @@ describe('issues me', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'me', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'me']);
 
     // Exactly one request — no second viewer call
     expect(request).toHaveBeenCalledOnce();
@@ -301,7 +328,7 @@ describe('issues me', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'me', '--json', '--limit', '7']);
+    await program.parseAsync(['node', 'linear', 'issues', 'me', '--limit', '7']);
 
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'Document' }),
@@ -314,7 +341,7 @@ describe('issues me', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'me', '--json', '--after', 'meCursor']);
+    await program.parseAsync(['node', 'linear', 'issues', 'me', '--after', 'meCursor']);
 
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'Document' }),
@@ -322,26 +349,38 @@ describe('issues me', () => {
     );
   });
 
-  it('--json output includes pageInfo', async () => {
+  it('table output produced for issues me', async () => {
     const request = vi.fn().mockResolvedValue(
       makeListResponse([makeIssueNode('ENG-1', 'Issue 1')], {
         hasNextPage: true,
         endCursor: 'meNext',
       })
     );
-    stdMocks(request);
+    let capturedRows: string[][] = [];
 
-    const printJsonCalls: unknown[] = [];
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
     }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((_h: string[], rows: string[][]) => {
+        capturedRows = rows;
+        return '';
+      }),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'me', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'me']);
 
-    const out = printJsonCalls[0] as { pageInfo: { hasNextPage: boolean; endCursor: string } };
-    expect(out.pageInfo.hasNextPage).toBe(true);
-    expect(out.pageInfo.endCursor).toBe('meNext');
+    expect(request).toHaveBeenCalledOnce();
+    expect(capturedRows.length).toBeGreaterThan(0);
+    const flat = capturedRows.flat();
+    expect(flat).toContain('ENG-1');
+    expect(flat).toContain('Issue 1');
+    expect(flat).toContain('Todo');
+    expect(flat).toContain('Alice');
   });
 
   it('default state filter applied to me (OR-of-eqIgnoreCase)', async () => {
@@ -349,7 +388,7 @@ describe('issues me', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'me', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'me']);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
     const json = JSON.stringify(vars);
@@ -362,7 +401,7 @@ describe('issues me', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'me', '--json', '--all-states']);
+    await program.parseAsync(['node', 'linear', 'issues', 'me', '--all-states']);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
     const json = JSON.stringify(vars);
@@ -388,7 +427,7 @@ describe('issues query', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug']);
 
     expect(request).toHaveBeenCalledOnce();
   });
@@ -398,7 +437,7 @@ describe('issues query', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'query', 'my search term', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'my search term']);
 
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'Document' }),
@@ -411,7 +450,7 @@ describe('issues query', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug']);
 
     // requestFn is now called with (TypedDocumentNode, vars) — check the document name
     const [docArg] = request.mock.calls[0] as [
@@ -434,7 +473,6 @@ describe('issues query', () => {
       'issues',
       'query',
       'bug',
-      '--json',
       '--limit',
       '20',
     ]);
@@ -456,7 +494,6 @@ describe('issues query', () => {
       'issues',
       'query',
       'bug',
-      '--json',
       '--after',
       'qCursor',
     ]);
@@ -484,39 +521,45 @@ describe('issues query', () => {
       );
     stdMocks(request);
 
-    const printJsonCalls: unknown[] = [];
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--all', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--all']);
 
     expect(request).toHaveBeenCalledTimes(2);
-    const result = printJsonCalls[0] as { issues: unknown[] };
-    expect(result.issues.length).toBe(55);
   });
 
-  it('--json output includes pageInfo', async () => {
+  it('table output produced for issues query', async () => {
     const request = vi.fn().mockResolvedValue(
       makeSearchResponse([makeIssueNode('ENG-1', 'Bug')], {
         hasNextPage: true,
         endCursor: 'qNext',
       })
     );
-    stdMocks(request);
+    let capturedRows: string[][] = [];
 
-    const printJsonCalls: unknown[] = [];
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
     }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((_h: string[], rows: string[][]) => {
+        capturedRows = rows;
+        return '';
+      }),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug']);
 
-    const out = printJsonCalls[0] as { pageInfo: { hasNextPage: boolean; endCursor: string } };
-    expect(out.pageInfo.hasNextPage).toBe(true);
-    expect(out.pageInfo.endCursor).toBe('qNext');
+    expect(request).toHaveBeenCalledOnce();
+    expect(capturedRows.length).toBeGreaterThan(0);
+    const flat = capturedRows.flat();
+    expect(flat).toContain('ENG-1');
+    expect(flat).toContain('Bug');
+    expect(flat).toContain('Todo');
+    expect(flat).toContain('Alice');
   });
 
   it('default state filter applied to query search (OR-of-eqIgnoreCase)', async () => {
@@ -524,7 +567,7 @@ describe('issues query', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug']);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
     const json = JSON.stringify(vars);
@@ -543,7 +586,6 @@ describe('issues query', () => {
       'issues',
       'query',
       'bug',
-      '--json',
       '--all-states',
     ]);
 
@@ -565,7 +607,7 @@ describe('TTY output selection', () => {
     process.exitCode = undefined;
   });
 
-  it('issues list: --json always outputs JSON regardless of isTTY', async () => {
+  it('issues list: default output always uses prettyTable', async () => {
     Object.defineProperty(process.stdout, 'isTTY', {
       value: true,
       writable: true,
@@ -577,24 +619,17 @@ describe('TTY output selection', () => {
       getClient: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
-    const printJsonCalls: unknown[] = [];
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
+    const printTableCalls: unknown[] = [];
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue('TABLE'),
-      printTable: vi.fn(),
+      printTable: vi.fn().mockImplementation((s: unknown) => printTableCalls.push(s)),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json', '--all-states']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--all-states']);
 
-    expect(printJsonCalls.length).toBeGreaterThan(0);
+    expect(printTableCalls.length).toBeGreaterThan(0);
   });
 
   it('issues list: isTTY=true uses prettyTable (cli-table3)', async () => {
@@ -608,11 +643,6 @@ describe('TTY output selection', () => {
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
-    }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
     }));
     const printTableCalls: unknown[] = [];
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -628,7 +658,7 @@ describe('TTY output selection', () => {
     expect(printTableCalls[0]).toBe('PRETTY');
   });
 
-  it('issues list: isTTY=false uses markdown', async () => {
+  it('issues list: isTTY=false still uses prettyTable', async () => {
     Object.defineProperty(process.stdout, 'isTTY', {
       value: false,
       writable: true,
@@ -640,26 +670,20 @@ describe('TTY output selection', () => {
       getClient: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    const printMarkdownCalls: unknown[] = [];
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue('MD'),
-      printMarkdown: vi.fn().mockImplementation((s: unknown) => printMarkdownCalls.push(s)),
-    }));
+    const printTableCalls: unknown[] = [];
     vi.doMock('../src/lib/output/table.js', () => ({
-      prettyTable: vi.fn().mockReturnValue(''),
-      printTable: vi.fn(),
+      prettyTable: vi.fn().mockReturnValue('TABLE'),
+      printTable: vi.fn().mockImplementation((s: unknown) => printTableCalls.push(s)),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
     await program.parseAsync(['node', 'linear', 'issues', 'list', '--all-states']);
 
-    expect(printMarkdownCalls.length).toBeGreaterThan(0);
-    expect(printMarkdownCalls[0]).toBe('MD');
+    expect(printTableCalls.length).toBeGreaterThan(0);
   });
 
-  it('issues list: isTTY=false emits console.error with count label (non-TTY countLabel path)', async () => {
+  it('table output produced when no results', async () => {
     Object.defineProperty(process.stdout, 'isTTY', {
       value: false,
       writable: true,
@@ -671,25 +695,17 @@ describe('TTY output selection', () => {
       getClient: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
+    const printTableCalls: unknown[] = [];
     vi.doMock('../src/lib/output/table.js', () => ({
-      prettyTable: vi.fn().mockReturnValue(''),
-      printTable: vi.fn(),
+      prettyTable: vi.fn().mockReturnValue('TABLE'),
+      printTable: vi.fn().mockImplementation((s: unknown) => printTableCalls.push(s)),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
-
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const program = await buildProgram();
     await program.parseAsync(['node', 'linear', 'issues', 'list', '--all-states']);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringMatching(/Showing \d+ issues/));
-
-    consoleErrorSpy.mockRestore();
+    expect(printTableCalls.length).toBeGreaterThan(0);
   });
 
   it('teams list: isTTY=true uses prettyTable', async () => {
@@ -707,11 +723,6 @@ describe('TTY output selection', () => {
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
       getRequestFn: vi.fn(),
-    }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
     }));
     const printTableCalls: unknown[] = [];
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -759,18 +770,13 @@ describe('exit codes', () => {
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(err(rateLimitErr)),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),
     }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list']);
 
     expect(process.exitCode).toBe(1);
   });
@@ -782,11 +788,6 @@ describe('exit codes', () => {
       getClient: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),
@@ -794,7 +795,7 @@ describe('exit codes', () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'list']);
 
     expect(process.exitCode).toBeUndefined();
   });

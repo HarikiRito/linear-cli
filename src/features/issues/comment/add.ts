@@ -10,8 +10,7 @@ export interface AddCommentOptions {
   token?: string;
   issueId: string;
   body: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 export async function addComment(opts: AddCommentOptions): Promise<void> {
@@ -30,7 +29,7 @@ export async function addComment(opts: AddCommentOptions): Promise<void> {
   );
 
   result.match(
-    (comment: CommentResult) => renderComment(comment, opts.json, opts.pretty),
+    (comment: CommentResult) => renderComment(comment, opts.plain),
     (e) => exitError(e)
   );
 }

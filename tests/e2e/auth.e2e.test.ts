@@ -12,25 +12,25 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { CMD_TIMEOUT, RUN_E2E, runCLI } from './helpers.js';
+import { CMD_TIMEOUT, parsePlainList, parsePlainRecord, RUN_E2E, runCLI } from './helpers.js';
 
 describe.skipIf(!RUN_E2E)('auth E2E', () => {
-  // ── whoami --json ────────────────────────────────────────────────────────
+  // ── whoami --plain ───────────────────────────────────────────────────────
 
   it(
-    'whoami --json returns non-empty id, name, email, workspace (shape only)',
+    'whoami --plain returns non-empty id, name, email, workspace (shape only)',
     async () => {
-      const r = await runCLI(['whoami', '--json']);
+      const r = await runCLI(['whoami', '--plain']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { id: string; name: string; email: string; workspace: string };
-      expect(typeof data.id).toBe('string');
-      expect(data.id).not.toBe('');
-      expect(typeof data.name).toBe('string');
-      expect(data.name).not.toBe('');
-      expect(typeof data.email).toBe('string');
-      expect(data.email).toContain('@');
-      expect(typeof data.workspace).toBe('string');
-      expect(data.workspace).not.toBe('');
+      const data = parsePlainRecord(r.stdout);
+      expect(typeof data['id']).toBe('string');
+      expect(data['id']).not.toBe('');
+      expect(typeof data['_primaryId']).toBe('string');  // name
+      expect(data['_primaryId']).not.toBe('');
+      expect(typeof data['email']).toBe('string');
+      expect(data['email']).toContain('@');
+      expect(typeof data['workspace']).toBe('string');
+      expect(data['workspace']).not.toBe('');
     },
     CMD_TIMEOUT
   );
@@ -40,10 +40,10 @@ describe.skipIf(!RUN_E2E)('auth E2E', () => {
   it(
     'teams list succeeds with stored session (no explicit --token)',
     async () => {
-      const r = await runCLI(['teams', 'list', '--json']);
+      const r = await runCLI(['teams', 'list', '--plain']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { teams?: unknown[] };
-      expect(Array.isArray(data?.teams)).toBe(true);
+      const records = parsePlainList(r.stdout);
+      expect(records.length).toBeGreaterThan(0);
     },
     CMD_TIMEOUT
   );
@@ -53,7 +53,7 @@ describe.skipIf(!RUN_E2E)('auth E2E', () => {
   it(
     'whoami with invalid --token exits non-zero with auth error',
     async () => {
-      const r = await runCLI(['whoami', '--token', 'lin_invalid_token_e2e_test', '--json']);
+      const r = await runCLI(['whoami', '--token', 'lin_invalid_token_e2e_test', '--plain']);
       expect(r.code).not.toBe(0);
       expect(r.stderr + r.stdout).toMatch(/auth|unauthorized|invalid|token|forbidden/i);
     },

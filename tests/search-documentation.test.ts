@@ -42,31 +42,4 @@ describe('search-documentation', () => {
     expect(arg.message).toContain('search-documentation is not supported');
   });
 
-  it('--json outputs valid JSON error and sets exitCode 1', async () => {
-    const printJsonCalls: unknown[] = [];
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
-    vi.doMock('../src/lib/errors.js', () => {
-      class ValidationError extends Error {
-        readonly kind = 'ValidationError' as const;
-        constructor(message: string) {
-          super(message);
-          this.name = 'ValidationError';
-        }
-      }
-      return { ValidationError };
-    });
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'search-documentation', 'query text', '--json']);
-
-    expect(printJsonCalls.length).toBe(1);
-    const out = printJsonCalls[0] as { error: string };
-    expect(out).toHaveProperty('error');
-    expect(out.error).toMatch(/not supported/i);
-    expect(out.error).toContain('search-documentation is not supported');
-    expect(process.exitCode).toBe(1);
-  });
 });

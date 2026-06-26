@@ -19,8 +19,7 @@ export interface ListProjectLabelsOptions {
   limit: number;
   after?: string;
   all: boolean;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface LabelRow {
@@ -31,10 +30,11 @@ interface LabelRow {
 }
 
 const LABEL_COLUMNS: ColumnConfig<LabelRow> = {
-  headers: ['ID', 'Name', 'Color', 'Parent ID'],
-  toRow: (l) => [l.id, l.name, l.color, l.parentId ?? ''],
-  ttyHeaders: ['Name', 'Color'],
-  ttyToRow: (l) => [l.name, l.color],
+  headers: ['Name', 'Color'],
+  toRow: (l) => [l.name, l.color],
+  plainType: 'Label',
+  plainPrimaryId: (l) => l.name,
+  toPlainFields: (l) => [{ key: 'color', value: l.color }],
 };
 
 function toRows(
@@ -105,5 +105,5 @@ export async function listProjectLabels(opts: ListProjectLabelsOptions): Promise
     coerceCliError
   );
 
-  await runAndRenderPaged(resultAsync, opts.json, 'labels', LABEL_COLUMNS, 'labels', opts.pretty);
+  await runAndRenderPaged(resultAsync, opts.plain, LABEL_COLUMNS, 'labels');
 }

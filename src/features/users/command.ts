@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addJsonOptions } from '../../lib/commandOptions.js';
+import { addAuthOptions, addPlainOption } from '../../lib/commandOptions.js';
 import { getUser } from './get.js';
 import { listUsers } from './list.js';
 
@@ -21,15 +21,14 @@ export function registerUsers(program: Command): void {
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)');
 
-  addAuthOptions(addJsonOptions(listCmd)).action(
+  addAuthOptions(addPlainOption(listCmd)).action(
     async (opts: {
       limit: string;
       after?: string;
       all?: boolean;
       apiKey?: string;
       token?: string;
-      json?: boolean;
-      pretty?: boolean;
+      plain?: boolean;
     }) => {
       await listUsers({
         apiKey: opts.apiKey,
@@ -37,8 +36,7 @@ export function registerUsers(program: Command): void {
         limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
         after: opts.after,
         all: !!opts.all,
-        json: !!opts.json,
-        pretty: !!opts.pretty,
+        plain: !!opts.plain,
       });
     }
   );
@@ -48,14 +46,13 @@ export function registerUsers(program: Command): void {
     .command('get <id>')
     .description('Get a user by UUID or ID');
 
-  addAuthOptions(addJsonOptions(getCmd)).action(
-    async (id: string, opts: { apiKey?: string; token?: string; json?: boolean; pretty?: boolean }) => {
+  addAuthOptions(addPlainOption(getCmd)).action(
+    async (id: string, opts: { apiKey?: string; token?: string; plain?: boolean }) => {
       await getUser({
         apiKey: opts.apiKey,
         token: opts.token,
         id,
-        json: !!opts.json,
-        pretty: !!opts.pretty,
+        plain: !!opts.plain,
       });
     }
   );

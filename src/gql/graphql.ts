@@ -27626,7 +27626,7 @@ export type SearchIssuesQueryVariables = Exact<{
 
 export type SearchIssuesQuery = { __typename?: 'Query', searchIssues: { __typename?: 'IssueSearchPayload', nodes: Array<{ __typename?: 'IssueSearchResult', identifier: string, title: string, state: { __typename?: 'WorkflowState', name: string }, assignee?: { __typename?: 'User', displayName: string } | null }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null } } };
 
-export type IssueFieldsFragment = { __typename?: 'Issue', identifier: string, title: string, state: { __typename?: 'WorkflowState', name: string }, assignee?: { __typename?: 'User', displayName: string } | null };
+export type IssueFieldsFragment = { __typename?: 'Issue', identifier: string, title: string, priority: number, state: { __typename?: 'WorkflowState', name: string }, assignee?: { __typename?: 'User', displayName: string } | null };
 
 export type ProjectMilestonesQueryVariables = Exact<{
   id: Scalars['String']['input'];

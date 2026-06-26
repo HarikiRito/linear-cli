@@ -25,11 +25,6 @@ function stdMocks(
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: requestFn ? vi.fn().mockReturnValue(requestFn) : vi.fn(),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
     printTable: vi.fn(),
@@ -78,7 +73,7 @@ describe('comment list', () => {
     stdMocks({}, requestFn);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'comment', 'list', 'ISSUE-1', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'comment', 'list', 'ISSUE-1']);
 
     // requestFn is now called with (TypedDocumentNode, vars) — check that it was called
     // with the correct variables (second arg); the doc is a DocumentNode object (not a string).
@@ -129,7 +124,6 @@ describe('comment add', () => {
       'ISSUE-1',
       '--body',
       'hi',
-      '--json',
     ]);
 
     expect(createCommentFn).toHaveBeenCalledWith(
@@ -170,7 +164,6 @@ describe('comment add', () => {
       'ISSUE-1',
       '--body',
       '-',
-      '--json',
     ]);
 
     expect(createCommentFn).toHaveBeenCalledWith(expect.objectContaining({ body: 'stdin body' }));
@@ -199,11 +192,6 @@ describe('comment reply', () => {
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),
@@ -259,7 +247,6 @@ describe('comment reply', () => {
       'COMMENT-1',
       '--body',
       'reply',
-      '--json',
     ]);
 
     // requestFn called with the typed document and parentId variable
@@ -313,7 +300,6 @@ describe('comment update', () => {
       'COMMENT-1',
       '--body',
       'edited',
-      '--json',
     ]);
 
     expect(updateCommentFn).toHaveBeenCalledWith(
@@ -361,11 +347,6 @@ describe('comment delete', () => {
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),

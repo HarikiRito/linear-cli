@@ -1,6 +1,7 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import type { ResultAsync } from 'neverthrow';
 import type { mapLinearError } from '../../../lib/errors.js';
+import type { PlainField } from '../../../lib/output/plain.js';
 import {
   type ColumnConfig,
   fetchOnePage,
@@ -20,6 +21,7 @@ export interface IssueNode {
   title: string;
   state: { name: string } | null;
   assignee: { displayName: string } | null;
+  priority: number;
 }
 
 export interface IssueRow {
@@ -27,6 +29,7 @@ export interface IssueRow {
   title: string;
   state: string;
   assignee: string;
+  priority: number;
 }
 
 export interface IssuesResult {
@@ -46,6 +49,7 @@ export function toIssueRows(nodes: IssueNode[]): IssueRow[] {
     title: n.title,
     state: n.state?.name ?? '',
     assignee: n.assignee?.displayName ?? '',
+    priority: n.priority,
   }));
 }
 
@@ -54,9 +58,21 @@ function toIssuesResult(r: PagedResult<IssueRow>): IssuesResult {
   return { issues: r.rows, pageInfo: r.pageInfo };
 }
 
+function issuePlainFields(row: IssueRow): PlainField[] {
+  return [
+    { key: 'title', value: row.title },
+    { key: 'state', value: row.state },
+    { key: 'priority', value: String(row.priority) },
+    { key: 'assignee', value: row.assignee },
+  ];
+}
+
 const ISSUE_COLUMNS: ColumnConfig<IssueRow> = {
   headers: ['ID', 'Title', 'State', 'Assignee'],
   toRow: (i) => [i.identifier, i.title, i.state, i.assignee],
+  plainType: 'Issue',
+  plainPrimaryId: (i) => i.identifier,
+  toPlainFields: issuePlainFields,
 };
 
 /**
@@ -102,29 +118,24 @@ export function fetchIssues<TData>(
 }
 
 /** Render and output an IssuesResult to stdout. */
-export function renderIssues(result: IssuesResult, json: boolean, pretty = false): void {
+export function renderIssues(result: IssuesResult, plain: boolean): void {
   renderPaged(
     { rows: result.issues, pageInfo: result.pageInfo },
-    json,
-    'issues',
+    plain,
     ISSUE_COLUMNS,
-    'issues',
-    pretty
+    'issues'
   );
 }
 
 /** Unwrap a ResultAsync<IssuesResult>, render on ok, exitError on err. */
 export async function runAndRender(
   resultAsync: ResultAsync<IssuesResult, ReturnType<typeof mapLinearError>>,
-  json: boolean,
-  pretty = false
+  plain: boolean
 ): Promise<void> {
   await runAndRenderPaged(
     resultAsync.map((r) => ({ rows: r.issues, pageInfo: r.pageInfo })),
-    json,
-    'issues',
+    plain,
     ISSUE_COLUMNS,
-    'issues',
-    pretty
+    'issues'
   );
 }

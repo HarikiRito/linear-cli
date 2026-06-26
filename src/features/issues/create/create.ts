@@ -31,8 +31,7 @@ export interface CreateIssueOptions {
   cycle?: string;
   parent?: string;
   dueDate?: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 async function resolveAndCreate(
@@ -136,7 +135,7 @@ export async function createIssue(opts: CreateIssueOptions): Promise<void> {
   );
 
   result.match(
-    (issue: IssueResult) => renderIssue(issue, opts.json, opts.pretty),
+    (issue: IssueResult) => renderIssue(issue, opts.plain),
     (e) => exitError(e)
   );
 }

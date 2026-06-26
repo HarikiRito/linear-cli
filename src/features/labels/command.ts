@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addJsonOptions } from '../../lib/commandOptions.js';
+import { addAuthOptions, addPlainOption } from '../../lib/commandOptions.js';
 import { createLabel } from './create.js';
 import { listLabels } from './list.js';
 
@@ -21,7 +21,7 @@ export function registerLabels(program: Command): void {
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)');
 
-  addAuthOptions(addJsonOptions(listCmd)).action(
+  addAuthOptions(addPlainOption(listCmd)).action(
     async (opts: {
       team?: string;
       limit: string;
@@ -29,8 +29,7 @@ export function registerLabels(program: Command): void {
       all?: boolean;
       apiKey?: string;
       token?: string;
-      json?: boolean;
-      pretty?: boolean;
+      plain?: boolean;
     }) => {
       await listLabels({
         apiKey: opts.apiKey,
@@ -39,8 +38,7 @@ export function registerLabels(program: Command): void {
         limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
         after: opts.after,
         all: !!opts.all,
-        json: !!opts.json,
-        pretty: !!opts.pretty,
+        plain: !!opts.plain,
       });
     }
   );
@@ -53,7 +51,7 @@ export function registerLabels(program: Command): void {
     .option('--team <key-or-id>', 'Team key or ID (omit for workspace-level label)')
     .option('--description <text>', 'Label description');
 
-  addAuthOptions(addJsonOptions(createCmd)).action(
+  addAuthOptions(addPlainOption(createCmd)).action(
     async (opts: {
       name: string;
       color?: string;
@@ -61,8 +59,7 @@ export function registerLabels(program: Command): void {
       description?: string;
       apiKey?: string;
       token?: string;
-      json?: boolean;
-      pretty?: boolean;
+      plain?: boolean;
     }) => {
       await createLabel({
         apiKey: opts.apiKey,
@@ -71,8 +68,7 @@ export function registerLabels(program: Command): void {
         color: opts.color,
         team: opts.team,
         description: opts.description,
-        json: !!opts.json,
-        pretty: !!opts.pretty,
+        plain: !!opts.plain,
       });
     }
   );

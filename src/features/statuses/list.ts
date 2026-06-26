@@ -1,5 +1,6 @@
 import { getClient, getRequestFn } from '../../lib/client/index.js';
 import { ValidationError } from '../../lib/errors.js';
+import type { PlainField } from '../../lib/output/plain.js';
 import { type ColumnConfig, fetchPaged, runAndRenderPaged } from '../../lib/pagination.js';
 import { exitError } from '../../lib/runner.js';
 import { resolveTeam } from '../issues/shared/resolve.js';
@@ -12,8 +13,7 @@ export interface ListStatusesOptions {
   limit: number;
   after?: string;
   all: boolean;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 export interface StatusRow {
@@ -24,11 +24,20 @@ export interface StatusRow {
   position: number;
 }
 
+function statusPlainFields(s: StatusRow): PlainField[] {
+  return [
+    { key: 'type', value: s.type },
+    { key: 'color', value: s.color },
+    { key: 'position', value: String(s.position) },
+  ];
+}
+
 const STATUS_COLUMNS: ColumnConfig<StatusRow> = {
-  headers: ['ID', 'Name', 'Type', 'Color', 'Position'],
-  toRow: (s) => [s.id, s.name, s.type, s.color, String(s.position)],
-  ttyHeaders: ['Name', 'Type', 'Color'],
-  ttyToRow: (s) => [s.name, s.type, s.color],
+  headers: ['Name', 'Type', 'Color', 'Position'],
+  toRow: (s) => [s.name, s.type, s.color, String(s.position)],
+  plainType: 'Status',
+  plainPrimaryId: (s) => s.name,
+  toPlainFields: statusPlainFields,
 };
 
 export function toStatusRows(
@@ -75,5 +84,5 @@ export async function listStatuses(opts: ListStatusesOptions): Promise<void> {
     { all: opts.all, after: opts.after, limit: opts.limit }
   );
 
-  await runAndRenderPaged(resultAsync, opts.json, 'statuses', STATUS_COLUMNS, 'statuses', opts.pretty);
+  await runAndRenderPaged(resultAsync, opts.plain, STATUS_COLUMNS, 'statuses');
 }

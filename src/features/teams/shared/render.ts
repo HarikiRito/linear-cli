@@ -1,6 +1,7 @@
 import type { Team } from '@linear/sdk';
 import type { ResultAsync } from 'neverthrow';
 import type { mapLinearError } from '../../../lib/errors.js';
+import type { PlainField } from '../../../lib/output/plain.js';
 import {
   type ColumnConfig,
   type PageInfo,
@@ -23,36 +24,36 @@ export function toTeamRows(nodes: Team[]): TeamRow[] {
   return nodes.map((n) => ({ id: n.id, name: n.name, key: n.key }));
 }
 
-// Markdown: ID + Name + Key; TTY omits ID — asymmetry intentional for terminal width.
+function teamPlainFields(t: TeamRow): PlainField[] {
+  return [
+    { key: 'id', value: t.id },
+    { key: 'key', value: t.key },
+  ];
+}
+
 const TEAM_COLUMNS: ColumnConfig<TeamRow> = {
-  headers: ['ID', 'Name', 'Key'],
-  toRow: (t) => [t.id, t.name, t.key],
-  ttyHeaders: ['Name', 'Key'],
-  ttyToRow: (t) => [t.name, t.key],
+  headers: ['Name', 'Key'],
+  toRow: (t) => [t.name, t.key],
+  plainType: 'Team',
+  plainPrimaryId: (t) => t.name,
+  toPlainFields: teamPlainFields,
 };
 
-export function renderTeams(result: TeamsResult, json: boolean, pretty = false): void {
+export function renderTeams(result: TeamsResult, plain: boolean): void {
   renderPaged(
     { rows: result.teams, pageInfo: result.pageInfo },
-    json,
-    'teams',
-    TEAM_COLUMNS,
-    undefined,
-    pretty
+    plain,
+    TEAM_COLUMNS
   );
 }
 
 export async function runAndRender(
   resultAsync: ResultAsync<TeamsResult, ReturnType<typeof mapLinearError>>,
-  json: boolean,
-  pretty = false
+  plain: boolean
 ): Promise<void> {
   await runAndRenderPaged(
     resultAsync.map((r) => ({ rows: r.teams, pageInfo: r.pageInfo })),
-    json,
-    'teams',
-    TEAM_COLUMNS,
-    undefined,
-    pretty
+    plain,
+    TEAM_COLUMNS
   );
 }

@@ -1,5 +1,6 @@
 import { getClient, getRequestFn } from '../../lib/client/index.js';
 import { ValidationError } from '../../lib/errors.js';
+import type { PlainField } from '../../lib/output/plain.js';
 import { type ColumnConfig, fetchPaged, runAndRenderPaged } from '../../lib/pagination.js';
 import { exitError } from '../../lib/runner.js';
 import { resolveTeam } from '../issues/shared/resolve.js';
@@ -12,8 +13,7 @@ export interface ListCyclesOptions {
   limit: number;
   after?: string;
   all: boolean;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface CycleRow {
@@ -25,11 +25,21 @@ interface CycleRow {
   completedAt: string | null;
 }
 
+function cyclePlainFields(c: CycleRow): PlainField[] {
+  return [
+    { key: 'number', value: String(c.number) },
+    { key: 'startsAt', value: c.startsAt },
+    { key: 'endsAt', value: c.endsAt },
+    { key: 'completedAt', value: c.completedAt },
+  ];
+}
+
 const CYCLE_COLUMNS: ColumnConfig<CycleRow> = {
-  headers: ['ID', 'Name', 'Number', 'Starts At', 'Ends At', 'Completed At'],
-  toRow: (c) => [c.id, c.name ?? '', String(c.number), c.startsAt, c.endsAt, c.completedAt ?? ''],
-  ttyHeaders: ['Name', 'Number', 'Starts At', 'Ends At'],
-  ttyToRow: (c) => [c.name ?? `#${c.number}`, String(c.number), c.startsAt, c.endsAt],
+  headers: ['Name', 'Number', 'Starts At', 'Ends At'],
+  toRow: (c) => [c.name ?? `#${c.number}`, String(c.number), c.startsAt, c.endsAt],
+  plainType: 'Cycle',
+  plainPrimaryId: (c) => c.name ?? `#${c.number}`,
+  toPlainFields: cyclePlainFields,
 };
 
 function toCycleRows(
@@ -81,5 +91,5 @@ export async function listCycles(opts: ListCyclesOptions): Promise<void> {
     limit: opts.limit,
   });
 
-  await runAndRenderPaged(resultAsync, opts.json, 'cycles', CYCLE_COLUMNS, 'cycles', opts.pretty);
+  await runAndRenderPaged(resultAsync, opts.plain, CYCLE_COLUMNS, 'cycles');
 }

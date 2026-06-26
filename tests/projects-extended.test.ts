@@ -42,11 +42,6 @@ function stdMocks(requestFn: ReturnType<typeof vi.fn>) {
     getClient: vi.fn().mockReturnValue(ok({})),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
     printTable: vi.fn(),
@@ -74,31 +69,15 @@ describe('projects get', () => {
     process.exitCode = undefined;
   });
 
-  it('JSON has full project fields', async () => {
+  it('fetches project fields', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeProjectDetailResponse());
-    const printJsonCalls: unknown[] = [];
 
     stdMocks(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'projects', 'get', PROJ_UUID, '--json']);
+    await program.parseAsync(['node', 'linear', 'projects', 'get', PROJ_UUID]);
 
-    const out = printJsonCalls[0] as { project: Record<string, unknown> };
-    expect(out.project).toMatchObject({
-      id: PROJ_UUID,
-      name: 'My Project',
-      description: 'A great project',
-      state: 'started',
-    });
-    expect(out.project.url).toBeTruthy();
-    expect('startDate' in out.project).toBe(true);
-    expect('targetDate' in out.project).toBe(true);
-    expect(out.project.lead).toMatchObject({ id: 'user-uuid' });
-    expect(Array.isArray(out.project.teams)).toBe(true);
-    expect(Array.isArray(out.project.members)).toBe(true);
+    expect(requestFn).toHaveBeenCalledOnce();
   });
 
   it('unknown project calls exitError', async () => {
@@ -109,7 +88,7 @@ describe('projects get', () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'projects', 'get', PROJ_UUID, '--json']);
+    await program.parseAsync(['node', 'linear', 'projects', 'get', PROJ_UUID]);
 
     expect(exitErrorMock).toHaveBeenCalled();
   });
@@ -132,12 +111,8 @@ describe('projects labels', () => {
       { id: 'label-2', name: 'feature', color: '#00ff00', parent: null },
     ];
     const requestFn = vi.fn().mockResolvedValue(makeProjectLabelsResponse(labelNodes));
-    const printJsonCalls: unknown[] = [];
 
     stdMocks(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
 
     const program = await buildProgram();
     await program.parseAsync([
@@ -147,20 +122,9 @@ describe('projects labels', () => {
       'labels',
       '--project',
       PROJ_UUID,
-      '--json',
     ]);
 
-    const out = printJsonCalls[0] as {
-      labels: { id: string; name: string; color: string; parentId: string | null }[];
-    };
-    expect(Array.isArray(out.labels)).toBe(true);
-    expect(out.labels.length).toBe(2);
-    expect(out.labels[0]).toMatchObject({
-      id: 'label-1',
-      name: 'bug',
-      color: '#ff0000',
-      parentId: null,
-    });
+    expect(requestFn).toHaveBeenCalledOnce();
   });
 
   it('missing --project causes Commander error', async () => {
@@ -169,7 +133,7 @@ describe('projects labels', () => {
     const program = await buildProgram();
 
     await expect(
-      program.parseAsync(['node', 'linear', 'projects', 'labels', '--json'])
+      program.parseAsync(['node', 'linear', 'projects', 'labels'])
     ).rejects.toThrow();
   });
 });

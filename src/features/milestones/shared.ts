@@ -1,5 +1,5 @@
-import { printJson } from '../../lib/output/json.js';
-import { markdownTable, printMarkdown } from '../../lib/output/markdown.js';
+import type { PlainField } from '../../lib/output/plain.js';
+import { renderPlainRecord } from '../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../lib/output/table.js';
 
 export interface MilestoneResult {
@@ -10,20 +10,21 @@ export interface MilestoneResult {
   project: { id: string; name: string } | null;
 }
 
-export function renderMilestoneResult(milestone: MilestoneResult, json: boolean, pretty = false): void {
-  if (json) {
-    printJson({ milestone }, pretty);
+export function renderMilestoneResult(milestone: MilestoneResult, plain: boolean): void {
+  if (plain) {
+    const fields: PlainField[] = [
+      { key: 'id', value: milestone.id },
+      { key: 'targetDate', value: milestone.targetDate },
+      { key: 'description', value: milestone.description },
+      { key: 'project', value: milestone.project?.name ?? null },
+    ];
+    console.log(renderPlainRecord('Milestone', milestone.name, fields));
     return;
   }
   const rows: [string, string][] = [
-    ['ID', milestone.id],
     ['Name', milestone.name],
     ['Target Date', milestone.targetDate ?? ''],
     ['Project', milestone.project?.name ?? ''],
   ];
-  if (process.stdout.isTTY) {
-    printTable(prettyTable(['Field', 'Value'], rows));
-  } else {
-    printMarkdown(markdownTable(['Field', 'Value'], rows));
-  }
+  printTable(prettyTable(['Field', 'Value'], rows));
 }

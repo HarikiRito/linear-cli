@@ -1,8 +1,8 @@
 import { ResultAsync } from 'neverthrow';
 import { getClient, getRequestFn } from '../../../lib/client/index.js';
 import { coerceCliError, NotFoundError } from '../../../lib/errors.js';
-import { printJson } from '../../../lib/output/json.js';
-import { markdownTable, printMarkdown } from '../../../lib/output/markdown.js';
+import type { PlainField } from '../../../lib/output/plain.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../../lib/output/table.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
@@ -12,8 +12,7 @@ export interface GetIssueOptions {
   apiKey?: string;
   token?: string;
   id: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface AttachmentRow {
@@ -108,14 +107,28 @@ export async function getIssue(opts: GetIssueOptions): Promise<void> {
   );
 
   result.match(
-    (issue) => renderIssueDetail(issue, opts.json, opts.pretty),
+    (issue) => renderIssueDetail(issue, opts.plain),
     (e) => exitError(e)
   );
 }
 
-function renderIssueDetail(issue: IssueDetail, json: boolean, pretty = false): void {
-  if (json) {
-    printJson({ issue }, pretty);
+function renderIssueDetail(issue: IssueDetail, plain: boolean): void {
+  if (plain) {
+    const fields: PlainField[] = [
+      { key: 'title', value: issue.title },
+      { key: 'state', value: issue.state?.name ?? null },
+      { key: 'assignee', value: issue.assignee?.name ?? null },
+      { key: 'priority', value: String(issue.priority) },
+      { key: 'project', value: issue.project?.name ?? null },
+      { key: 'labels', value: issue.labels.map((l) => l.name) },
+      { key: 'url', value: issue.url },
+      { key: 'branchName', value: issue.branchName },
+      { key: 'dueDate', value: issue.dueDate },
+      { key: 'parent', value: issue.parent?.identifier ?? null },
+      { key: 'children', value: issue.children.map((c) => c.identifier) },
+      { key: 'description', value: issue.description },
+    ];
+    console.log(renderPlainRecord('Issue', issue.identifier, fields));
     return;
   }
 
@@ -127,7 +140,6 @@ function renderIssueDetail(issue: IssueDetail, json: boolean, pretty = false): v
     ['Labels', issue.labels.map((l) => l.name).join(', ')],
     ['Project', issue.project?.name ?? ''],
     ['Priority', String(issue.priority)],
-    ['Estimate', issue.estimate !== null ? String(issue.estimate) : ''],
     ['Due Date', issue.dueDate ?? ''],
     ['Branch', issue.branchName],
     ['Parent', issue.parent ? `${issue.parent.identifier}: ${issue.parent.title}` : ''],
@@ -136,12 +148,8 @@ function renderIssueDetail(issue: IssueDetail, json: boolean, pretty = false): v
     ['Created', issue.createdAt],
   ];
 
-  if (process.stdout.isTTY) {
-    printTable(prettyTable(['Field', 'Value'], rows));
-  } else {
-    printMarkdown(markdownTable(['Field', 'Value'], rows));
-    if (issue.description) {
-      printMarkdown(`\n## Description\n\n${issue.description}`);
-    }
+  printTable(prettyTable(['Field', 'Value'], rows));
+  if (issue.description) {
+    console.log(`\nDescription:\n${issue.description}`);
   }
 }

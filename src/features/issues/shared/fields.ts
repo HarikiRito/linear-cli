@@ -10,5 +10,6 @@ export const IssueFieldsFragment = graphql(`
     title
     state { name }
     assignee { displayName }
+    priority
   }
 `);

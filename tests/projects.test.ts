@@ -24,11 +24,6 @@ function stdMocks(projectsFn: ReturnType<typeof vi.fn>) {
     getClient: vi.fn().mockReturnValue(ok({ projects: projectsFn })),
     getRequestFn: vi.fn(),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 }
 
@@ -58,7 +53,7 @@ describe('projects list', () => {
     stdMocks(projectsFn);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'projects', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'projects', 'list']);
 
     expect(projectsFn).toHaveBeenCalledOnce();
   });
@@ -70,27 +65,16 @@ describe('projects list', () => {
     ];
     const projectsFn = vi.fn().mockResolvedValue(makeConn(nodes));
 
-    const printJsonCalls: unknown[] = [];
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ projects: projectsFn })),
       getRequestFn: vi.fn(),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'projects', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'projects', 'list']);
 
     expect(projectsFn).toHaveBeenCalledOnce();
-    const out = printJsonCalls[0] as { projects: { id: string; name: string; state: string }[] };
-    expect(out.projects[0]).toEqual({ id: 'p1', name: 'Alpha', state: 'started' });
-    expect(out.projects[1]).toEqual({ id: 'p2', name: 'Beta', state: 'planned' });
   });
 
   it('respects --limit (passes as "first" variable)', async () => {
@@ -98,7 +82,7 @@ describe('projects list', () => {
     stdMocks(projectsFn);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'projects', 'list', '--json', '--limit', '15']);
+    await program.parseAsync(['node', 'linear', 'projects', 'list', '--limit', '15']);
 
     expect(projectsFn).toHaveBeenCalledWith(expect.objectContaining({ first: 15 }));
   });
@@ -113,7 +97,6 @@ describe('projects list', () => {
       'linear',
       'projects',
       'list',
-      '--json',
       '--after',
       'projCursor',
     ]);
@@ -141,81 +124,19 @@ describe('projects list', () => {
         )
       );
 
-    const printJsonCalls: unknown[] = [];
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ projects: projectsFn })),
       getRequestFn: vi.fn(),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'projects', 'list', '--all', '--json']);
+    await program.parseAsync(['node', 'linear', 'projects', 'list', '--all']);
 
     expect(projectsFn).toHaveBeenCalledTimes(2);
-    const result = printJsonCalls[0] as { projects: unknown[] };
-    expect(result.projects.length).toBe(54);
   });
 
-  it('--json output includes pageInfo with hasNextPage and endCursor', async () => {
-    const projectsFn = vi.fn().mockResolvedValue(
-      makeConn([makeProjectNode('p1', 'Alpha', 'started')], {
-        hasNextPage: true,
-        endCursor: 'pNext',
-      })
-    );
 
-    const printJsonCalls: unknown[] = [];
-    vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ projects: projectsFn })),
-      getRequestFn: vi.fn(),
-    }));
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
-    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'projects', 'list', '--json']);
-
-    const out = printJsonCalls[0] as { pageInfo: { hasNextPage: boolean; endCursor: string } };
-    expect(out.pageInfo.hasNextPage).toBe(true);
-    expect(out.pageInfo.endCursor).toBe('pNext');
-  });
-
-  it('renders Markdown by default', async () => {
-    const projectsFn = vi
-      .fn()
-      .mockResolvedValue(makeConn([makeProjectNode('p1', 'Alpha', 'started')]));
-
-    const printMarkdownCalls: unknown[] = [];
-    vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ projects: projectsFn })),
-      getRequestFn: vi.fn(),
-    }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue('TABLE'),
-      printMarkdown: vi.fn().mockImplementation((s: unknown) => printMarkdownCalls.push(s)),
-    }));
-    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'projects', 'list']);
-
-    expect(printMarkdownCalls.length).toBeGreaterThan(0);
-    expect(printMarkdownCalls[0]).toBe('TABLE');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -272,14 +193,9 @@ describe('projects exit codes', () => {
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(err(rateLimitErr)),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'projects', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'projects', 'list']);
 
     expect(process.exitCode).toBe(1);
   });

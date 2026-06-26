@@ -1,6 +1,5 @@
 import type { CommentPayload } from '@linear/sdk';
-import { printJson } from '../../../lib/output/json.js';
-import { markdownTable, printMarkdown } from '../../../lib/output/markdown.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../../lib/output/table.js';
 
 export interface CommentResult {
@@ -31,12 +30,17 @@ export async function buildCommentResult(payload: CommentPayload): Promise<Comme
 const COLUMNS = ['ID', 'Body', 'URL', 'CreatedAt', 'Author'];
 const toRowArr = (c: CommentResult): string[] => [c.id, c.body, c.url, c.createdAt, c.author];
 
-export function renderComment(comment: CommentResult, json: boolean, pretty = false): void {
-  if (json) {
-    printJson({ comment }, pretty);
-  } else if (process.stdout.isTTY) {
-    printTable(prettyTable(COLUMNS, [toRowArr(comment)]));
-  } else {
-    printMarkdown(markdownTable(COLUMNS, [toRowArr(comment)]));
+export function renderComment(comment: CommentResult, plain: boolean): void {
+  if (plain) {
+    console.log(
+      renderPlainRecord('Comment', comment.id, [
+        { key: 'author', value: comment.author },
+        { key: 'body', value: comment.body },
+        { key: 'createdAt', value: comment.createdAt },
+        { key: 'url', value: comment.url },
+      ])
+    );
+    return;
   }
+  printTable(prettyTable(COLUMNS, [toRowArr(comment)]));
 }

@@ -2,7 +2,6 @@ import { ResultAsync } from 'neverthrow';
 import { getClient } from '../../lib/client/index.js';
 import { confirmDestructive } from '../../lib/confirm.js';
 import { mapLinearError } from '../../lib/errors.js';
-import { printJson } from '../../lib/output/json.js';
 import { exitError } from '../../lib/runner.js';
 
 export interface DeleteMilestoneOptions {
@@ -10,8 +9,6 @@ export interface DeleteMilestoneOptions {
   token?: string;
   id: string;
   yes: boolean;
-  json: boolean;
-  pretty: boolean;
 }
 
 export async function deleteMilestone(opts: DeleteMilestoneOptions): Promise<void> {
@@ -38,11 +35,7 @@ export async function deleteMilestone(opts: DeleteMilestoneOptions): Promise<voi
 
   result.match(
     () => {
-      if (opts.json) {
-        printJson({ success: true }, opts.pretty);
-      } else {
-        console.log(`Milestone ${opts.id} deleted.`);
-      }
+      console.log(`Milestone ${opts.id} deleted.`);
     },
     (e) => exitError(e)
   );

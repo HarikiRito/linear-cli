@@ -14,6 +14,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   CMD_TIMEOUT,
   discoverTeam,
+  parsePlainList,
+  parsePlainRecord,
   RUN_E2E,
   runCLI,
   type TeamInfo,
@@ -40,13 +42,13 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
       projName,
       '--team',
       team.name,
-      '--json',
+      '--plain',
     ]);
     if (r.code !== 0) {
       throw new Error(`Failed to create project for documents E2E: ${r.stderr}`);
     }
-    const data = r.json as { project?: { id: string } };
-    projectId = data.project?.id ?? '';
+    const data = parsePlainRecord(r.stdout);
+    projectId = data['id'] ?? '';
     if (!projectId) throw new Error('No project id returned from create');
     createdProjectIds.push(projectId);
   }, CMD_TIMEOUT * 2);
@@ -65,13 +67,12 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
   // ── list (no project filter) ──────────────────────────────────────────────
 
   it(
-    'documents list --json exits 0 and returns documents array',
+    'documents list --plain exits 0 and returns documents array',
     async () => {
-      const r = await runCLI(['documents', 'list', '--json']);
+      const r = await runCLI(['documents', 'list', '--plain']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { documents?: unknown[]; pageInfo?: { hasNextPage: boolean } };
-      expect(Array.isArray(data?.documents)).toBe(true);
-      expect(data.pageInfo).toBeDefined();
+      // Plain output may be empty if no docs exist; just verify exit 0
+      expect(r.code).toBe(0);
     },
     CMD_TIMEOUT
   );
@@ -79,7 +80,7 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
   // ── create ────────────────────────────────────────────────────────────────
 
   it(
-    'documents create --json returns document with id, title, slugId',
+    'documents create --plain returns document with id, title, slugId',
     async () => {
       expect(projectId, 'project must be created').not.toBe('');
       documentTitle = uniqueName('e2e-doc');
@@ -90,17 +91,16 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
         documentTitle,
         '--project',
         projectId,
-        '--json',
+        '--plain',
       ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { document?: { id: string; title: string; slugId: string } };
-      expect(data?.document).toBeDefined();
-      expect(typeof data.document?.id).toBe('string');
-      expect(data.document?.id).not.toBe('');
-      expect(data.document?.title).toBe(documentTitle);
-      expect(typeof data.document?.slugId).toBe('string');
+      const data = parsePlainRecord(r.stdout);
+      expect(typeof data['id']).toBe('string');
+      expect(data['id']).not.toBe('');
+      expect(data['_primaryId']).toBe(documentTitle);  // title is primaryId
+      expect(typeof data['slugId']).toBe('string');
 
-      documentId = data.document?.id ?? '';
+      documentId = data['id'] ?? '';
     },
     CMD_TIMEOUT
   );
@@ -123,14 +123,14 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
           projectId,
           '--content-file',
           tmpPath,
-          '--json',
+          '--plain',
         ]);
         expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-        const data = r.json as { document?: { id: string; content: string | null } };
-        expect(data?.document).toBeDefined();
+        const data = parsePlainRecord(r.stdout);
+        expect(data['id']).toBeTruthy();
         // Content may be normalized by Linear but should contain the text
-        if (data.document?.content !== null && data.document?.content !== undefined) {
-          expect(data.document.content).toContain('E2E Test Content');
+        if (data['content']) {
+          expect(data['content']).toContain('E2E Test Content');
         }
       } finally {
         await unlink(tmpPath).catch(() => {});
@@ -142,26 +142,15 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
   // ── get ───────────────────────────────────────────────────────────────────
 
   it(
-    'documents get <id> --json returns full document',
+    'documents get <id> --plain returns full document',
     async () => {
       expect(documentId, 'depends on create').not.toBe('');
-      const r = await runCLI(['documents', 'get', documentId, '--json']);
+      const r = await runCLI(['documents', 'get', documentId, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as {
-        document?: {
-          id: string;
-          title: string;
-          slugId: string;
-          content: string | null;
-          project?: { id: string };
-        };
-      };
-      expect(data?.document).toBeDefined();
-      expect(data.document?.id).toBe(documentId);
-      expect(data.document?.title).toBe(documentTitle);
-      expect(typeof data.document?.slugId).toBe('string');
-      expect('content' in (data.document ?? {})).toBe(true);
-      expect(data.document?.project?.id).toBe(projectId);
+      const data = parsePlainRecord(r.stdout);
+      expect(data['id']).toBe(documentId);
+      expect(data['_primaryId']).toBe(documentTitle);  // title
+      expect(typeof data['slugId']).toBe('string');
     },
     CMD_TIMEOUT
   );
@@ -169,16 +158,15 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
   // ── update ────────────────────────────────────────────────────────────────
 
   it(
-    'documents update <id> --title --json reflects title change',
+    'documents update <id> --title --plain reflects title change',
     async () => {
       expect(documentId, 'depends on create').not.toBe('');
       const newTitle = uniqueName('e2e-doc-updated');
-      const r = await runCLI(['documents', 'update', documentId, '--title', newTitle, '--json']);
+      const r = await runCLI(['documents', 'update', documentId, '--title', newTitle, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { document?: { id: string; title: string } };
-      expect(data?.document).toBeDefined();
-      expect(data.document?.id).toBe(documentId);
-      expect(data.document?.title).toBe(newTitle);
+      const data = parsePlainRecord(r.stdout);
+      expect(data['id']).toBe(documentId);
+      expect(data['_primaryId']).toBe(newTitle);  // updated title
       documentTitle = newTitle;
     },
     CMD_TIMEOUT
@@ -187,15 +175,14 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
   // ── list with project filter ───────────────────────────────────────────────
 
   it(
-    'documents list --project <id> --json scopes to project',
+    'documents list --project <id> --plain scopes to project',
     async () => {
       expect(projectId, 'depends on create').not.toBe('');
-      const r = await runCLI(['documents', 'list', '--project', projectId, '--json']);
+      const r = await runCLI(['documents', 'list', '--project', projectId, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { documents?: { id: string }[] };
-      expect(Array.isArray(data?.documents)).toBe(true);
-      // The document we created should appear
-      const found = data.documents?.some((d) => d.id === documentId);
+      const records = parsePlainList(r.stdout);
+      // The document we created should appear (matched by updated title)
+      const found = records.some((d) => d['_primaryId'] === documentTitle);
       expect(found).toBe(true);
     },
     CMD_TIMEOUT

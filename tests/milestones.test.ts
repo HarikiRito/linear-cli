@@ -73,11 +73,6 @@ function stdMocksWithRequest(
     getClient: vi.fn().mockReturnValue(ok({ ...clientOverrides })),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
     printTable: vi.fn(),
@@ -89,11 +84,6 @@ function stdMocksWithClient(clientMock: ReturnType<typeof makeClientMock>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: vi.fn(),
-  }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
@@ -132,68 +122,11 @@ describe('milestones list', () => {
     const program = await buildProgram();
 
     await expect(
-      program.parseAsync(['node', 'linear', 'milestones', 'list', '--json'])
+      program.parseAsync(['node', 'linear', 'milestones', 'list'])
     ).rejects.toThrow();
   });
 
-  it('JSON has milestones array and pageInfo', async () => {
-    const nodes = [makeMilestoneNode('m1', 'Alpha', '2026-06-01', 'desc')];
-    const requestFn = vi
-      .fn()
-      .mockResolvedValue({ project: { projectMilestones: makeMilestoneConn(nodes) } });
-    const printJsonCalls: unknown[] = [];
 
-    stdMocksWithRequest(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    const program = await buildProgram();
-
-    await program.parseAsync([
-      'node',
-      'linear',
-      'milestones',
-      'list',
-      '--project',
-      PROJ_ID,
-      '--json',
-    ]);
-
-    const out = printJsonCalls[0] as {
-      milestones: { id: string; name: string; targetDate: string | null }[];
-      pageInfo: { hasNextPage: boolean };
-    };
-    expect(Array.isArray(out.milestones)).toBe(true);
-    expect(out.milestones[0]).toMatchObject({ id: 'm1', name: 'Alpha', targetDate: '2026-06-01' });
-    expect(out.pageInfo).toBeDefined();
-  });
-
-  it('empty project returns empty milestones array and exits 0', async () => {
-    const requestFn = vi
-      .fn()
-      .mockResolvedValue({ project: { projectMilestones: makeMilestoneConn([]) } });
-    const printJsonCalls: unknown[] = [];
-
-    stdMocksWithRequest(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    const program = await buildProgram();
-
-    await program.parseAsync([
-      'node',
-      'linear',
-      'milestones',
-      'list',
-      '--project',
-      PROJ_ID,
-      '--json',
-    ]);
-
-    const out = printJsonCalls[0] as { milestones: unknown[] };
-    expect(out.milestones).toEqual([]);
-    expect(process.exitCode).toBeUndefined();
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -207,36 +140,6 @@ describe('milestones get', () => {
     process.exitCode = undefined;
   });
 
-  it('JSON has full milestone fields', async () => {
-    const m = makeMilestoneDetail();
-    const requestFn = vi.fn().mockResolvedValue({ projectMilestone: m });
-    const printJsonCalls: unknown[] = [];
-
-    stdMocksWithRequest(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    const program = await buildProgram();
-
-    await program.parseAsync(['node', 'linear', 'milestones', 'get', MILE_ID, '--json']);
-
-    const out = printJsonCalls[0] as {
-      milestone: {
-        id: string;
-        name: string;
-        targetDate: string | null;
-        description: string | null;
-        progress: number;
-        sortOrder: number;
-        project: { id: string; name: string } | null;
-      };
-    };
-    expect(out.milestone.id).toBe('mile-uuid');
-    expect(out.milestone.name).toBe('Milestone 1');
-    expect(out.milestone.progress).toBe(0.5);
-    expect(out.milestone.sortOrder).toBe(0);
-    expect(out.milestone.project?.id).toBe('proj-uuid');
-  });
 
   it('unknown ID calls exitError with NotFoundError', async () => {
     const requestFn = vi.fn().mockResolvedValue({ projectMilestone: null });
@@ -245,7 +148,7 @@ describe('milestones get', () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'milestones', 'get', 'bad-id', '--json']);
+    await program.parseAsync(['node', 'linear', 'milestones', 'get', 'bad-id']);
 
     expect(exitErrorMock).toHaveBeenCalled();
   });
@@ -277,7 +180,6 @@ describe('milestones create', () => {
       PROJ_ID,
       '--name',
       'M1',
-      '--json',
     ]);
 
     expect(createFn).toHaveBeenCalledWith(
@@ -302,7 +204,6 @@ describe('milestones create', () => {
       'M1',
       '--target-date',
       '2026-12-31',
-      '--json',
     ]);
 
     expect(createFn).toHaveBeenCalledWith(expect.objectContaining({ targetDate: '2026-12-31' }));
@@ -354,7 +255,6 @@ describe('milestones update', () => {
       MILE_ID,
       '--name',
       'NewName',
-      '--json',
     ]);
 
     expect(updateFn).toHaveBeenCalledWith(MILE_ID, { name: 'NewName' });
@@ -374,7 +274,6 @@ describe('milestones update', () => {
       MILE_ID,
       '--target-date',
       '2027-01-01',
-      '--json',
     ]);
 
     expect(updateFn).toHaveBeenCalledWith(MILE_ID, { targetDate: '2027-01-01' });
@@ -413,7 +312,6 @@ describe('milestones delete', () => {
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
 
     // Ensure non-TTY
     const originalIsTTY = process.stdin.isTTY;

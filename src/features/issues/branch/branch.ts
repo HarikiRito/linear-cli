@@ -2,7 +2,6 @@ import { execFileSync } from 'node:child_process';
 import { Result, ResultAsync } from 'neverthrow';
 import { getClient, getRequestFn } from '../../../lib/client/index.js';
 import { coerceCliError, NotFoundError, ValidationError } from '../../../lib/errors.js';
-import { printJson } from '../../../lib/output/json.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 import { GET_ISSUE_BRANCH_QUERY } from './queries.js';
@@ -11,8 +10,6 @@ export interface BranchIssueOptions {
   apiKey?: string;
   token?: string;
   id: string;
-  json: boolean;
-  pretty: boolean;
   checkout: boolean;
 }
 
@@ -45,10 +42,6 @@ export async function branchIssue(opts: BranchIssueOptions): Promise<void> {
 
   result.match(
     (branchName) => {
-      if (opts.json) {
-        printJson({ branchName }, opts.pretty);
-        return;
-      }
       if (opts.checkout) {
         const checkoutResult = Result.fromThrowable(
           () => execFileSync('git', ['checkout', '-b', branchName], { stdio: 'inherit', cwd: process.cwd() }),

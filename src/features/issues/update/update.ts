@@ -34,8 +34,7 @@ export interface UpdateIssueOptions {
   cycle?: string;
   parent?: string;
   dueDate?: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 async function resolveAndUpdate(
@@ -157,7 +156,7 @@ export async function updateIssue(opts: UpdateIssueOptions): Promise<void> {
   );
 
   result.match(
-    (issue: IssueResult) => renderIssue(issue, opts.json, opts.pretty),
+    (issue: IssueResult) => renderIssue(issue, opts.plain),
     (e) => exitError(e)
   );
 }

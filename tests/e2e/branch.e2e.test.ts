@@ -1,5 +1,5 @@
 /**
- * E2E tests: issues branch command (JSON output, plain output, bare-number expansion, error case).
+ * E2E tests: issues branch command (plain output, bare-number expansion, error case).
  * Creates one issue to work with; tracked and deleted in afterAll.
  *
  * Team is discovered at runtime via discoverTeam().
@@ -12,6 +12,7 @@ import {
   CMD_TIMEOUT,
   discoverTeam,
   makeRegistry,
+  parsePlainRecord,
   RUN_E2E,
   runCLI,
   uniqueName,
@@ -40,42 +41,42 @@ describe.skipIf(!RUN_E2E)('issues branch E2E', () => {
       uniqueName('e2e-branch'),
       '--team',
       team.name,
-      '--json',
+      '--plain',
     ]);
     if (r.code !== 0) {
       throw new Error(
         `Setup failed: could not create issue.\nstdout: ${r.stdout}\nstderr: ${r.stderr}`
       );
     }
-    const data = r.json as { issue: { id: string; identifier: string } };
-    const issue = data.issue;
-    reg.trackIssue(issue.id);
-    issueIdentifier = issue.identifier;
+    const data = parsePlainRecord(r.stdout);
+    reg.trackIssue(data['id']);
+    issueIdentifier = data['_primaryId'];
     // Extract the digits after the dash, e.g. "ENG-42" → "42"
-    bareNumber = issue.identifier.split('-')[1];
+    bareNumber = issueIdentifier.split('-')[1];
 
     // Fetch the canonical branch name once so tests 2 and 3 can assert against it.
-    const br = await runCLI(['issues', 'branch', issueIdentifier, '--json']);
+    // The branch command always writes the branch name to stdout (no --plain/--json needed).
+    const br = await runCLI(['issues', 'branch', issueIdentifier]);
     if (br.code !== 0) {
       throw new Error(
         `Setup failed: could not fetch branch name for ${issueIdentifier}.\nstdout: ${br.stdout}\nstderr: ${br.stderr}`
       );
     }
-    knownBranchName = (br.json as { branchName: string }).branchName;
+    knownBranchName = br.stdout.trim();
   }, CMD_TIMEOUT);
 
-  // ── Test 1: --json returns a branchName ────────────────────────────────────
+  // ── Test 1: branch command returns a branchName ────────────────────────────
 
   it(
-    'issues branch <identifier> --json returns a branchName',
+    'issues branch <identifier> returns a branchName',
     async () => {
       expect(issueIdentifier).not.toBe('');
-      const r = await runCLI(['issues', 'branch', issueIdentifier, '--json']);
+      const r = await runCLI(['issues', 'branch', issueIdentifier]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { branchName?: string };
-      expect(typeof data?.branchName).toBe('string');
-      expect(data.branchName).not.toBe('');
-      knownBranchName = data.branchName as string;
+      const branchName = r.stdout.trim();
+      expect(typeof branchName).toBe('string');
+      expect(branchName).not.toBe('');
+      knownBranchName = branchName;
     },
     CMD_TIMEOUT
   );
@@ -93,7 +94,7 @@ describe.skipIf(!RUN_E2E)('issues branch E2E', () => {
       // Must not be JSON
       expect(out.startsWith('{')).toBe(false);
       expect(out.startsWith('[')).toBe(false);
-      // Must match the branch name from the JSON form
+      // Must match the branch name from the known value
       expect(out).toBe(knownBranchName);
     },
     CMD_TIMEOUT
@@ -108,12 +109,12 @@ describe.skipIf(!RUN_E2E)('issues branch E2E', () => {
       expect(teamId).not.toBe('');
       process.env.LINEAR_TEAM_ID = teamId;
       try {
-        const r = await runCLI(['issues', 'branch', bareNumber, '--json']);
+        const r = await runCLI(['issues', 'branch', bareNumber]);
         expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-        const data = r.json as { branchName?: string };
-        expect(typeof data?.branchName).toBe('string');
-        expect(data.branchName).not.toBe('');
-        expect(data.branchName).toBe(knownBranchName);
+        const branchName = r.stdout.trim();
+        expect(typeof branchName).toBe('string');
+        expect(branchName).not.toBe('');
+        expect(branchName).toBe(knownBranchName);
       } finally {
         delete process.env.LINEAR_TEAM_ID;
       }

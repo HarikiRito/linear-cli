@@ -11,8 +11,7 @@ export interface QueryOptions {
   limit: number;
   after?: string;
   all: boolean;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
   states: string[];
   allStates: boolean;
 }
@@ -35,7 +34,6 @@ export async function queryIssues(opts: QueryOptions): Promise<void> {
       after: opts.after,
       limit: opts.limit,
     }),
-    opts.json,
-    opts.pretty
+    opts.plain
   );
 }

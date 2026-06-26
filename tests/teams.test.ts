@@ -24,11 +24,6 @@ function stdMocks(teamsFn: ReturnType<typeof vi.fn>) {
     getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
     getRequestFn: vi.fn(),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 }
 
@@ -56,7 +51,7 @@ describe('teams list', () => {
     stdMocks(teamsFn);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'teams', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'teams', 'list']);
 
     expect(teamsFn).toHaveBeenCalledOnce();
   });
@@ -65,27 +60,16 @@ describe('teams list', () => {
     const nodes = [makeTeamNode('t1', 'Engineering', 'ENG'), makeTeamNode('t2', 'Design', 'DES')];
     const teamsFn = vi.fn().mockResolvedValue(makeConn(nodes));
 
-    const printJsonCalls: unknown[] = [];
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
       getRequestFn: vi.fn(),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'teams', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'teams', 'list']);
 
     expect(teamsFn).toHaveBeenCalledOnce();
-    const out = printJsonCalls[0] as { teams: { id: string; name: string; key: string }[] };
-    expect(out.teams[0]).toEqual({ id: 't1', name: 'Engineering', key: 'ENG' });
-    expect(out.teams[1]).toEqual({ id: 't2', name: 'Design', key: 'DES' });
   });
 
   it('respects --limit (passes as "first" variable)', async () => {
@@ -93,7 +77,7 @@ describe('teams list', () => {
     stdMocks(teamsFn);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'teams', 'list', '--json', '--limit', '5']);
+    await program.parseAsync(['node', 'linear', 'teams', 'list', '--limit', '5']);
 
     expect(teamsFn).toHaveBeenCalledWith(expect.objectContaining({ first: 5 }));
   });
@@ -108,7 +92,6 @@ describe('teams list', () => {
       'linear',
       'teams',
       'list',
-      '--json',
       '--after',
       'teamCursor',
     ]);
@@ -136,79 +119,19 @@ describe('teams list', () => {
         )
       );
 
-    const printJsonCalls: unknown[] = [];
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
       getRequestFn: vi.fn(),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'teams', 'list', '--all', '--json']);
+    await program.parseAsync(['node', 'linear', 'teams', 'list', '--all']);
 
     expect(teamsFn).toHaveBeenCalledTimes(2);
-    const result = printJsonCalls[0] as { teams: unknown[] };
-    expect(result.teams.length).toBe(53);
   });
 
-  it('--json output includes pageInfo with hasNextPage and endCursor', async () => {
-    const teamsFn = vi.fn().mockResolvedValue(
-      makeConn([makeTeamNode('t1', 'Engineering', 'ENG')], {
-        hasNextPage: true,
-        endCursor: 'tNext',
-      })
-    );
 
-    const printJsonCalls: unknown[] = [];
-    vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
-      getRequestFn: vi.fn(),
-    }));
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
-    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'teams', 'list', '--json']);
-
-    const out = printJsonCalls[0] as { pageInfo: { hasNextPage: boolean; endCursor: string } };
-    expect(out.pageInfo.hasNextPage).toBe(true);
-    expect(out.pageInfo.endCursor).toBe('tNext');
-  });
-
-  it('renders Markdown by default', async () => {
-    const teamsFn = vi.fn().mockResolvedValue(makeConn([makeTeamNode('t1', 'Engineering', 'ENG')]));
-
-    const printMarkdownCalls: unknown[] = [];
-    vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
-      getRequestFn: vi.fn(),
-    }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue('TABLE'),
-      printMarkdown: vi.fn().mockImplementation((s: unknown) => printMarkdownCalls.push(s)),
-    }));
-    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'teams', 'list']);
-
-    expect(printMarkdownCalls.length).toBeGreaterThan(0);
-    expect(printMarkdownCalls[0]).toBe('TABLE');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -265,14 +188,9 @@ describe('teams exit codes', () => {
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(err(rateLimitErr)),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'teams', 'list', '--json']);
+    await program.parseAsync(['node', 'linear', 'teams', 'list']);
 
     expect(process.exitCode).toBe(1);
   });

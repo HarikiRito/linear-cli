@@ -11,6 +11,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   CMD_TIMEOUT,
   discoverTeam,
+  parsePlainList,
+  parsePlainRecord,
   RUN_E2E,
   runCLI,
   type TeamInfo,
@@ -37,13 +39,13 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
       projName,
       '--team',
       team.name,
-      '--json',
+      '--plain',
     ]);
     if (r.code !== 0) {
       throw new Error(`Failed to create project for milestones E2E: ${r.stderr}`);
     }
-    const data = r.json as { project?: { id: string } };
-    projectId = data.project?.id ?? '';
+    const data = parsePlainRecord(r.stdout);
+    projectId = data['id'] ?? '';
     if (!projectId) throw new Error('No project id returned from create');
     createdProjectIds.push(projectId);
   }, CMD_TIMEOUT * 2);
@@ -62,7 +64,7 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
   // ── create ────────────────────────────────────────────────────────────────
 
   it(
-    'milestones create --json returns milestone with id, name',
+    'milestones create --plain returns milestone with id, name',
     async () => {
       expect(projectId, 'project must be created').not.toBe('');
       milestoneName = uniqueName('e2e-milestone');
@@ -73,16 +75,15 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
         projectId,
         '--name',
         milestoneName,
-        '--json',
+        '--plain',
       ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { milestone?: { id: string; name: string; project?: { id: string } } };
-      expect(data?.milestone).toBeDefined();
-      expect(typeof data.milestone?.id).toBe('string');
-      expect(data.milestone?.id).not.toBe('');
-      expect(data.milestone?.name).toBe(milestoneName);
+      const data = parsePlainRecord(r.stdout);
+      expect(typeof data['id']).toBe('string');
+      expect(data['id']).not.toBe('');
+      expect(data['_primaryId']).toBe(milestoneName);  // name is primaryId
 
-      milestoneId = data.milestone?.id ?? '';
+      milestoneId = data['id'] ?? '';
     },
     CMD_TIMEOUT
   );
@@ -90,15 +91,15 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
   // ── list ──────────────────────────────────────────────────────────────────
 
   it(
-    'milestones list --project <id> --json includes created milestone',
+    'milestones list --project <id> --plain includes created milestone',
     async () => {
       expect(milestoneId, 'depends on create').not.toBe('');
-      const r = await runCLI(['milestones', 'list', '--project', projectId, '--json']);
+      const r = await runCLI(['milestones', 'list', '--project', projectId, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { milestones?: { id: string }[] };
-      expect(Array.isArray(data?.milestones)).toBe(true);
-      const found = data.milestones?.some((m) => m.id === milestoneId);
-      expect(found, `milestone ${milestoneId} not found in list`).toBe(true);
+      const records = parsePlainList(r.stdout);
+      expect(Array.isArray(records)).toBe(true);
+      const found = records.some((m) => m['_primaryId'] === milestoneName);
+      expect(found, `milestone ${milestoneName} not found in list`).toBe(true);
     },
     CMD_TIMEOUT
   );
@@ -106,26 +107,14 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
   // ── get ───────────────────────────────────────────────────────────────────
 
   it(
-    'milestones get <id> --json returns milestone details',
+    'milestones get <id> --plain returns milestone details',
     async () => {
       expect(milestoneId, 'depends on create').not.toBe('');
-      const r = await runCLI(['milestones', 'get', milestoneId, '--json']);
+      const r = await runCLI(['milestones', 'get', milestoneId, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as {
-        milestone?: {
-          id: string;
-          name: string;
-          targetDate: string | null;
-          description: string | null;
-          progress: number;
-          sortOrder: number;
-          project?: { id: string };
-        };
-      };
-      expect(data?.milestone).toBeDefined();
-      expect(data.milestone?.id).toBe(milestoneId);
-      expect(data.milestone?.name).toBe(milestoneName);
-      expect(data.milestone?.project?.id).toBe(projectId);
+      const data = parsePlainRecord(r.stdout);
+      expect(data['id']).toBe(milestoneId);
+      expect(data['_primaryId']).toBe(milestoneName);
     },
     CMD_TIMEOUT
   );
@@ -133,16 +122,22 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
   // ── update ────────────────────────────────────────────────────────────────
 
   it(
-    'milestones update <id> --name --json reflects name change',
+    'milestones update <id> --name --plain reflects name change',
     async () => {
       expect(milestoneId, 'depends on create').not.toBe('');
       const newName = uniqueName('e2e-ms-updated');
-      const r = await runCLI(['milestones', 'update', milestoneId, '--name', newName, '--json']);
+      const r = await runCLI([
+        'milestones',
+        'update',
+        milestoneId,
+        '--name',
+        newName,
+        '--plain',
+      ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { milestone?: { id: string; name: string } };
-      expect(data?.milestone).toBeDefined();
-      expect(data.milestone?.id).toBe(milestoneId);
-      expect(data.milestone?.name).toBe(newName);
+      const data = parsePlainRecord(r.stdout);
+      expect(data['id']).toBe(milestoneId);
+      expect(data['_primaryId']).toBe(newName);
       milestoneName = newName;
     },
     CMD_TIMEOUT
@@ -153,7 +148,7 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
   it(
     'milestones list without --project exits non-zero',
     async () => {
-      const r = await runCLI(['milestones', 'list', '--json']);
+      const r = await runCLI(['milestones', 'list', '--plain']);
       expect(r.code).not.toBe(0);
     },
     CMD_TIMEOUT

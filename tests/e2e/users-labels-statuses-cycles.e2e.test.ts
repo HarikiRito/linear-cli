@@ -12,6 +12,8 @@ import {
   CMD_TIMEOUT,
   discoverTeam,
   getViewer,
+  parsePlainList,
+  parsePlainRecord,
   RUN_E2E,
   runCLI,
   type TeamInfo,
@@ -30,43 +32,37 @@ describe.skipIf(!RUN_E2E)('users/labels/statuses/cycles read-only E2E', () => {
   // ── users ─────────────────────────────────────────────────────────────────
 
   it(
-    'users list --json exits 0 and returns users array with pageInfo',
+    'users list --plain exits 0 and returns users array',
     async () => {
-      const r = await runCLI(['users', 'list', '--json']);
+      const r = await runCLI(['users', 'list', '--plain']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as {
-        users?: { id: string; name: string; email: string; active: boolean }[];
-        pageInfo?: { hasNextPage: boolean; endCursor: string | null };
-      };
-      expect(Array.isArray(data?.users)).toBe(true);
-      expect(data.pageInfo).toBeDefined();
-      expect(typeof data.pageInfo?.hasNextPage).toBe('boolean');
+      const records = parsePlainList(r.stdout);
+      expect(Array.isArray(records)).toBe(true);
+      expect(records.length).toBeGreaterThan(0);
     },
     CMD_TIMEOUT
   );
 
   it(
-    'users list --limit 1 --json returns at most 1 user',
+    'users list --limit 1 --plain returns at most 1 user',
     async () => {
-      const r = await runCLI(['users', 'list', '--limit', '1', '--json']);
+      const r = await runCLI(['users', 'list', '--limit', '1', '--plain']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { users: unknown[] };
-      expect(data.users.length).toBeLessThanOrEqual(1);
+      const records = parsePlainList(r.stdout);
+      expect(records.length).toBeLessThanOrEqual(1);
     },
     CMD_TIMEOUT
   );
 
   it(
-    'users get <viewer-id> --json returns user fields',
+    'users get <viewer-id> --plain returns user fields',
     async () => {
       expect(viewer.id, 'viewer must be discovered').not.toBe('');
-      const r = await runCLI(['users', 'get', viewer.id, '--json']);
+      const r = await runCLI(['users', 'get', viewer.id, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { user?: { id: string; name: string; email: string } };
-      expect(data?.user).toBeDefined();
-      expect(data.user?.id).toBe(viewer.id);
-      expect(typeof data.user?.name).toBe('string');
-      expect(typeof data.user?.email).toBe('string');
+      const data = parsePlainRecord(r.stdout);
+      expect(data['_primaryId']).toBe(viewer.name);
+      expect(data['email']).toBe(viewer.email);
     },
     CMD_TIMEOUT
   );
@@ -74,25 +70,24 @@ describe.skipIf(!RUN_E2E)('users/labels/statuses/cycles read-only E2E', () => {
   // ── labels ────────────────────────────────────────────────────────────────
 
   it(
-    'labels list --json exits 0 and returns labels array',
+    'labels list --plain exits 0 and returns labels array',
     async () => {
-      const r = await runCLI(['labels', 'list', '--json']);
+      const r = await runCLI(['labels', 'list', '--plain']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { labels?: unknown[]; pageInfo?: { hasNextPage: boolean } };
-      expect(Array.isArray(data?.labels)).toBe(true);
-      expect(data.pageInfo).toBeDefined();
+      const records = parsePlainList(r.stdout);
+      expect(Array.isArray(records)).toBe(true);
     },
     CMD_TIMEOUT
   );
 
   it(
-    'labels list --team <team> --json scopes to team',
+    'labels list --team <team> --plain scopes to team',
     async () => {
       expect(team.name, 'team must be discovered').not.toBe('');
-      const r = await runCLI(['labels', 'list', '--team', team.name, '--json']);
+      const r = await runCLI(['labels', 'list', '--team', team.name, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { labels?: unknown[] };
-      expect(Array.isArray(data?.labels)).toBe(true);
+      const records = parsePlainList(r.stdout);
+      expect(Array.isArray(records)).toBe(true);
     },
     CMD_TIMEOUT
   );
@@ -100,21 +95,18 @@ describe.skipIf(!RUN_E2E)('users/labels/statuses/cycles read-only E2E', () => {
   // ── statuses ──────────────────────────────────────────────────────────────
 
   it(
-    'statuses list --team <team> --json exits 0 with non-empty statuses',
+    'statuses list --team <team> --plain exits 0 with non-empty statuses',
     async () => {
       expect(team.name, 'team must be discovered').not.toBe('');
-      const r = await runCLI(['statuses', 'list', '--team', team.name, '--json']);
+      const r = await runCLI(['statuses', 'list', '--team', team.name, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as {
-        statuses?: { id: string; name: string; type: string; color: string; position: number }[];
-      };
-      expect(Array.isArray(data?.statuses)).toBe(true);
-      expect(data.statuses?.length).toBeGreaterThan(0);
+      const records = parsePlainList(r.stdout);
+      expect(Array.isArray(records)).toBe(true);
+      expect(records.length).toBeGreaterThan(0);
       // Each status should have required fields
-      const s = data.statuses?.[0];
-      expect(typeof s?.id).toBe('string');
-      expect(typeof s?.name).toBe('string');
-      expect(typeof s?.type).toBe('string');
+      const s = records[0];
+      expect(typeof s['_primaryId']).toBe('string');  // name
+      expect(typeof s['type']).toBe('string');
     },
     CMD_TIMEOUT
   );
@@ -122,7 +114,7 @@ describe.skipIf(!RUN_E2E)('users/labels/statuses/cycles read-only E2E', () => {
   it(
     'statuses list without --team exits non-zero',
     async () => {
-      const r = await runCLI(['statuses', 'list', '--json']);
+      const r = await runCLI(['statuses', 'list', '--plain']);
       expect(r.code).not.toBe(0);
     },
     CMD_TIMEOUT
@@ -131,14 +123,13 @@ describe.skipIf(!RUN_E2E)('users/labels/statuses/cycles read-only E2E', () => {
   // ── cycles ────────────────────────────────────────────────────────────────
 
   it(
-    'cycles list --team <team> --json exits 0 and returns cycles array',
+    'cycles list --team <team> --plain exits 0 and returns cycles array',
     async () => {
       expect(team.name, 'team must be discovered').not.toBe('');
-      const r = await runCLI(['cycles', 'list', '--team', team.name, '--json']);
+      const r = await runCLI(['cycles', 'list', '--team', team.name, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { cycles?: unknown[]; pageInfo?: { hasNextPage: boolean } };
-      expect(Array.isArray(data?.cycles)).toBe(true);
-      expect(data.pageInfo).toBeDefined();
+      const records = parsePlainList(r.stdout);
+      expect(Array.isArray(records)).toBe(true);
     },
     CMD_TIMEOUT
   );
@@ -146,7 +137,7 @@ describe.skipIf(!RUN_E2E)('users/labels/statuses/cycles read-only E2E', () => {
   it(
     'cycles list without --team exits non-zero',
     async () => {
-      const r = await runCLI(['cycles', 'list', '--json']);
+      const r = await runCLI(['cycles', 'list', '--plain']);
       expect(r.code).not.toBe(0);
     },
     CMD_TIMEOUT

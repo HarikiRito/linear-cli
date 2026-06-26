@@ -84,11 +84,6 @@ function stdMocks(requestFn: ReturnType<typeof vi.fn>) {
     getClient: vi.fn().mockReturnValue(ok({})),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
     printTable: vi.fn(),
@@ -116,36 +111,6 @@ describe('documents list', () => {
     process.exitCode = undefined;
   });
 
-  it('JSON has documents array and pageInfo', async () => {
-    const nodes = [
-      makeDocumentListNode(),
-      makeDocumentListNode({ id: 'doc-2', title: 'Second Doc', slugId: 'second-doc-def' }),
-    ];
-    const requestFn = vi.fn().mockResolvedValue(makeDocumentsResponse(nodes));
-    const printJsonCalls: unknown[] = [];
-
-    stdMocks(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'documents', 'list', '--json']);
-
-    expect(requestFn).toHaveBeenCalledOnce();
-    const out = printJsonCalls[0] as {
-      documents: { id: string; title: string; slugId: string; updatedAt: string }[];
-      pageInfo: { hasNextPage: boolean };
-    };
-    expect(Array.isArray(out.documents)).toBe(true);
-    expect(out.documents.length).toBe(2);
-    expect(out.documents[0]).toMatchObject({
-      id: 'doc-uuid',
-      title: 'Test Doc',
-      slugId: 'test-doc-abc',
-    });
-    expect(out.pageInfo).toBeDefined();
-  });
 
   it('--project scopes filter to project id', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeDocumentsResponse([]));
@@ -159,29 +124,12 @@ describe('documents list', () => {
       'list',
       '--project',
       PROJ_UUID,
-      '--json',
     ]);
 
     const [, vars] = requestFn.mock.calls[0] as [unknown, Record<string, unknown>];
     expect(JSON.stringify(vars)).toContain(PROJ_UUID);
   });
 
-  it('empty result exits 0 with empty array', async () => {
-    const requestFn = vi.fn().mockResolvedValue(makeDocumentsResponse([]));
-    const printJsonCalls: unknown[] = [];
-
-    stdMocks(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'documents', 'list', '--json']);
-
-    const out = printJsonCalls[0] as { documents: unknown[] };
-    expect(out.documents).toEqual([]);
-    expect(process.exitCode).toBeUndefined();
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -195,29 +143,6 @@ describe('documents get', () => {
     process.exitCode = undefined;
   });
 
-  it('JSON has full document fields', async () => {
-    const requestFn = vi.fn().mockResolvedValue(makeDocumentDetailResponse());
-    const printJsonCalls: unknown[] = [];
-
-    stdMocks(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'documents', 'get', 'doc-uuid', '--json']);
-
-    const out = printJsonCalls[0] as { document: Record<string, unknown> };
-    expect(out.document).toMatchObject({
-      id: 'doc-uuid',
-      title: 'Test Doc',
-      slugId: 'test-doc-abc',
-    });
-    expect('content' in out.document).toBe(true);
-    expect('updatedAt' in out.document).toBe(true);
-    expect(out.document.project).toMatchObject({ id: PROJ_UUID });
-    expect(out.document.creator).toMatchObject({ id: 'user-uuid' });
-  });
 
   it('unknown ID calls exitError', async () => {
     const requestFn = vi.fn().mockResolvedValue({ document: null });
@@ -227,28 +152,11 @@ describe('documents get', () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'documents', 'get', 'bad-id', '--json']);
+    await program.parseAsync(['node', 'linear', 'documents', 'get', 'bad-id']);
 
     expect(exitErrorMock).toHaveBeenCalled();
   });
 
-  it('content field is present in --json output (not contentState)', async () => {
-    const requestFn = vi.fn().mockResolvedValue(makeDocumentDetailResponse());
-    const printJsonCalls: unknown[] = [];
-
-    stdMocks(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-
-    const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'documents', 'get', 'doc-uuid', '--json']);
-
-    const out = printJsonCalls[0] as { document: Record<string, unknown> };
-    expect('content' in out.document).toBe(true);
-    expect('contentState' in out.document).toBe(false);
-    expect(out.document.content).toBe('# Hello\n\nContent here.');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -264,18 +172,10 @@ describe('documents create', () => {
 
   it('creates standalone doc without --project (no projectId in mutation)', async () => {
     const createFn = vi.fn().mockResolvedValue(makeCreateDocumentPayload({ project: null }));
-    const printJsonCalls: unknown[] = [];
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ createDocument: createFn })),
       getRequestFn: vi.fn(),
-    }));
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
@@ -291,33 +191,20 @@ describe('documents create', () => {
       'create',
       '--title',
       'My Doc',
-      '--json',
     ]);
 
     expect(createFn).toHaveBeenCalledOnce();
     const input = createFn.mock.calls[0][0] as Record<string, unknown>;
     expect(input).toMatchObject({ title: 'My Doc' });
     expect(input).not.toHaveProperty('projectId');
-
-    const out = printJsonCalls[0] as { document: { id: string; project: null } };
-    expect(out.document.id).toBe('doc-new');
-    expect(out.document.project).toBeNull();
   });
 
   it('creates doc with --project resolved by UUID (projectId in mutation)', async () => {
     const createFn = vi.fn().mockResolvedValue(makeCreateDocumentPayload());
-    const printJsonCalls: unknown[] = [];
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ createDocument: createFn })),
       getRequestFn: vi.fn(),
-    }));
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
-    }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
@@ -335,7 +222,6 @@ describe('documents create', () => {
       'My Doc',
       '--project',
       PROJ_UUID,
-      '--json',
     ]);
 
     expect(createFn).toHaveBeenCalledOnce();

@@ -1,8 +1,8 @@
 import { ResultAsync } from 'neverthrow';
 import { getClient, getRequestFn } from '../../lib/client/index.js';
 import { coerceCliError, NotFoundError } from '../../lib/errors.js';
-import { printJson } from '../../lib/output/json.js';
-import { markdownTable, printMarkdown } from '../../lib/output/markdown.js';
+import type { PlainField } from '../../lib/output/plain.js';
+import { renderPlainRecord } from '../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../lib/output/table.js';
 import { exitError } from '../../lib/runner.js';
 import { GET_PROJECT_MILESTONE_QUERY } from './queries.js';
@@ -11,8 +11,7 @@ export interface GetMilestoneOptions {
   apiKey?: string;
   token?: string;
   id: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface MilestoneDetail {
@@ -52,19 +51,25 @@ export async function getMilestone(opts: GetMilestoneOptions): Promise<void> {
   );
 
   result.match(
-    (milestone) => renderMilestoneDetail(milestone, opts.json, opts.pretty),
+    (milestone) => renderMilestoneDetail(milestone, opts.plain),
     (e) => exitError(e)
   );
 }
 
-function renderMilestoneDetail(m: MilestoneDetail, json: boolean, pretty = false): void {
-  if (json) {
-    printJson({ milestone: m }, pretty);
+function renderMilestoneDetail(m: MilestoneDetail, plain: boolean): void {
+  if (plain) {
+    const fields: PlainField[] = [
+      { key: 'id', value: m.id },
+      { key: 'targetDate', value: m.targetDate },
+      { key: 'description', value: m.description },
+      { key: 'progress', value: `${m.progress}` },
+      { key: 'project', value: m.project?.name ?? null },
+    ];
+    console.log(renderPlainRecord('Milestone', m.name, fields));
     return;
   }
 
   const rows: [string, string][] = [
-    ['ID', m.id],
     ['Name', m.name],
     ['Target Date', m.targetDate ?? ''],
     ['Description', m.description ?? ''],
@@ -73,9 +78,5 @@ function renderMilestoneDetail(m: MilestoneDetail, json: boolean, pretty = false
     ['Project', m.project?.name ?? ''],
   ];
 
-  if (process.stdout.isTTY) {
-    printTable(prettyTable(['Field', 'Value'], rows));
-  } else {
-    printMarkdown(markdownTable(['Field', 'Value'], rows));
-  }
+  printTable(prettyTable(['Field', 'Value'], rows));
 }

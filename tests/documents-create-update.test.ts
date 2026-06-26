@@ -31,11 +31,6 @@ function stdMocks(clientMock: ReturnType<typeof makeClientMock>) {
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: vi.fn(),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
     printTable: vi.fn(),
@@ -78,7 +73,6 @@ describe('documents create', () => {
       'My Doc',
       '--project',
       PROJ_UUID,
-      '--json',
     ]);
 
     expect(createDocumentFn).toHaveBeenCalledWith(
@@ -105,7 +99,6 @@ describe('documents create', () => {
       PROJ_UUID,
       '--content',
       'hello world',
-      '--json',
     ]);
 
     expect(createDocumentFn).toHaveBeenCalledWith(
@@ -143,7 +136,6 @@ describe('documents create', () => {
       'create',
       '--title',
       'Standalone',
-      '--json',
     ]);
 
     expect(createDocumentFn).toHaveBeenCalledOnce();
@@ -177,7 +169,6 @@ describe('documents update', () => {
       'doc-uuid',
       '--title',
       'New Title',
-      '--json',
     ]);
 
     expect(updateDocumentFn).toHaveBeenCalledWith('doc-uuid', { title: 'New Title' });
@@ -199,7 +190,6 @@ describe('documents update', () => {
       'doc-uuid',
       '--content',
       'newbody',
-      '--json',
     ]);
 
     const callInput = updateDocumentFn.mock.calls[0][1];

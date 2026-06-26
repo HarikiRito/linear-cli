@@ -7,9 +7,7 @@ export function addAuthOptions(cmd: Command): Command {
     .option('--token <token>', 'Linear access token');
 }
 
-/** Register --json and --pretty output options on a command. */
-export function addJsonOptions(cmd: Command): Command {
-  return cmd
-    .option('--json', 'Output as JSON')
-    .option('--pretty', 'Pretty-print JSON output (only with --json)');
+/** Register the --plain output option on a command. */
+export function addPlainOption(cmd: Command): Command {
+  return cmd.option('--plain', 'Output as plain key:value text (agent-friendly)');
 }

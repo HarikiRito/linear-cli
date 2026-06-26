@@ -1,6 +1,7 @@
 import { ResultAsync } from 'neverthrow';
 import { getClient, getRequestFn } from '../../lib/client/index.js';
 import { coerceCliError, NotFoundError } from '../../lib/errors.js';
+import type { PlainField } from '../../lib/output/plain.js';
 import {
   type ColumnConfig,
   normalizePageInfo,
@@ -18,8 +19,7 @@ export interface ListMilestonesOptions {
   limit: number;
   after?: string;
   all: boolean;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface MilestoneRow {
@@ -29,11 +29,19 @@ interface MilestoneRow {
   description: string | null;
 }
 
+function milestonePlainFields(m: MilestoneRow): PlainField[] {
+  return [
+    { key: 'targetDate', value: m.targetDate },
+    { key: 'description', value: m.description },
+  ];
+}
+
 const MILESTONE_COLUMNS: ColumnConfig<MilestoneRow> = {
-  headers: ['ID', 'Name', 'Target Date', 'Description'],
-  toRow: (m) => [m.id, m.name, m.targetDate ?? '', m.description ?? ''],
-  ttyHeaders: ['Name', 'Target Date'],
-  ttyToRow: (m) => [m.name, m.targetDate ?? ''],
+  headers: ['Name', 'Target Date'],
+  toRow: (m) => [m.name, m.targetDate ?? ''],
+  plainType: 'Milestone',
+  plainPrimaryId: (m) => m.name,
+  toPlainFields: milestonePlainFields,
 };
 
 export async function listMilestones(opts: ListMilestonesOptions): Promise<void> {
@@ -84,5 +92,5 @@ export async function listMilestones(opts: ListMilestonesOptions): Promise<void>
     coerceCliError
   );
 
-  await runAndRenderPaged(resultAsync, opts.json, 'milestones', MILESTONE_COLUMNS, 'milestones', opts.pretty);
+  await runAndRenderPaged(resultAsync, opts.plain, MILESTONE_COLUMNS, 'milestones');
 }

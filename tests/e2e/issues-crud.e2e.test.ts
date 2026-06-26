@@ -9,7 +9,15 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { CMD_TIMEOUT, discoverTeam, makeRegistry, RUN_E2E, runCLI, uniqueName } from './helpers.js';
+import {
+  CMD_TIMEOUT,
+  discoverTeam,
+  makeRegistry,
+  parsePlainRecord,
+  RUN_E2E,
+  runCLI,
+  uniqueName,
+} from './helpers.js';
 
 describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
   const reg = makeRegistry();
@@ -28,7 +36,7 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
   // ── create ───────────────────────────────────────────────────────────────
 
   it(
-    'issues create --json returns issue with id, identifier, url, title',
+    'issues create --plain returns issue with id, identifier, url, title',
     async () => {
       expect(teamName, 'team must be discovered').not.toBe('');
       const r = await runCLI([
@@ -42,23 +50,19 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
         `E2E test created at ${new Date().toISOString()}`,
         '--priority',
         '3',
-        '--json',
+        '--plain',
       ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as {
-        issue?: { id: string; identifier: string; title: string; url: string; state: string };
-      };
-      expect(data?.issue).toBeDefined();
-      expect(typeof data.issue?.id).toBe('string');
-      expect(data.issue?.id).not.toBe('');
+      const data = parsePlainRecord(r.stdout);
+      expect(data['id']).toBeTruthy();
       // identifier matches generic pattern — no team key hardcoded
-      expect(data.issue?.identifier).toMatch(/^[A-Z0-9]+-\d+$/);
-      expect(data.issue?.title).toBe(createTitle);
-      expect(data.issue?.url).toContain('linear.app');
-      expect(typeof data.issue?.state).toBe('string');
+      expect(data['_primaryId']).toMatch(/^[A-Z0-9]+-\d+$/);
+      expect(data['title']).toBe(createTitle);
+      expect(data['url']).toContain('linear.app');
+      expect(typeof data['state']).toBe('string');
 
-      issueId = data.issue?.id;
-      issueIdentifier = data.issue?.identifier;
+      issueId = data['id'];
+      issueIdentifier = data['_primaryId'];
       reg.trackIssue(issueId);
     },
     CMD_TIMEOUT
@@ -67,7 +71,7 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
   // ── update ───────────────────────────────────────────────────────────────
 
   it(
-    'issues update --title --priority --json reflects changes',
+    'issues update --title --priority --plain reflects changes',
     async () => {
       expect(issueId, 'depends on create').not.toBe('');
 
@@ -79,13 +83,12 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
         updatedTitle,
         '--priority',
         '2',
-        '--json',
+        '--plain',
       ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { issue?: { id: string; title: string } };
-      expect(data?.issue).toBeDefined();
-      expect(data.issue?.id).toBe(issueId);
-      expect(data.issue?.title).toBe(updatedTitle);
+      const data = parsePlainRecord(r.stdout);
+      expect(data['id']).toBe(issueId);
+      expect(data['title']).toBe(updatedTitle);
     },
     CMD_TIMEOUT
   );
@@ -96,10 +99,17 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
       expect(issueIdentifier, 'depends on create').not.toBe('');
 
       const newTitle = uniqueName('e2e-by-identifier');
-      const r = await runCLI(['issues', 'update', issueIdentifier, '--title', newTitle, '--json']);
+      const r = await runCLI([
+        'issues',
+        'update',
+        issueIdentifier,
+        '--title',
+        newTitle,
+        '--plain',
+      ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const data = r.json as { issue?: { id: string; title: string } };
-      expect(data?.issue?.title).toBe(newTitle);
+      const data = parsePlainRecord(r.stdout);
+      expect(data['title']).toBe(newTitle);
     },
     CMD_TIMEOUT
   );
@@ -194,7 +204,7 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
       expect(r.stderr + r.stdout).toMatch(/--yes|non-interactively/i);
 
       // Issue must still exist — verify by listing its comments (errors if issue deleted)
-      const listR = await runCLI(['issues', 'comment', 'list', issueId, '--json']);
+      const listR = await runCLI(['issues', 'comment', 'list', issueId, '--plain']);
       expect(listR.code, 'issue should still exist after aborted delete').toBe(0);
     },
     CMD_TIMEOUT

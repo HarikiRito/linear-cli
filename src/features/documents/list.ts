@@ -1,4 +1,5 @@
 import { getClient, getRequestFn } from '../../lib/client/index.js';
+import type { PlainField } from '../../lib/output/plain.js';
 import { type ColumnConfig, fetchPaged, runAndRenderPaged } from '../../lib/pagination.js';
 import { exitError } from '../../lib/runner.js';
 import { resolveProject } from '../issues/shared/resolve.js';
@@ -11,8 +12,7 @@ export interface ListDocumentsOptions {
   limit: number;
   after?: string;
   all: boolean;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface DocumentRow {
@@ -23,11 +23,20 @@ interface DocumentRow {
   projectName: string | null;
 }
 
+function documentPlainFields(d: DocumentRow): PlainField[] {
+  return [
+    { key: 'slugId', value: d.slugId },
+    { key: 'updatedAt', value: d.updatedAt },
+    { key: 'project', value: d.projectName },
+  ];
+}
+
 const DOCUMENT_COLUMNS: ColumnConfig<DocumentRow> = {
-  headers: ['ID', 'Title', 'Slug', 'Updated At', 'Project'],
-  toRow: (d) => [d.id, d.title, d.slugId, d.updatedAt, d.projectName ?? ''],
-  ttyHeaders: ['Title', 'Slug', 'Updated At'],
-  ttyToRow: (d) => [d.title, d.slugId, d.updatedAt],
+  headers: ['Title', 'Slug', 'Updated At'],
+  toRow: (d) => [d.title, d.slugId, d.updatedAt],
+  plainType: 'Document',
+  plainPrimaryId: (d) => d.title,
+  toPlainFields: documentPlainFields,
 };
 
 function toDocumentRows(
@@ -79,5 +88,5 @@ export async function listDocuments(opts: ListDocumentsOptions): Promise<void> {
     { all: opts.all, after: opts.after, limit: opts.limit }
   );
 
-  await runAndRenderPaged(resultAsync, opts.json, 'documents', DOCUMENT_COLUMNS, 'documents', opts.pretty);
+  await runAndRenderPaged(resultAsync, opts.plain, DOCUMENT_COLUMNS, 'documents');
 }

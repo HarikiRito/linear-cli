@@ -1,8 +1,8 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { okAsync, ResultAsync } from 'neverthrow';
 import { mapLinearError } from './errors.js';
-import { printJson } from './output/json.js';
-import { markdownTable, printMarkdown } from './output/markdown.js';
+import type { PlainField } from './output/plain.js';
+import { renderPlainList } from './output/plain.js';
 import { prettyTable, printTable } from './output/table.js';
 import { exitError } from './runner.js';
 
@@ -51,20 +51,19 @@ export interface PaginationOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Column config used for TTY table and Markdown output
+// Column config used for table output and optional plain output
 // ---------------------------------------------------------------------------
 export interface ColumnConfig<TRow> {
-  /** Column headers for Markdown output (and TTY when ttyHeaders is absent) */
+  /** Column headers for the boxed table */
   headers: string[];
-  /** Map a row to cell strings for Markdown (and TTY when ttyToRow is absent) */
+  /** Map a row to cell strings for the table */
   toRow: (row: TRow) => string[];
-  /**
-   * Optional TTY-only column headers. When present, the TTY branch uses these
-   * instead of `headers` — allows asymmetric column sets (e.g. omit ID in TTY).
-   */
-  ttyHeaders?: string[];
-  /** Optional TTY-only row mapper, paired with ttyHeaders. */
-  ttyToRow?: (row: TRow) => string[];
+  /** For --plain list output: the type label (e.g. 'Issue', 'Project'). */
+  plainType?: string;
+  /** For --plain list output: extract the primary identifier from a row. */
+  plainPrimaryId?: (row: TRow) => string;
+  /** For --plain list output: extract key/value fields from a row. */
+  toPlainFields?: (row: TRow) => PlainField[];
 }
 
 // ---------------------------------------------------------------------------
@@ -137,51 +136,44 @@ export function fetchPaged<TData, TNode, TRow>(
 
 /**
  * Render a PagedResult to stdout.
- * - json=true → printJson with `{ [jsonKey]: rows, pageInfo }`
- * - isTTY → prettyTable
- * - else → markdownTable + optional stderr count line
+ * - plain=true → renderPlainList (if columns has plainType/plainPrimaryId/toPlainFields)
+ * - default → always boxed cli-table3 prettyTable (regardless of isTTY)
  */
 export function renderPaged<TRow>(
   result: PagedResult<TRow>,
-  json: boolean,
-  jsonKey: string,
+  plain: boolean,
   columns: ColumnConfig<TRow>,
-  countLabel?: string,
-  pretty = false
+  countLabel?: string
 ): void {
   const { rows, pageInfo } = result;
-  if (json) {
-    printJson({ [jsonKey]: rows, pageInfo }, pretty);
-  } else if (process.stdout.isTTY) {
-    const headers = columns.ttyHeaders ?? columns.headers;
-    const rowMapper = columns.ttyToRow ?? columns.toRow;
-    printTable(prettyTable(headers, rows.map(rowMapper)));
-    if (pageInfo.hasNextPage && pageInfo.endCursor) {
-      console.log(`\nNext page: --after ${pageInfo.endCursor}`);
-    }
-  } else {
-    printMarkdown(markdownTable(columns.headers, rows.map(columns.toRow)));
-    if (pageInfo.hasNextPage && pageInfo.endCursor) {
-      console.log(`\nNext page: --after ${pageInfo.endCursor}`);
-    }
-    if (countLabel) {
-      console.error(`Showing ${rows.length} ${countLabel}`);
-    }
+
+  if (plain && columns.plainType && columns.plainPrimaryId && columns.toPlainFields) {
+    const records = rows.map((r) => ({
+      primaryId: columns.plainPrimaryId!(r),
+      fields: columns.toPlainFields!(r),
+    }));
+    console.log(renderPlainList(columns.plainType, records));
+    return;
   }
+
+  // Default: always boxed table regardless of TTY
+  printTable(prettyTable(columns.headers, rows.map(columns.toRow)));
+  if (pageInfo.hasNextPage && pageInfo.endCursor) {
+    console.log(`\nNext page: --after ${pageInfo.endCursor}`);
+  }
+  void countLabel; // retained for API compat; no longer emitted to stderr
 }
 
 /** Unwrap a ResultAsync<PagedResult<TRow>>, render on ok, exitError on err. */
 export async function runAndRenderPaged<TRow>(
   resultAsync: ResultAsync<PagedResult<TRow>, ReturnType<typeof mapLinearError>>,
-  json: boolean,
-  jsonKey: string,
+  plain: boolean,
   columns: ColumnConfig<TRow>,
-  countLabel?: string,
-  pretty = false
+  countLabel?: string
 ): Promise<void> {
   const result = await resultAsync;
   result.match(
-    (data) => renderPaged(data, json, jsonKey, columns, countLabel, pretty),
+    (data) => renderPaged(data, plain, columns, countLabel),
     (e) => exitError(e)
   );
 }

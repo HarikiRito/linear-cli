@@ -2,8 +2,8 @@ import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
 import { getClient } from '../../lib/client/index.js';
 import { coerceCliError } from '../../lib/errors.js';
-import { printJson } from '../../lib/output/json.js';
-import { markdownTable, printMarkdown } from '../../lib/output/markdown.js';
+import type { PlainField } from '../../lib/output/plain.js';
+import { renderPlainRecord } from '../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../lib/output/table.js';
 import { exitError } from '../../lib/runner.js';
 import { resolveTeam } from '../issues/shared/resolve.js';
@@ -15,8 +15,7 @@ export interface CreateLabelOptions {
   color?: string;
   team?: string;
   description?: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 interface LabelResult {
@@ -68,21 +67,17 @@ export async function createLabel(opts: CreateLabelOptions): Promise<void> {
 
   result.match(
     (label) => {
-      if (opts.json) {
-        printJson({ label }, opts.pretty);
+      if (opts.plain) {
+        const fields: PlainField[] = [{ key: 'color', value: label.color }];
+        console.log(renderPlainRecord('Label', label.name, fields));
         return;
       }
       const rows: [string, string][] = [
-        ['ID', label.id],
         ['Name', label.name],
         ['Color', label.color],
-        ['Team ID', label.teamId ?? '(workspace)'],
+        ['Team', label.teamId ?? '(workspace)'],
       ];
-      if (process.stdout.isTTY) {
-        printTable(prettyTable(['Field', 'Value'], rows));
-      } else {
-        printMarkdown(markdownTable(['Field', 'Value'], rows));
-      }
+      printTable(prettyTable(['Field', 'Value'], rows));
     },
     (e) => exitError(e)
   );

@@ -1,8 +1,8 @@
 import type { Project } from '@linear/sdk';
 import type { ResultAsync } from 'neverthrow';
 import type { mapLinearError } from '../../../lib/errors.js';
-import { printJson } from '../../../lib/output/json.js';
-import { markdownTable, printMarkdown } from '../../../lib/output/markdown.js';
+import type { PlainField } from '../../../lib/output/plain.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../../lib/output/table.js';
 import {
   type ColumnConfig,
@@ -27,22 +27,23 @@ export function toProjectRows(nodes: Project[]): ProjectRow[] {
   return nodes.map((n) => ({ id: n.id, name: n.name, state: n.state }));
 }
 
-// Markdown: ID + Name + State; TTY omits ID — asymmetry intentional for terminal width.
+function projectPlainFields(p: ProjectRow): PlainField[] {
+  return [{ key: 'state', value: p.state }];
+}
+
 const PROJECT_COLUMNS: ColumnConfig<ProjectRow> = {
-  headers: ['ID', 'Name', 'State'],
-  toRow: (p) => [p.id, p.name, p.state],
-  ttyHeaders: ['Name', 'State'],
-  ttyToRow: (p) => [p.name, p.state],
+  headers: ['Name', 'State'],
+  toRow: (p) => [p.name, p.state],
+  plainType: 'Project',
+  plainPrimaryId: (p) => p.name,
+  toPlainFields: projectPlainFields,
 };
 
-export function renderProjects(result: ProjectsResult, json: boolean, pretty = false): void {
+export function renderProjects(result: ProjectsResult, plain: boolean): void {
   renderPaged(
     { rows: result.projects, pageInfo: result.pageInfo },
-    json,
-    'projects',
-    PROJECT_COLUMNS,
-    undefined,
-    pretty
+    plain,
+    PROJECT_COLUMNS
   );
 }
 
@@ -54,35 +55,32 @@ export interface ProjectResult {
   url: string;
 }
 
-export function renderProjectResult(p: ProjectResult, json: boolean, pretty = false): void {
-  if (json) {
-    printJson({ project: p }, pretty);
+export function renderProjectResult(p: ProjectResult, plain: boolean): void {
+  if (plain) {
+    console.log(
+      renderPlainRecord('Project', p.name, [
+        { key: 'id', value: p.id },
+        { key: 'state', value: p.state },
+        { key: 'url', value: p.url },
+      ])
+    );
     return;
   }
   const rows: [string, string][] = [
-    ['ID', p.id],
     ['Name', p.name],
     ['State', p.state],
     ['URL', p.url],
   ];
-  if (process.stdout.isTTY) {
-    printTable(prettyTable(['Field', 'Value'], rows));
-  } else {
-    printMarkdown(markdownTable(['Field', 'Value'], rows));
-  }
+  printTable(prettyTable(['Field', 'Value'], rows));
 }
 
 export async function runAndRender(
   resultAsync: ResultAsync<ProjectsResult, ReturnType<typeof mapLinearError>>,
-  json: boolean,
-  pretty = false
+  plain: boolean
 ): Promise<void> {
   await runAndRenderPaged(
     resultAsync.map((r) => ({ rows: r.projects, pageInfo: r.pageInfo })),
-    json,
-    'projects',
-    PROJECT_COLUMNS,
-    undefined,
-    pretty
+    plain,
+    PROJECT_COLUMNS
   );
 }

@@ -40,11 +40,6 @@ function stdMocks(requestFn: ReturnType<typeof vi.fn>) {
     getClient: vi.fn().mockReturnValue(ok({})),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
-  vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-  vi.doMock('../src/lib/output/markdown.js', () => ({
-    markdownTable: vi.fn().mockReturnValue(''),
-    printMarkdown: vi.fn(),
-  }));
   vi.doMock('../src/lib/output/table.js', () => ({
     prettyTable: vi.fn().mockReturnValue(''),
     printTable: vi.fn(),
@@ -72,54 +67,58 @@ describe('issues get', () => {
     process.exitCode = undefined;
   });
 
-  it('JSON includes all detail fields', async () => {
+  it('fetches issue detail fields', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeIssueResponse());
-    const printJsonCalls: unknown[] = [];
+    let capturedRows: string[][] = [];
 
-    stdMocks(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((_h: string[], rows: string[][]) => {
+        capturedRows = rows;
+        return '';
+      }),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42']);
 
     expect(requestFn).toHaveBeenCalledOnce();
-    const out = printJsonCalls[0] as { issue: Record<string, unknown> };
-    expect(out.issue).toBeDefined();
-    expect(out.issue.id).toBe('issue-uuid');
-    expect(out.issue.identifier).toBe('ENG-42');
-    expect(out.issue.title).toBe('Test issue');
-    expect(out.issue.description).toBe('A description');
-    expect(out.issue.url).toContain('linear.app');
-    expect(out.issue.branchName).toBe('eng-42-test-issue');
-    expect(out.issue.priority).toBe(2);
-    expect(out.issue.estimate).toBe(3);
-    expect(out.issue.dueDate).toBe('2026-12-31');
-    expect(out.issue.createdAt).toBeTruthy();
-    expect(out.issue.state).toMatchObject({ name: 'In Progress' });
-    expect(out.issue.assignee).toMatchObject({ name: 'Alice' });
-    expect(Array.isArray(out.issue.labels)).toBe(true);
-    expect(out.issue.project).toMatchObject({ id: 'proj-uuid' });
-    expect(out.issue.parent).toMatchObject({ identifier: 'ENG-10' });
-    expect(Array.isArray(out.issue.children)).toBe(true);
-    expect(Array.isArray(out.issue.attachments)).toBe(true);
+    const flat = capturedRows.flat();
+    expect(flat).toContain('ENG-42');
+    expect(flat).toContain('Test issue');
+    expect(flat).toContain('In Progress');
+    expect(flat).toContain('Alice A.');
   });
 
-  it('attachments array is empty when no attachments', async () => {
+  it('fetches when no attachments', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeIssueResponse({ attachments: { nodes: [] } }));
-    const printJsonCalls: unknown[] = [];
+    let capturedRows: string[][] = [];
 
-    stdMocks(requestFn);
-    vi.doMock('../src/lib/output/json.js', () => ({
-      printJson: vi.fn().mockImplementation((d: unknown) => printJsonCalls.push(d)),
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((_h: string[], rows: string[][]) => {
+        capturedRows = rows;
+        return '';
+      }),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42']);
 
-    const out = printJsonCalls[0] as { issue: { attachments: unknown[] } };
-    expect(out.issue.attachments).toEqual([]);
+    expect(requestFn).toHaveBeenCalledOnce();
+    const flat = capturedRows.flat();
+    expect(flat).toContain('ENG-42');
+    expect(flat).toContain('Test issue');
   });
 
   it('unknown ID calls exitError', async () => {
@@ -130,14 +129,14 @@ describe('issues get', () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'get', 'bad-id', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'get', 'bad-id']);
 
     expect(exitErrorMock).toHaveBeenCalled();
   });
 
-  it('non-TTY without --json uses markdown output', async () => {
+  it('non-TTY uses prettyTable output', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeIssueResponse());
-    const printMarkdownCalls: unknown[] = [];
+    const printTableCalls: unknown[] = [];
 
     Object.defineProperty(process.stdout, 'isTTY', {
       value: false,
@@ -149,21 +148,49 @@ describe('issues get', () => {
       getClient: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue('MD'),
-      printMarkdown: vi.fn().mockImplementation((s: unknown) => printMarkdownCalls.push(s)),
-    }));
     vi.doMock('../src/lib/output/table.js', () => ({
-      prettyTable: vi.fn().mockReturnValue(''),
-      printTable: vi.fn(),
+      prettyTable: vi.fn().mockReturnValue('TABLE'),
+      printTable: vi.fn().mockImplementation((s: unknown) => printTableCalls.push(s)),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
     await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42']);
 
-    expect(printMarkdownCalls.length).toBeGreaterThan(0);
+    expect(printTableCalls.length).toBeGreaterThan(0);
+  });
+
+  it('--plain outputs required fields and omits dropped fields', async () => {
+    const requestFn = vi.fn().mockResolvedValue(
+      makeIssueResponse({ description: 'Line one\nLine two' })
+    );
+    stdMocks(requestFn);
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42', '--plain']);
+
+    const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+
+    // Required fields present
+    expect(output).toContain('Issue: ENG-42');
+    expect(output).toContain('title: Test issue');
+    expect(output).toContain('state: In Progress');
+    expect(output).toContain('assignee: Alice');
+    expect(output).toContain('url: https://linear.app/test/ENG-42');
+    expect(output).toContain('branchName: eng-42-test-issue');
+    expect(output).toContain('dueDate: 2026-12-31');
+    expect(output).toContain('parent: ENG-10');
+    expect(output).toContain('children: ENG-43');
+    expect(output).toContain('description: |<<');
+
+    // Dropped fields absent
+    expect(output).not.toContain('createdAt');
+    expect(output).not.toContain('estimate');
+    expect(output).not.toContain('attachments');
+
+    consoleSpy.mockRestore();
   });
 
   it('unauthenticated calls exitError', async () => {
@@ -178,11 +205,6 @@ describe('issues get', () => {
       getClient: vi.fn().mockReturnValue(err(authErr)),
       getRequestFn: vi.fn(),
     }));
-    vi.doMock('../src/lib/output/json.js', () => ({ printJson: vi.fn() }));
-    vi.doMock('../src/lib/output/markdown.js', () => ({
-      markdownTable: vi.fn().mockReturnValue(''),
-      printMarkdown: vi.fn(),
-    }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),
@@ -190,7 +212,7 @@ describe('issues get', () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42', '--json']);
+    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42']);
 
     expect(exitErrorMock).toHaveBeenCalled();
   });

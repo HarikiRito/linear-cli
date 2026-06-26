@@ -25,7 +25,6 @@ export interface RunResult {
   stdout: string;
   stderr: string;
   code: number;
-  json?: unknown;
 }
 
 // ── CLI runner ───────────────────────────────────────────────────────────────
@@ -39,26 +38,65 @@ export async function runCLI(args: string[]): Promise<RunResult> {
     const { stdout, stderr } = await execFileAsync('node', [CLI, ...args], {
       timeout: CMD_TIMEOUT,
     });
-    return { stdout, stderr, code: 0, json: tryParseJson(stdout) };
+    return { stdout, stderr, code: 0 };
   } catch (err: unknown) {
     const e = err as { stdout?: string; stderr?: string; code?: number };
     const stdout = e.stdout ?? '';
     const stderr = e.stderr ?? '';
     const code = typeof e.code === 'number' ? e.code : 1;
-    return { stdout, stderr, code, json: tryParseJson(stdout) };
+    return { stdout, stderr, code };
   }
 }
 
-function tryParseJson(text: string): unknown {
-  const t = text.trim();
-  if (t.startsWith('{') || t.startsWith('[')) {
-    try {
-      return JSON.parse(t);
-    } catch {
-      // not JSON
+// ── Plain-text output parsers ────────────────────────────────────────────────
+
+/**
+ * Parse a single plain-format record (key:value block with a header line).
+ * The header line "Type: primaryId" populates _type and _primaryId.
+ * Multi-line |<< block content is joined into a single multi-line string.
+ * Returns a flat Record<string, string>.
+ */
+export function parsePlainRecord(text: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const lines = text.trim().split('\n');
+  if (lines.length === 0) return result;
+
+  // Header: "Type: primaryId"
+  const header = lines[0].match(/^(\w+):\s*(.+)$/);
+  if (header) {
+    result['_type'] = header[1];
+    result['_primaryId'] = header[2];
+  }
+
+  for (let i = 1; i < lines.length; i++) {
+    const kv = lines[i].match(/^([^:]+):\s*(.*)$/);
+    if (kv) {
+      const key = kv[1].trim();
+      if (kv[2] === '|<<') {
+        // Multi-line block — collect until <<END
+        const blockLines: string[] = [];
+        i++;
+        while (i < lines.length && lines[i] !== '<<END') {
+          blockLines.push(lines[i]);
+          i++;
+        }
+        result[key] = blockLines.join('\n');
+      } else {
+        result[key] = kv[2];
+      }
     }
   }
-  return undefined;
+  return result;
+}
+
+/**
+ * Parse a plain-format list (records separated by '\n---\n').
+ * Returns an array of parsed records.
+ */
+export function parsePlainList(text: string): Record<string, string>[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  return trimmed.split('\n---\n').map(parsePlainRecord);
 }
 
 // ── Unique name generator ────────────────────────────────────────────────────
@@ -84,35 +122,45 @@ export interface ViewerInfo {
 }
 
 /**
- * Discover the first available team by calling `teams list --json`.
+ * Discover the first available team by calling `teams list --plain`.
  * Throws if the CLI call fails or returns no teams.
  */
 export async function discoverTeam(): Promise<TeamInfo> {
-  const r = await runCLI(['teams', 'list', '--json']);
+  const r = await runCLI(['teams', 'list', '--plain']);
   if (r.code !== 0) {
     throw new Error(`teams list failed (exit ${r.code}): ${r.stderr}`);
   }
-  const data = r.json as { teams?: TeamInfo[] };
-  if (!data?.teams?.length) {
+  const records = parsePlainList(r.stdout);
+  if (!records.length || !records[0]['_primaryId']) {
     throw new Error('teams list returned no teams — cannot run E2E tests');
   }
-  return data.teams[0];
+  const t = records[0];
+  return {
+    id: t['id'] ?? '',
+    name: t['_primaryId'] ?? '',
+    key: t['key'] ?? '',
+  };
 }
 
 /**
- * Get the currently-authenticated viewer via `whoami --json`.
+ * Get the currently-authenticated viewer via `whoami --plain`.
  * Throws if not authenticated.
  */
 export async function getViewer(): Promise<ViewerInfo> {
-  const r = await runCLI(['whoami', '--json']);
+  const r = await runCLI(['whoami', '--plain']);
   if (r.code !== 0) {
     throw new Error(`whoami failed (exit ${r.code}): ${r.stderr}`);
   }
-  const data = r.json as ViewerInfo;
-  if (!data?.id) {
+  const data = parsePlainRecord(r.stdout);
+  if (!data['id']) {
     throw new Error('whoami returned no id — not authenticated?');
   }
-  return data;
+  return {
+    id: data['id'],
+    name: data['_primaryId'] ?? '',
+    email: data['email'] ?? '',
+    workspace: data['workspace'] ?? '',
+  };
 }
 
 // ── Cleanup registry ─────────────────────────────────────────────────────────

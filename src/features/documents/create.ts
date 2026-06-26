@@ -15,8 +15,7 @@ export interface CreateDocumentOptions {
   content?: string;
   contentFile?: string;
   project?: string;
-  json: boolean;
-  pretty: boolean;
+  plain: boolean;
 }
 
 async function doCreate(
@@ -68,7 +67,7 @@ export async function createDocument(opts: CreateDocumentOptions): Promise<void>
   const result = await ResultAsync.fromPromise(doCreate(client, opts, content), coerceCliError);
 
   result.match(
-    (doc) => renderDocumentResult(doc, opts.json, opts.pretty),
+    (doc) => renderDocumentResult(doc, opts.plain),
     (e) => exitError(e)
   );
 }
