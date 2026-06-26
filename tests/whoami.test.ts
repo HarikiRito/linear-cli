@@ -1,5 +1,6 @@
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { UnauthenticatedError } from '../src/lib/errors.js';
 
 const mockViewer = { id: 'u1', name: 'Alice', email: 'alice@example.com' };
 const mockOrg = { id: 'org1', name: 'Acme Corp', urlKey: 'acme' };
@@ -158,6 +159,29 @@ describe('whoami command', () => {
 
     const out = jsonOutputs[0] as { id: string };
     expect(out.id).toBe('u1');
+  });
+
+  it('unauthenticated: console.error contains "Not authenticated" and exitCode === 1', async () => {
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(err(new UnauthenticatedError())),
+      getRequestFn: vi.fn(),
+    }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue(''),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'whoami', '--api-key', 'test-key']);
+
+    const allMessages = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(allMessages).toContain('Not authenticated');
+    expect(process.exitCode).toBe(1);
+
+    consoleSpy.mockRestore();
   });
 
   it('fetches viewer and organization via SDK getters', async () => {

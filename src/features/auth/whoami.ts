@@ -23,7 +23,7 @@ export interface WhoamiOptions {
 }
 
 export async function runWhoami(opts: WhoamiOptions): Promise<void> {
-  const result = await getClient({ apiKey: opts.apiKey, token: opts.token }).andThen((client) =>
+  const result = await getClient({ apiKey: opts.apiKey, token: opts.token, allowInteractive: false }).andThen((client) =>
     ResultAsync.fromPromise(
       (async (): Promise<WhoamiData> => {
         const [viewer, organization] = await Promise.all([client.viewer, client.organization]);
@@ -57,7 +57,14 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
         }
       }
     },
-    (e) => exitError(e)
+    (e) => {
+      if (e.kind === 'UnauthenticatedError') {
+        console.error('Not authenticated. Run `linear login` to authenticate.');
+        process.exitCode = 1;
+      } else {
+        exitError(e);
+      }
+    }
   );
 }
 
