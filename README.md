@@ -1,6 +1,8 @@
 # @harikidev/linear-cli
 
-A CLI for Linear designed for agent/programmatic use. Outputs machine-readable tables, JSON, and markdown — optimized for scripting and AI tooling.
+A CLI for Linear designed for agent/programmatic use. Outputs boxed tables for humans and an agent-friendly plain-text format (`--plain`) optimized for AI tooling and scripting.
+
+Repository: https://github.com/HarikiRito/linear-cli
 
 ## Install
 
@@ -35,8 +37,7 @@ Most commands accept these common flags (not repeated per command):
 
 | Flag | Description |
 |---|---|
-| `--json` | Output as JSON |
-| `--pretty` | Pretty-print JSON (use with `--json`) |
+| `--plain` | Output agent-friendly plain key:value text (only relevant fields) |
 | `--api-key <key>` | Linear API key |
 | `--token <token>` | Linear access token |
 
@@ -48,7 +49,7 @@ List commands also accept: `--limit <n>` (default 50), `--after <cursor>`, `--al
 |---|---|
 | `linear login` | Authenticate with Linear (saves to global or project scope) |
 | `linear logout` | Remove stored credentials |
-| `linear whoami` | Show the currently authenticated user |
+| `linear whoami` | Show the currently authenticated user. Does not start interactive login when unauthenticated — run `linear login` first. |
 
 ### Issues
 
@@ -143,9 +144,62 @@ List commands also accept: `--limit <n>` (default 50), `--after <cursor>`, `--al
 
 ## Output & Pagination
 
-Default output is a table (TTY) or markdown table (non-TTY). Use `--json` for JSON output; add `--pretty` to pretty-print.
+Default output is a boxed table (TTY) or markdown table when piped. Use `--plain` for agent-friendly plain-text output optimized for AI tooling.
 
 List commands paginate with `--limit <n>` (default 50), `--after <cursor>` for next-page cursor, or `--all` to fetch all pages automatically.
+
+## Plain Output Format (--plain)
+
+`--plain` emits a minimal, structured text format designed for LLM consumption:
+
+- **Header line** per record: `<Type>: <id>` (e.g. `Issue: ENG-123`)
+- **Fields** as `key: value`, one per line; null/empty fields are omitted
+- **Nested relations** are shown by name or identifier, not internal IDs
+- **Multi-line fields** (e.g. description) are wrapped in a sentinel block:
+  ```
+  description: |<<
+  First line of description.
+  Second line.
+  <<END
+  ```
+- **List output**: records separated by a line of exactly `---`
+
+Example — `linear issues get ENG-123 --plain`:
+
+```
+Issue: ENG-123
+title: Fix authentication timeout
+state: In Progress
+assignee: Jane Smith
+priority: High
+description: |<<
+Users are experiencing session timeouts after 5 minutes
+even when actively using the app.
+<<END
+```
+
+Example — `linear issues list --plain`:
+
+```
+Issue: ENG-123
+title: Fix authentication timeout
+state: In Progress
+assignee: Jane Smith
+---
+Issue: ENG-124
+title: Update onboarding flow
+state: Todo
+assignee: Bob Lee
+```
+
+## Claude Code Skill
+
+A Claude Code skill is generated at `skill/linear-cli/SKILL.md` via `npm run generate:skill` (also run automatically by `prepublishOnly`). The skill includes every command with `--plain` appended and provides:
+
+- A Linear-specific trigger so Claude Code routes relevant requests to this skill
+- A **read-only-by-default guardrail** — the agent only performs mutations (create, update, delete) when the user explicitly asks
+
+Agent users should always pass `--plain` to get output in the format the skill expects.
 
 ## Config File
 
@@ -164,3 +218,7 @@ workspace = "myorg"  # workspace slug
 ```
 
 Both keys are optional. Environment overrides: `LINEAR_TEAM_ID` → `team_id`, `LINEAR_WORKSPACE` → `workspace`.
+
+## Contributing
+
+Issues and pull requests are welcome at https://github.com/HarikiRito/linear-cli. To report a bug or request a feature, open an issue at https://github.com/HarikiRito/linear-cli/issues.

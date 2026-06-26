@@ -3,6 +3,9 @@
   "version": "0.2.0",
   "description": "CLI for Linear — designed for agent/programmatic use",
   "type": "commonjs",
+  "repository": { "type": "git", "url": "git+https://github.com/HarikiRito/linear-cli.git" },
+  "bugs": { "url": "https://github.com/HarikiRito/linear-cli/issues" },
+  "homepage": "https://github.com/HarikiRito/linear-cli#readme",
   "bin": {
     "linear": "./dist/index.cjs"
   },
