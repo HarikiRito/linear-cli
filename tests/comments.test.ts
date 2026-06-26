@@ -52,6 +52,118 @@ describe('comment list', () => {
     process.exitCode = undefined;
   });
 
+  it('renders full body longer than 80 chars in table output (no truncation)', async () => {
+    const longBody = 'A'.repeat(100);
+    const requestFn = vi.fn().mockResolvedValue({
+      issue: {
+        comments: {
+          nodes: [
+            {
+              id: 'c1',
+              body: longBody,
+              createdAt: '2024-01-01',
+              parentId: null,
+              user: { name: 'Alice' },
+            },
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+    });
+    stdMocks({}, requestFn);
+    const program = await buildProgram();
+    const { prettyTable } = await import('../src/lib/output/table.js');
+    await program.parseAsync(['node', 'linear', 'issues', 'comment', 'list', 'ISSUE-1']);
+
+    expect(vi.mocked(prettyTable)).toHaveBeenCalledOnce();
+    const rows: string[][] = vi.mocked(prettyTable).mock.calls[0][1];
+    expect(rows[0]).toContain(longBody);
+  });
+
+  it('renders full body longer than 80 chars in --plain output (no truncation)', async () => {
+    const longBody = 'B'.repeat(120);
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const requestFn = vi.fn().mockResolvedValue({
+      issue: {
+        comments: {
+          nodes: [
+            {
+              id: 'c2',
+              body: longBody,
+              createdAt: '2024-01-01',
+              parentId: null,
+              user: { name: 'Bob' },
+            },
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+    });
+    stdMocks({}, requestFn);
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'comment', 'list', 'ISSUE-1', '--plain']);
+
+    const output = consoleSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain(longBody);
+  });
+
+  it('renders multi-line body in full in --plain output', async () => {
+    const multiLineBody = 'line one\nline two\nline three';
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const requestFn = vi.fn().mockResolvedValue({
+      issue: {
+        comments: {
+          nodes: [
+            {
+              id: 'c3',
+              body: multiLineBody,
+              createdAt: '2024-01-01',
+              parentId: null,
+              user: { name: 'Carol' },
+            },
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+    });
+    stdMocks({}, requestFn);
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'comment', 'list', 'ISSUE-1', '--plain']);
+
+    const output = consoleSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('line one');
+    expect(output).toContain('line two');
+    expect(output).toContain('line three');
+  });
+
+  it('renders short body unchanged', async () => {
+    const shortBody = 'Hello';
+    const requestFn = vi.fn().mockResolvedValue({
+      issue: {
+        comments: {
+          nodes: [
+            {
+              id: 'c4',
+              body: shortBody,
+              createdAt: '2024-01-01',
+              parentId: null,
+              user: { name: 'Dave' },
+            },
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+    });
+    stdMocks({}, requestFn);
+    const program = await buildProgram();
+    const { prettyTable } = await import('../src/lib/output/table.js');
+    await program.parseAsync(['node', 'linear', 'issues', 'comment', 'list', 'ISSUE-1']);
+
+    expect(vi.mocked(prettyTable)).toHaveBeenCalledOnce();
+    const rows: string[][] = vi.mocked(prettyTable).mock.calls[0][1];
+    expect(rows[0]).toContain(shortBody);
+  });
+
   it('fetches comments for issue', async () => {
     // comment list uses requestFn + TypedDocumentNode (LIST_COMMENTS_QUERY)
     const requestFn = vi.fn().mockResolvedValue({

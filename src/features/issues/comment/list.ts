@@ -23,10 +23,6 @@ interface CommentRow {
   thread: string;
 }
 
-function truncate(s: string, max: number): string {
-  return s.length > max ? `${s.slice(0, max - 3)}...` : s;
-}
-
 function commentPlainFields(r: CommentRow): PlainField[] {
   return [
     { key: 'author', value: r.author },
@@ -68,7 +64,7 @@ export async function listComments(opts: ListCommentsOptions): Promise<void> {
         rows: nodes.map((n) => ({
           id: n.id,
           author: n.user?.name ?? '',
-          body: truncate(n.body, 80),
+          body: n.body,
           createdAt: n.createdAt,
           thread: n.parentId ? `reply to ${n.parentId}` : '',
         })),
