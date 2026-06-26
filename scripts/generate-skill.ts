@@ -26,7 +26,11 @@ function collectLeaves(cmd: Command, prefix: string): LeafRow[] {
     const argTokens = args.map((a) =>
       a.required ? `<${a.name()}>` : `[${a.name()}]`
     );
-    const usagePath = [fullPath, ...argTokens].join(' ');
+    // Append --plain if the command supports it (has a --plain option registered)
+    const hasPlain = cmd.options.some((o) => o.long === '--plain');
+    const pathParts = [fullPath, ...argTokens];
+    if (hasPlain) pathParts.push('--plain');
+    const usagePath = pathParts.join(' ');
     const desc = cmd.description().replace(/\n/g, ' ').replace(/\|/g, '\\|');
     return [{ path: usagePath, description: desc }];
   }
@@ -35,7 +39,7 @@ function collectLeaves(cmd: Command, prefix: string): LeafRow[] {
 }
 
 const SKILL_DESCRIPTION =
-  'Manage Linear issues, projects, teams, cycles, and documents from the `linear` CLI.';
+  'Manage Linear issues, projects, and teams via the linear CLI. Use when: the user shares a Linear URL (e.g. https://linear.app/<team>/issue/ENG-123), explicitly mentions Linear, or requests to view, create, update, or work with a Linear issue, project, team, cycle, or document.';
 
 export function renderSkill(program: Command): string {
   const leaves = sortedSubcommands(program)
@@ -50,11 +54,7 @@ export function renderSkill(program: Command): string {
   lines.push('---');
   lines.push('');
   lines.push(
-    '<!-- Do not edit by hand — regenerate via `npm run generate:skill` -->'
-  );
-  lines.push('');
-  lines.push(
-    '**Always pass `--json`** — JSON is the most reliable, machine-readable output for agents; prefer it on every command. Run `linear login` first to authenticate. Use `--help` on any command for full option details.'
+    '**Instructions:** When the user shares a Linear ticket URL (e.g. `https://linear.app/<team>/issue/ABC-123`) or asks to work with Linear, use the `linear` CLI to fetch and inspect the relevant data, always passing `--plain` for agent-readable output. If a command reports you are not authenticated, tell the user to run `linear login` themselves — you cannot complete the interactive login. Use `--help` on any command for full option details.\n\n**Read-only by default:** Only perform MUTATIONS (create, update, delete, comment, or any state-changing command) when the user EXPLICITLY requests that specific action. Never create or modify Linear data on your own initiative, and never just because a ticket was mentioned or pasted. When unsure whether the user wants a mutation, ask first — default to read-only.'
   );
   lines.push('');
   lines.push('## Commands');

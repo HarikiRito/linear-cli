@@ -96,9 +96,28 @@ describe('renderSkill', () => {
     expect(desc.length).toBeLessThanOrEqual(1536);
   });
 
-  it('auto-generated banner present', () => {
+  it('auto-generated banner absent', () => {
     const program = makeProgram();
     const output = renderSkill(program);
-    expect(output).toContain('Do not edit by hand');
+    expect(output).not.toContain('Do not edit by hand');
   });
+
+  it('description triggers on Linear URL and "Use when:"', () => {
+    const program = makeProgram();
+    const output = renderSkill(program);
+    const match = output.match(/^---\n([\s\S]*?)\n---/);
+    const frontmatter = match![1];
+    const descMatch = frontmatter.match(/description:\s*"([\s\S]*?)"/);
+    const desc = descMatch![1];
+    expect(desc).toContain('https://linear.app');
+    expect(desc).toContain('Use when:');
+  });
+
+  it('instructions block contains read-only-by-default guardrail', () => {
+    const program = makeProgram();
+    const output = renderSkill(program);
+    expect(output).toMatch(/Read-only by default/i);
+    expect(output).toMatch(/EXPLICITLY/);
+  });
+
 });
