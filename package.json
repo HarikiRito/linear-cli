@@ -1,6 +1,6 @@
 {
   "name": "@harikidev/linear-cli",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "CLI for Linear — designed for agent/programmatic use",
   "type": "commonjs",
   "repository": { "type": "git", "url": "git+https://github.com/HarikiRito/linear-cli.git" },
