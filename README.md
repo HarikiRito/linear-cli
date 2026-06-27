@@ -194,7 +194,7 @@ assignee: Bob Lee
 
 ## Claude Code Skill
 
-A Claude Code skill is generated at `skill/linear-cli/SKILL.md` via `npm run generate:skill` (also run automatically by `prepublishOnly`). The skill includes every command with `--plain` appended and provides:
+A Claude Code skill is hand-authored and maintained at `skill/linear-cli/SKILL.md`. The skill includes every command with `--plain` appended and provides:
 
 - A Linear-specific trigger so Claude Code routes relevant requests to this skill
 - A **read-only-by-default guardrail** — the agent only performs mutations (create, update, delete) when the user explicitly asks

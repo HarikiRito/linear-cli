@@ -28,12 +28,4 @@ describe('createProgram', () => {
     expect(names).toContain('projects');
   });
 
-  it('renderSkill against real program contains known commands', async () => {
-    const { createProgram } = await import('../src/program.js');
-    const { renderSkill } = await import('../scripts/generate-skill.js');
-    const program = createProgram();
-    const output = renderSkill(program);
-    expect(output).toContain('issues');
-    expect(output).toContain('projects');
-  });
 });

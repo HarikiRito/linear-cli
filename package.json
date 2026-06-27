@@ -25,13 +25,12 @@
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "build": "tsdown",
-    "prepublishOnly": "npm run build && npm run generate:skill",
+    "prepublishOnly": "npm run build",
     "dev": "tsdown --watch",
     "codegen": "graphql-codegen --config codegen.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "pnpm build && RUN_E2E=1 vitest run tests/e2e",
-    "generate:skill": "tsx scripts/generate-skill.ts",
     "format": "biome format --write src tests",
     "lint": "biome check src tests && eslint src tests",
     "lint:fix": "biome check --write --unsafe src tests && eslint --fix src tests"
