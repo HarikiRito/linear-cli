@@ -39,6 +39,7 @@ function makeCyclesResponse(
 function stdMocks(requestFn: ReturnType<typeof vi.fn>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({})),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
@@ -109,6 +110,7 @@ describe('cycles list', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({

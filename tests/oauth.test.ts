@@ -130,7 +130,7 @@ describe('OAuth token refresh (PKCE)', () => {
     expect(body.get('client_id')).toBe('override-client-id');
   });
 
-  it('refreshAccessToken rotates the refresh token when server returns a new one', async () => {
+  it('refreshAccessToken returns rotated refreshToken in the resolved value (no disk I/O)', async () => {
     const writeSession = vi.fn().mockReturnValue({ isErr: () => false });
     vi.doMock('../src/features/auth/session.js', () => ({
       ...makeSessionMock({
@@ -153,11 +153,16 @@ describe('OAuth token refresh (PKCE)', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     const { refreshAccessToken } = await import('../src/features/auth/oauth.js');
-    await refreshAccessToken('old-refresh');
+    const result = await refreshAccessToken('old-refresh');
 
-    expect(writeSession).toHaveBeenCalledWith(
-      expect.objectContaining({ refreshToken: 'new-refresh' })
-    );
+    expect(result.isOk()).toBe(true);
+    const val = result._unsafeUnwrap();
+    expect(val.accessToken).toBe('new-access');
+    expect(val.refreshToken).toBe('new-refresh');
+    expect(val.expiresAt).toBeGreaterThan(Date.now());
+
+    // refreshAccessToken must NOT write to disk — caller is responsible
+    expect(writeSession).not.toHaveBeenCalled();
   });
 
   it('refreshAccessToken returns err on failed response', async () => {

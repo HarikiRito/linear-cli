@@ -10,7 +10,7 @@ import {
   LINEAR_TOKEN_URL,
 } from '../../lib/config.js';
 import { AuthError, type CliError, NetworkError, toError } from '../../lib/errors.js';
-import { readSession, writeSession } from './session.js';
+import { writeSession } from './session.js';
 
 export function generateCodeVerifier(): string {
   // 96 random bytes → 128 base64url chars (within the required 43–128 char range)
@@ -179,7 +179,7 @@ export function startOAuthFlow(): ResultAsync<void, CliError> {
 
 export function refreshAccessToken(
   refreshToken: string
-): ResultAsync<{ accessToken: string; expiresAt: number }, CliError> {
+): ResultAsync<{ accessToken: string; refreshToken: string; expiresAt: number }, CliError> {
   const clientId = getClientId();
 
   const body = new URLSearchParams({
@@ -204,18 +204,11 @@ export function refreshAccessToken(
         expires_in: number;
       };
       const expiresAt = Date.now() + data.expires_in * 1000;
-      const session = readSession();
-      if (session && 'refreshToken' in session) {
-        const writeResult = writeSession({
-          accessToken: data.access_token,
-          refreshToken: data.refresh_token ?? session.refreshToken,
-          expiresAt,
-        });
-        if (writeResult.isErr()) {
-          throw writeResult.error;
-        }
-      }
-      return { accessToken: data.access_token, expiresAt };
+      return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token ?? refreshToken,
+        expiresAt,
+      };
     }),
     (e) => new NetworkError(e instanceof Error ? e.message : String(e))
   );

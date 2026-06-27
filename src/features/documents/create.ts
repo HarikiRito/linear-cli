@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
-import { getClient } from '../../lib/client/index.js';
+import { getClientWithAuthRetry } from '../../lib/client/index.js';
 import { coerceCliError } from '../../lib/errors.js';
 import { exitError } from '../../lib/runner.js';
 import { readStdin } from '../../lib/stdin.js';
@@ -57,7 +57,7 @@ export async function createDocument(opts: CreateDocumentOptions): Promise<void>
     content = await readFile(opts.contentFile, 'utf-8');
   }
 
-  const clientResult = await getClient({ apiKey: opts.apiKey, token: opts.token });
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
     return;

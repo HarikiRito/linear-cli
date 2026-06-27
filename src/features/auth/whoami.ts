@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { ResultAsync } from 'neverthrow';
-import { getClient } from '../../lib/client/index.js';
+import { getClientWithAuthRetry } from '../../lib/client/index.js';
 import { addPlainOption } from '../../lib/commandOptions.js';
 import { mapLinearError } from '../../lib/errors.js';
 import { renderPlainRecord } from '../../lib/output/plain.js';
@@ -21,7 +21,7 @@ export interface WhoamiOptions {
 }
 
 export async function runWhoami(opts: WhoamiOptions): Promise<void> {
-  const result = await getClient({ apiKey: opts.apiKey, token: opts.token, allowInteractive: false }).andThen((client) =>
+  const result = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token, allowInteractive: false }).andThen((client) =>
     ResultAsync.fromPromise(
       (async (): Promise<WhoamiData> => {
         const [viewer, organization] = await Promise.all([client.viewer, client.organization]);

@@ -82,6 +82,7 @@ function makeCreateDocumentPayload(
 function stdMocks(requestFn: ReturnType<typeof vi.fn>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({})),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
@@ -175,6 +176,7 @@ describe('documents create', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ createDocument: createFn })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ createDocument: createFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -204,6 +206,7 @@ describe('documents create', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ createDocument: createFn })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ createDocument: createFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -232,6 +235,7 @@ describe('documents create', () => {
   it('missing --title causes Commander error', async () => {
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));

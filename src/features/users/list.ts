@@ -1,4 +1,4 @@
-import { getClient, getRequestFn } from '../../lib/client/index.js';
+import { getClientWithAuthRetry, getRequestFn } from '../../lib/client/index.js';
 import type { PlainField } from '../../lib/output/plain.js';
 import { type ColumnConfig, fetchPaged, runAndRenderPaged } from '../../lib/pagination.js';
 import { exitError } from '../../lib/runner.js';
@@ -50,7 +50,7 @@ function toUserRows(
 }
 
 export async function listUsers(opts: ListUsersOptions): Promise<void> {
-  const clientResult = await getClient({ apiKey: opts.apiKey, token: opts.token });
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
     return;

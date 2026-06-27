@@ -22,6 +22,7 @@ function makeConn(
 function stdMocks(teamsFn: ReturnType<typeof vi.fn>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
     getRequestFn: vi.fn(),
   }));
   vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -62,6 +63,7 @@ describe('teams list', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -121,6 +123,7 @@ describe('teams list', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -187,6 +190,7 @@ describe('teams exit codes', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(err(rateLimitErr)),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(err(rateLimitErr)),
     }));
 
     const program = await buildProgram();

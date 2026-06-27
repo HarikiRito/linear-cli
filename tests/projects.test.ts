@@ -22,6 +22,7 @@ function makeConn(
 function stdMocks(projectsFn: ReturnType<typeof vi.fn>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({ projects: projectsFn })),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ projects: projectsFn })),
     getRequestFn: vi.fn(),
   }));
   vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -67,6 +68,7 @@ describe('projects list', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ projects: projectsFn })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ projects: projectsFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -126,6 +128,7 @@ describe('projects list', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ projects: projectsFn })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ projects: projectsFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -192,6 +195,7 @@ describe('projects exit codes', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(err(rateLimitErr)),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(err(rateLimitErr)),
     }));
 
     const program = await buildProgram();

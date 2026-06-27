@@ -1,4 +1,4 @@
-import { getClient, getRequestFn } from '../../lib/client/index.js';
+import { getClientWithAuthRetry, getRequestFn } from '../../lib/client/index.js';
 import { ValidationError } from '../../lib/errors.js';
 import type { PlainField } from '../../lib/output/plain.js';
 import { type ColumnConfig, fetchPaged, runAndRenderPaged } from '../../lib/pagination.js';
@@ -68,7 +68,7 @@ export async function listCycles(opts: ListCyclesOptions): Promise<void> {
     return;
   }
 
-  const clientResult = await getClient({ apiKey: opts.apiKey, token: opts.token });
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
     return;

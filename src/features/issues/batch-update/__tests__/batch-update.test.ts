@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../../lib/client/index.js', () => ({
-  getClient: vi.fn(),
+  getClientWithAuthRetry: vi.fn(),
 }));
 
 vi.mock('../../update/update.js', () => ({
@@ -9,7 +9,7 @@ vi.mock('../../update/update.js', () => ({
 }));
 
 import { ok, okAsync } from 'neverthrow';
-import { getClient } from '../../../../lib/client/index.js';
+import { getClientWithAuthRetry } from '../../../../lib/client/index.js';
 import { resolveUpdateInput } from '../../update/update.js';
 import {
   BATCH_CHUNK_SIZE,
@@ -225,7 +225,7 @@ describe('exit code logic', () => {
       .mockResolvedValueOnce(makePayloadMock())
       .mockRejectedValueOnce(new Error('not found'));
 
-    vi.mocked(getClient).mockResolvedValue(ok({ updateIssue: updateIssueFn } as any));
+    vi.mocked(getClientWithAuthRetry).mockResolvedValue(ok({ updateIssue: updateIssueFn } as any));
     vi.mocked(resolveUpdateInput).mockReturnValue(okAsync({}) as any);
 
     await batchUpdateIssues({ ids: ['ENG-1', 'ENG-2'], plain: false });
@@ -236,7 +236,7 @@ describe('exit code logic', () => {
   it('leaves process.exitCode unchanged when all updates succeed', async () => {
     const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
 
-    vi.mocked(getClient).mockResolvedValue(ok({ updateIssue: updateIssueFn } as any));
+    vi.mocked(getClientWithAuthRetry).mockResolvedValue(ok({ updateIssue: updateIssueFn } as any));
     vi.mocked(resolveUpdateInput).mockReturnValue(okAsync({}) as any);
 
     await batchUpdateIssues({ ids: ['ENG-1'], plain: false });
@@ -247,7 +247,7 @@ describe('exit code logic', () => {
   it('resolveUpdateInput is called exactly once regardless of ID count', async () => {
     const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
 
-    vi.mocked(getClient).mockResolvedValue(ok({ updateIssue: updateIssueFn } as any));
+    vi.mocked(getClientWithAuthRetry).mockResolvedValue(ok({ updateIssue: updateIssueFn } as any));
     vi.mocked(resolveUpdateInput).mockReturnValue(okAsync({ title: 'Shared' }) as any);
 
     await batchUpdateIssues({ ids: ['ENG-1', 'ENG-2', 'ENG-3'], plain: false });

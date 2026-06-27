@@ -34,6 +34,7 @@ function stdMocks(request: ReturnType<typeof vi.fn>) {
     // Issues list/me/query use requestFn + TypedDocumentNode — provide a stub client
     // and return the request spy from getRequestFn.
     getClient: vi.fn().mockReturnValue(ok({})),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
     getRequestFn: vi.fn().mockReturnValue(request),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
@@ -154,6 +155,7 @@ describe('issues list', () => {
     const printTableCalls: unknown[] = [];
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -261,6 +263,7 @@ describe('issues list', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -360,6 +363,7 @@ describe('issues me', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -539,6 +543,7 @@ describe('issues query', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -617,6 +622,7 @@ describe('TTY output selection', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
     const printTableCalls: unknown[] = [];
@@ -642,6 +648,7 @@ describe('TTY output selection', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
     const printTableCalls: unknown[] = [];
@@ -668,6 +675,7 @@ describe('TTY output selection', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
     const printTableCalls: unknown[] = [];
@@ -693,6 +701,7 @@ describe('TTY output selection', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
     const printTableCalls: unknown[] = [];
@@ -722,6 +731,7 @@ describe('TTY output selection', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
       getRequestFn: vi.fn(),
     }));
     const printTableCalls: unknown[] = [];
@@ -769,6 +779,7 @@ describe('exit codes', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(err(rateLimitErr)),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(err(rateLimitErr)),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
       prettyTable: vi.fn().mockReturnValue(''),
@@ -786,6 +797,7 @@ describe('exit codes', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(request),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({

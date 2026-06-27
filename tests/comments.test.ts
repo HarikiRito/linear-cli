@@ -23,6 +23,7 @@ function stdMocks(
 ) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: requestFn ? vi.fn().mockReturnValue(requestFn) : vi.fn(),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
@@ -301,6 +302,7 @@ describe('comment reply', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok(makeClientMock({ createComment: createCommentFn }))),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok(makeClientMock({ createComment: createCommentFn }))),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
@@ -456,6 +458,7 @@ describe('comment delete', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok(makeClientMock({ deleteComment: deleteCommentFn }))),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok(makeClientMock({ deleteComment: deleteCommentFn }))),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));

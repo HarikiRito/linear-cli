@@ -38,6 +38,7 @@ function stdMocks(teamFn: ReturnType<typeof vi.fn>) {
   // resolveTeam with UUID short-circuits (no teams call needed)
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({ team: teamFn })),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ team: teamFn })),
     getRequestFn: vi.fn(),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
@@ -74,6 +75,7 @@ describe('teams get', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ team: teamFn })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ team: teamFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({

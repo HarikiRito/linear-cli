@@ -1,14 +1,17 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { type CliError, UnauthenticatedError } from '../../lib/errors.js';
+import { AuthError, type CliError, UnauthenticatedError } from '../../lib/errors.js';
 import { findProjectRoot } from '../../lib/scope.js';
 import { runLoginFlow } from './login.js';
 import { refreshAccessToken } from './oauth.js';
 import {
   isApiKeySession,
   isOAuthSession,
+  type OAuthSession,
   readProjectSession,
   readSession,
   type Session,
+  writeProjectSession,
+  writeSession,
 } from './session.js';
 
 export interface ResolvedCredential {
@@ -20,23 +23,43 @@ export interface ResolveOptions {
   apiKey?: string;
   token?: string;
   allowInteractive?: boolean;
+  forceRefresh?: boolean;
 }
+
+type Scope = { type: 'project'; projectRoot: string } | { type: 'global' };
 
 /**
  * Resolve a single session to a credential, refreshing OAuth tokens when expired.
- * Returns null for apiKey sessions (never expires), or a ResultAsync for OAuth.
- * Actually returns a ResultAsync in all cases for uniform handling.
+ * Persists rotated tokens to the same scope they came from (no cross-writing).
  */
-function resolveSessionWithRefresh(session: Session): ResultAsync<ResolvedCredential, CliError> {
+function resolveSessionWithRefresh(
+  session: Session,
+  scope: Scope,
+  forceRefresh?: boolean
+): ResultAsync<ResolvedCredential, CliError> {
   if (isApiKeySession(session)) {
     return okAsync({ type: 'apiKey' as const, value: session.apiKey });
   }
   if (isOAuthSession(session)) {
-    if (session.expiresAt && Date.now() >= session.expiresAt) {
-      return refreshAccessToken(session.refreshToken).map((refreshed) => ({
-        type: 'accessToken' as const,
-        value: refreshed.accessToken,
-      }));
+    // 60-second skew buffer: refresh proactively before actual expiry
+    const needsRefresh =
+      forceRefresh || (session.expiresAt != null && Date.now() >= session.expiresAt - 60_000);
+    if (needsRefresh) {
+      return refreshAccessToken(session.refreshToken).andThen((refreshed) => {
+        const updatedSession: OAuthSession = {
+          accessToken: refreshed.accessToken,
+          refreshToken: refreshed.refreshToken,
+          expiresAt: refreshed.expiresAt,
+        };
+        const writeResult =
+          scope.type === 'project'
+            ? writeProjectSession(scope.projectRoot, updatedSession)
+            : writeSession(updatedSession);
+        if (writeResult.isErr()) {
+          return errAsync(new AuthError(writeResult.error.message) as CliError);
+        }
+        return okAsync({ type: 'accessToken' as const, value: refreshed.accessToken });
+      });
     }
     return okAsync({ type: 'accessToken' as const, value: session.accessToken });
   }
@@ -49,19 +72,24 @@ function resolveSessionWithRefresh(session: Session): ResultAsync<ResolvedCreden
  * Returns null (via errAsync(UnauthenticatedError)) if nothing is stored.
  */
 function resolveFromStoredSession(
-  projectRoot: string | null
+  projectRoot: string | null,
+  forceRefresh?: boolean
 ): ResultAsync<ResolvedCredential, CliError> {
   // Project scope first
   if (projectRoot) {
     const projectSession = readProjectSession(projectRoot);
     if (projectSession) {
-      return resolveSessionWithRefresh(projectSession);
+      return resolveSessionWithRefresh(
+        projectSession,
+        { type: 'project', projectRoot },
+        forceRefresh
+      );
     }
   }
   // Global scope
   const session = readSession();
   if (session) {
-    return resolveSessionWithRefresh(session);
+    return resolveSessionWithRefresh(session, { type: 'global' }, forceRefresh);
   }
   return errAsync(new UnauthenticatedError());
 }
@@ -87,7 +115,7 @@ export function resolveCredential(
 
   // 3) Project-scoped session, then 4) global session (with OAuth refresh)
   const projectRoot = findProjectRoot(process.cwd());
-  const stored = resolveFromStoredSession(projectRoot);
+  const stored = resolveFromStoredSession(projectRoot, opts.forceRefresh);
 
   // If a stored session was found (including after refresh), return it.
   // We use orElse to continue to the interactive fallback only on UnauthenticatedError.

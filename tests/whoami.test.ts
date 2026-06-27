@@ -24,6 +24,7 @@ function makeClientMock() {
 function stdMocks(clientMock: ReturnType<typeof makeClientMock>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: vi.fn(),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
@@ -139,6 +140,7 @@ describe('whoami command', () => {
   it('unauthenticated: console.error contains "Not authenticated" and exitCode === 1', async () => {
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(err(new UnauthenticatedError())),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(err(new UnauthenticatedError())),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({

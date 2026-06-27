@@ -1,4 +1,4 @@
-import { getClient } from '../../../lib/client/index.js';
+import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { parseCsv } from '../../../lib/commandOptions.js';
 import { validatePriority, ValidationError } from '../../../lib/errors.js';
 import { renderPlainList } from '../../../lib/output/plain.js';
@@ -98,7 +98,7 @@ export async function batchUpdateIssues(opts: BatchUpdateOptions): Promise<void>
 
   const resolvedDescription = opts.description === '-' ? await readStdin() : opts.description;
 
-  const clientResult = await getClient({ apiKey: opts.apiKey, token: opts.token });
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
     return;

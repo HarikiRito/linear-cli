@@ -71,6 +71,7 @@ function stdMocksWithRequest(
 ) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({ ...clientOverrides })),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ ...clientOverrides })),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
@@ -83,6 +84,7 @@ function stdMocksWithRequest(
 function stdMocksWithClient(clientMock: ReturnType<typeof makeClientMock>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: vi.fn(),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
@@ -309,6 +311,7 @@ describe('milestones delete', () => {
     const clientMock = makeClientMock({ deleteProjectMilestone: deleteFn });
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok(clientMock)),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));

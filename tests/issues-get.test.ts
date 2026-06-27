@@ -38,6 +38,7 @@ function makeIssueResponse(overrides: Record<string, unknown> = {}) {
 function stdMocks(requestFn: ReturnType<typeof vi.fn>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({})),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
@@ -73,6 +74,7 @@ describe('issues get', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -101,6 +103,7 @@ describe('issues get', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -146,6 +149,7 @@ describe('issues get', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -203,6 +207,7 @@ describe('issues get', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(err(authErr)),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(err(authErr)),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({

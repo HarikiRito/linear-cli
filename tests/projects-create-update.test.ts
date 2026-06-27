@@ -28,6 +28,7 @@ function makeClientMock(overrides: Record<string, unknown>) {
 function stdMocks(clientMock: ReturnType<typeof makeClientMock>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: vi.fn(),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({

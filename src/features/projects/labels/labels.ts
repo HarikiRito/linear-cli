@@ -1,5 +1,5 @@
 import { ResultAsync } from 'neverthrow';
-import { getClient, getRequestFn } from '../../../lib/client/index.js';
+import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
 import { coerceCliError, NotFoundError, ValidationError } from '../../../lib/errors.js';
 import {
   type ColumnConfig,
@@ -54,7 +54,7 @@ export async function listProjectLabels(opts: ListProjectLabelsOptions): Promise
     return;
   }
 
-  const clientResult = await getClient({ apiKey: opts.apiKey, token: opts.token });
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
     return;

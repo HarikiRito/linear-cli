@@ -1,5 +1,5 @@
 import { ResultAsync } from 'neverthrow';
-import { getClient } from '../../../lib/client/index.js';
+import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { confirmDestructive } from '../../../lib/confirm.js';
 import { mapLinearError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
@@ -22,7 +22,7 @@ export async function deleteComment(opts: DeleteCommentOptions): Promise<void> {
     return;
   }
 
-  const clientResult = await getClient({ apiKey: opts.apiKey, token: opts.token });
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
     return;

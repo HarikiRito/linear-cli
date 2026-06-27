@@ -1,6 +1,6 @@
 import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
-import { getClient } from '../../../lib/client/index.js';
+import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { coerceCliError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveAssignee, resolveTeam } from '../../issues/shared/resolve.js';
@@ -47,7 +47,7 @@ async function resolveAndCreate(
 }
 
 export async function createProject(opts: CreateProjectOptions): Promise<void> {
-  const clientResult = await getClient({ apiKey: opts.apiKey, token: opts.token });
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
     return;

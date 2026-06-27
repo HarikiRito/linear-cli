@@ -1,5 +1,5 @@
 import { errAsync, okAsync } from 'neverthrow';
-import { getClient, getRequestFn } from '../../lib/client/index.js';
+import { getClientWithAuthRetry, getRequestFn } from '../../lib/client/index.js';
 import { AmbiguousMatchError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import type { PlainField } from '../../lib/output/plain.js';
 import { renderPlainRecord } from '../../lib/output/plain.js';
@@ -31,7 +31,7 @@ export async function getStatus(opts: GetStatusOptions): Promise<void> {
     return;
   }
 
-  const clientResult = await getClient({ apiKey: opts.apiKey, token: opts.token });
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
     return;

@@ -38,6 +38,7 @@ function makeClientMock(overrides: Record<string, unknown>) {
 function stdMocks(clientMock: ReturnType<typeof makeClientMock>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
     getRequestFn: vi.fn(),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
@@ -118,6 +119,7 @@ describe('issues create', () => {
     const clientMock = makeClientMock({ createIssue: createIssueFn });
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok(clientMock)),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
@@ -224,6 +226,7 @@ describe('issues update', () => {
     const clientMock = makeClientMock({ updateIssue: updateIssueFn });
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok(clientMock)),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
@@ -369,6 +372,7 @@ describe('issues batch-update', () => {
     const clientMock = makeClientMock({ updateIssue: updateIssueFn });
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok(clientMock)),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
@@ -394,6 +398,7 @@ describe('issues batch-update', () => {
     const clientMock = makeClientMock({ updateIssue: updateIssueFn });
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok(clientMock)),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
@@ -485,6 +490,7 @@ describe('issues delete', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok(clientMock)),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));

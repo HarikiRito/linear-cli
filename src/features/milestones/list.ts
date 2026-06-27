@@ -1,5 +1,5 @@
 import { ResultAsync } from 'neverthrow';
-import { getClient, getRequestFn } from '../../lib/client/index.js';
+import { getClientWithAuthRetry, getRequestFn } from '../../lib/client/index.js';
 import { coerceCliError, NotFoundError } from '../../lib/errors.js';
 import type { PlainField } from '../../lib/output/plain.js';
 import {
@@ -45,7 +45,7 @@ const MILESTONE_COLUMNS: ColumnConfig<MilestoneRow> = {
 };
 
 export async function listMilestones(opts: ListMilestonesOptions): Promise<void> {
-  const clientResult = await getClient({ apiKey: opts.apiKey, token: opts.token });
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
     return;

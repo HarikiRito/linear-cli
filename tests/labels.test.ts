@@ -40,6 +40,7 @@ function stdMocksWithRequestAndClient(
 ) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({ ...clientExtra })),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ ...clientExtra })),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
   vi.doMock('../src/lib/output/table.js', () => ({
@@ -93,6 +94,7 @@ describe('labels list', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ teams: teamsFn })),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -138,6 +140,7 @@ describe('labels create', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ createIssueLabel: createFn })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ createIssueLabel: createFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -165,6 +168,7 @@ describe('labels create', () => {
   it('missing --name causes Commander error', async () => {
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));

@@ -1,4 +1,4 @@
-import { getClient, getRequestFn } from '../../../lib/client/index.js';
+import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
 import { exitError } from '../../../lib/runner.js';
 import { buildFilter, type IssueFilterInput } from '../shared/filters.js';
 import { fetchIssues, runAndRender } from '../shared/render.js';
@@ -24,7 +24,7 @@ export async function myIssues(opts: MeOptions): Promise<void> {
     : buildStateFilter(opts.states);
   const filter = buildFilter(meBaseFilter, stateFilter as IssueFilterInput | undefined);
 
-  const clientResult = await getClient({ apiKey: opts.apiKey, token: opts.token });
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
     return;

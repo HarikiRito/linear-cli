@@ -13,6 +13,7 @@ function makeBranchResponse(branchName = 'eng-123-fix-thing') {
 function stdMocks(requestFn: ReturnType<typeof vi.fn>) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({})),
+    getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
     getRequestFn: vi.fn().mockReturnValue(requestFn),
   }));
   vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -117,6 +118,7 @@ describe('issues branch', () => {
     const teamMock = vi.fn().mockResolvedValue({ key: 'ENG' });
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ team: teamMock })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ team: teamMock })),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));

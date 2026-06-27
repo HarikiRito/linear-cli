@@ -1,5 +1,5 @@
 import { ResultAsync } from 'neverthrow';
-import { getClient, getRequestFn } from '../../../lib/client/index.js';
+import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
 import { coerceCliError, mapLinearError, NotFoundError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
@@ -17,7 +17,7 @@ export interface ReplyCommentOptions {
 export async function replyComment(opts: ReplyCommentOptions): Promise<void> {
   const body = opts.body === '-' ? await readStdin() : opts.body;
 
-  const clientResult = await getClient({ apiKey: opts.apiKey, token: opts.token });
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
     return;
