@@ -62,6 +62,15 @@ export class AmbiguousMatchError extends Error {
   }
 }
 
+/** Returns a ValidationError if priority is out of the 0–4 range, otherwise null. */
+export function validatePriority(priority: number | undefined): ValidationError | null {
+  if (priority === undefined) return null;
+  if (priority < 0 || priority > 4) {
+    return new ValidationError(`Priority must be between 0 and 4, got ${priority}`);
+  }
+  return null;
+}
+
 export function toError(e: unknown): Error {
   return e instanceof Error ? e : new Error(String(e));
 }

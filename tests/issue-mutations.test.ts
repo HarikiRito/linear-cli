@@ -302,6 +302,161 @@ describe('issues update', () => {
 });
 
 // ---------------------------------------------------------------------------
+// issues batch-update
+// ---------------------------------------------------------------------------
+describe('issues batch-update', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.resetModules();
+    process.exitCode = undefined;
+  });
+
+  it('parseIds splits comma-separated args and deduplicates', async () => {
+    const { parseIds } = await import('../src/features/issues/batch-update/batch-update.js');
+    expect(parseIds(['ENG-1', 'ENG-2,ENG-3', 'ENG-1'])).toEqual(['ENG-1', 'ENG-2', 'ENG-3']);
+  });
+
+  it('calls updateIssue once per ID with identical resolved input', async () => {
+    const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    stdMocks(clientMock);
+    const program = await buildProgram();
+
+    await program.parseAsync([
+      'node', 'linear', 'issues', 'batch-update', 'ENG-1', 'ENG-2', '--title', 'Batch Title',
+    ]);
+
+    expect(updateIssueFn).toHaveBeenCalledTimes(2);
+    const [, input1] = updateIssueFn.mock.calls[0] as [string, Record<string, unknown>];
+    const [, input2] = updateIssueFn.mock.calls[1] as [string, Record<string, unknown>];
+    expect(input1).toEqual({ title: 'Batch Title' });
+    expect(input2).toEqual({ title: 'Batch Title' });
+  });
+
+  it('sets exit code 1 when any issue update fails', async () => {
+    const updateIssueFn = vi
+      .fn()
+      .mockResolvedValueOnce(makePayloadMock())
+      .mockRejectedValueOnce(new Error('API error'));
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    stdMocks(clientMock);
+    const program = await buildProgram();
+
+    await program.parseAsync([
+      'node', 'linear', 'issues', 'batch-update', 'ENG-1', 'ENG-2', '--title', 'X',
+    ]);
+
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('does not set exit code 1 when all updates succeed', async () => {
+    const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    stdMocks(clientMock);
+    const program = await buildProgram();
+
+    await program.parseAsync([
+      'node', 'linear', 'issues', 'batch-update', 'ENG-1', '--title', 'X',
+    ]);
+
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('invalid priority calls exitError before any API call', async () => {
+    const updateIssueFn = vi.fn();
+    const exitErrorMock = vi.fn();
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok(clientMock)),
+      getRequestFn: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue(''),
+      printTable: vi.fn(),
+    }));
+
+    const program = await buildProgram();
+    await program.parseAsync([
+      'node', 'linear', 'issues', 'batch-update', 'ENG-1', '--priority', '5',
+    ]);
+
+    expect(exitErrorMock).toHaveBeenCalledOnce();
+    const err = exitErrorMock.mock.calls[0][0] as { kind: string };
+    expect(err.kind).toBe('ValidationError');
+    expect(updateIssueFn).not.toHaveBeenCalled();
+  });
+
+  it('empty IDs list calls exitError with ValidationError', async () => {
+    const updateIssueFn = vi.fn();
+    const exitErrorMock = vi.fn();
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok(clientMock)),
+      getRequestFn: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue(''),
+      printTable: vi.fn(),
+    }));
+
+    const { batchUpdateIssues } = await import(
+      '../src/features/issues/batch-update/batch-update.js'
+    );
+    await batchUpdateIssues({ ids: [], plain: false });
+
+    expect(exitErrorMock).toHaveBeenCalledOnce();
+    const err = exitErrorMock.mock.calls[0][0] as { kind: string };
+    expect(err.kind).toBe('ValidationError');
+    expect(updateIssueFn).not.toHaveBeenCalled();
+  });
+
+  it('runBatchUpdate processes all IDs and partial failures do not block other updates', async () => {
+    const { runBatchUpdate } = await import(
+      '../src/features/issues/batch-update/batch-update.js'
+    );
+
+    let callCount = 0;
+    const updateFn = vi.fn().mockImplementation(
+      async (id: string): Promise<{ ok: true; issue: { id: string; identifier: string; title: string; url: string; state: string } } | { ok: false; id: string; error: string }> => {
+        callCount++;
+        if (id === 'ENG-2') return { ok: false, id, error: 'failed' };
+        return { ok: true, issue: { id, identifier: id, title: 'T', url: 'u', state: 's' } };
+      }
+    );
+
+    const results = await runBatchUpdate(['ENG-1', 'ENG-2', 'ENG-3'], updateFn);
+
+    expect(callCount).toBe(3);
+    expect(results).toHaveLength(3);
+    expect(results[0]).toMatchObject({ ok: true });
+    expect(results[1]).toMatchObject({ ok: false, id: 'ENG-2', error: 'failed' });
+    expect(results[2]).toMatchObject({ ok: true });
+  });
+
+  it('runBatchUpdate processes IDs in bounded chunks', async () => {
+    const { runBatchUpdate, BATCH_CHUNK_SIZE } = await import(
+      '../src/features/issues/batch-update/batch-update.js'
+    );
+
+    const ids = Array.from({ length: BATCH_CHUNK_SIZE + 2 }, (_, i) => `ENG-${i + 1}`);
+    const updateFn = vi.fn().mockImplementation(
+      async (id: string): Promise<{ ok: true; issue: { id: string; identifier: string; title: string; url: string; state: string } }> => ({
+        ok: true,
+        issue: { id, identifier: id, title: 'T', url: 'u', state: 's' },
+      })
+    );
+
+    const results = await runBatchUpdate(ids, updateFn);
+
+    expect(results).toHaveLength(ids.length);
+    expect(updateFn).toHaveBeenCalledTimes(ids.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // issues delete
 // ---------------------------------------------------------------------------
 describe('issues delete', () => {

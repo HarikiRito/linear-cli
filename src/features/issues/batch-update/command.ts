@@ -1,11 +1,11 @@
 import type { Command } from 'commander';
 import { addAuthOptions, addPlainOption, parseCsv } from '../../../lib/commandOptions.js';
-import { updateIssue } from './update.js';
+import { batchUpdateIssues } from './batch-update.js';
 
-export function registerUpdateCommand(issues: Command): void {
+export function registerBatchUpdateCommand(issues: Command): void {
   const cmd = issues
-    .command('update <id>')
-    .description('Update an issue')
+    .command('batch-update <ids...>')
+    .description('Update multiple issues at once')
     .option('--title <text>', 'Issue title')
     .option('--team <name-or-id>', 'Team name or ID')
     .option('--description <text>', 'Issue description (use - to read from stdin)')
@@ -25,7 +25,7 @@ export function registerUpdateCommand(issues: Command): void {
 
   addAuthOptions(addPlainOption(cmd)).action(
     async (
-      id: string,
+      ids: string[],
       opts: {
         title?: string;
         team?: string;
@@ -46,10 +46,10 @@ export function registerUpdateCommand(issues: Command): void {
       }
     ) => {
       const labels = opts.labels ? parseCsv(opts.labels) : undefined;
-      await updateIssue({
+      await batchUpdateIssues({
+        ids,
         apiKey: opts.apiKey,
         token: opts.token,
-        id,
         title: opts.title,
         team: opts.team,
         description: opts.description,

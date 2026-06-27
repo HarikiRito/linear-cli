@@ -1,7 +1,7 @@
 import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
 import { getClient } from '../../../lib/client/index.js';
-import { coerceCliError, ValidationError } from '../../../lib/errors.js';
+import { coerceCliError, type CliError, validatePriority, ValidationError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
 import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
@@ -37,15 +37,11 @@ export interface UpdateIssueOptions {
   plain: boolean;
 }
 
-async function resolveAndUpdate(
+async function buildInput(
   client: LinearClient,
-  opts: UpdateIssueOptions,
+  opts: Omit<UpdateIssueOptions, 'id' | 'apiKey' | 'token'>,
   description: string | undefined
-): Promise<IssueResult> {
-  const idResult = await resolveIssueIdentifier(opts.id, client);
-  if (idResult.isErr()) throw idResult.error;
-  const resolvedId = idResult.value;
-
+): Promise<Record<string, unknown>> {
   const input: Record<string, unknown> = {};
 
   if (opts.title !== undefined) input.title = opts.title;
@@ -120,6 +116,35 @@ async function resolveAndUpdate(
     input.cycleId = cycleResult.value;
   }
 
+  return input;
+}
+
+/**
+ * Resolve all shared update fields (name→ID lookups, validations, passthrough fields) into
+ * a GraphQL-ready input object. Does NOT resolve the issue identifier or perform the mutation.
+ * Call this once per batch to avoid redundant API calls for identical shared inputs.
+ */
+export function resolveUpdateInput(
+  client: LinearClient,
+  opts: Omit<UpdateIssueOptions, 'id' | 'apiKey' | 'token'>,
+  description: string | undefined
+): ResultAsync<Record<string, unknown>, CliError> {
+  return ResultAsync.fromPromise(buildInput(client, opts, description), coerceCliError);
+}
+
+export async function resolveAndUpdate(
+  client: LinearClient,
+  opts: UpdateIssueOptions,
+  description: string | undefined
+): Promise<IssueResult> {
+  const idResult = await resolveIssueIdentifier(opts.id, client);
+  if (idResult.isErr()) throw idResult.error;
+  const resolvedId = idResult.value;
+
+  const inputResult = await resolveUpdateInput(client, opts, description);
+  if (inputResult.isErr()) throw inputResult.error;
+  const input = inputResult.value;
+
   const payload = await client.updateIssue(resolvedId, input);
   const issue = await payload.issue;
   if (!issue) throw new Error('updateIssue returned no issue');
@@ -136,8 +161,9 @@ async function resolveAndUpdate(
 }
 
 export async function updateIssue(opts: UpdateIssueOptions): Promise<void> {
-  if (opts.priority !== undefined && (opts.priority < 0 || opts.priority > 4)) {
-    exitError(new ValidationError(`Priority must be between 0 and 4, got ${opts.priority}`));
+  const priorityErr = validatePriority(opts.priority);
+  if (priorityErr) {
+    exitError(priorityErr);
     return;
   }
 

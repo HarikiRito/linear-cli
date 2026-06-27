@@ -1,4 +1,5 @@
 import type { Command } from 'commander';
+import { registerBatchUpdateCommand } from './batch-update/command.js';
 import { registerBranchCommand } from './branch/command.js';
 import { registerCommentCommand } from './comment/command.js';
 import { registerCreateCommand } from './create/command.js';
@@ -12,7 +13,7 @@ import { registerUpdateCommand } from './update/command.js';
 export function registerIssues(program: Command): void {
   const issues = program
     .command('issues')
-    .description('Issue commands: list, get, me, query, create, update, delete, comment')
+    .description('Issue commands: list, get, me, query, create, update, batch-update, delete, comment')
     .addHelpCommand(false);
 
   // Bare `issues` with no subcommand prints help
@@ -27,6 +28,7 @@ export function registerIssues(program: Command): void {
   registerCommentCommand(issues);
   registerCreateCommand(issues);
   registerUpdateCommand(issues);
+  registerBatchUpdateCommand(issues);
   registerDeleteCommand(issues);
   registerBranchCommand(issues);
 }
