@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import { addAuthOptions, addPlainOption } from '../../lib/commandOptions.js';
 import { createDocument } from './create.js';
+import { deleteDocument } from './delete.js';
 import { getDocument } from './get.js';
 import { listDocuments } from './list.js';
 import { updateDocument } from './update.js';
@@ -8,7 +9,7 @@ import { updateDocument } from './update.js';
 export function registerDocuments(program: Command): void {
   const documents = program
     .command('documents')
-    .description('Document commands: list, get, create, update')
+    .description('Document commands: list, get, create, update, delete')
     .addHelpCommand(false);
 
   documents.action(() => {
@@ -121,6 +122,23 @@ export function registerDocuments(program: Command): void {
         content: opts.content,
         contentFile: opts.contentFile,
         plain: !!opts.plain,
+      });
+    }
+  );
+
+  // documents delete
+  const deleteCmd = documents
+    .command('delete <id>')
+    .description('Delete a document (permanent)')
+    .option('--yes', 'Skip confirmation prompt');
+
+  addAuthOptions(deleteCmd).action(
+    async (id: string, opts: { yes?: boolean; apiKey?: string; token?: string }) => {
+      await deleteDocument({
+        apiKey: opts.apiKey,
+        token: opts.token,
+        id,
+        yes: !!opts.yes,
       });
     }
   );

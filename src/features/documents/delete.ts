@@ -1,0 +1,42 @@
+import { ResultAsync } from 'neverthrow';
+import { getClientWithAuthRetry } from '../../lib/client/index.js';
+import { confirmDestructive } from '../../lib/confirm.js';
+import { mapLinearError } from '../../lib/errors.js';
+import { exitError } from '../../lib/runner.js';
+
+export interface DeleteDocumentOptions {
+  apiKey?: string;
+  token?: string;
+  id: string;
+  yes: boolean;
+}
+
+export async function deleteDocument(opts: DeleteDocumentOptions): Promise<void> {
+  const { proceed, error } = await confirmDestructive(`Delete document ${opts.id}?`, opts.yes);
+  if (error) {
+    exitError(error);
+    return;
+  }
+  if (!proceed) {
+    console.log('Aborted.');
+    return;
+  }
+
+  const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
+  if (clientResult.isErr()) {
+    exitError(clientResult.error);
+    return;
+  }
+  const client = clientResult.value;
+
+  const result = await ResultAsync.fromPromise(client.deleteDocument(opts.id), (e) =>
+    mapLinearError(e)
+  );
+
+  result.match(
+    () => {
+      console.log(`Document ${opts.id} deleted.`);
+    },
+    (e) => exitError(e)
+  );
+}
