@@ -1,16 +1,16 @@
 /**
  * E2E tests: projects CRUD (create, get, update, labels) + negative cases.
  *
- * Created projects are tracked and cleaned up in afterAll via projects update
- * (there is no projects delete command yet, so cleanup is best-effort).
+ * Created projects are tracked and cleaned up in afterAll via projects delete.
  *
  * Gate: RUN_E2E=1
  */
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CMD_TIMEOUT,
   discoverTeam,
+  makeRegistry,
   parsePlainList,
   parsePlainRecord,
   RUN_E2E,
@@ -23,22 +23,11 @@ describe.skipIf(!RUN_E2E)('projects extended E2E', () => {
   let team: TeamInfo;
   let projectId = '';
   let projectName = '';
-  const createdProjectIds: string[] = [];
+  const reg = makeRegistry();
 
   beforeAll(async () => {
     team = await discoverTeam();
   }, CMD_TIMEOUT);
-
-  afterAll(async () => {
-    // Best-effort: mark created projects as cancelled so they don't pollute the workspace
-    for (const id of createdProjectIds) {
-      try {
-        await runCLI(['projects', 'update', id, '--state', 'cancelled']);
-      } catch {
-        /* best-effort */
-      }
-    }
-  }, CMD_TIMEOUT * 3);
 
   // ── create ────────────────────────────────────────────────────────────────
 
@@ -65,7 +54,7 @@ describe.skipIf(!RUN_E2E)('projects extended E2E', () => {
       expect(data['url']).toContain('linear.app');
 
       projectId = data['id'] ?? '';
-      createdProjectIds.push(projectId);
+      reg.trackProject(projectId);
     },
     CMD_TIMEOUT
   );

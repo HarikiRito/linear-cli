@@ -2,7 +2,7 @@
  * E2E tests: documents CRUD (list, create, get, update).
  *
  * A project is created in beforeAll to host the documents.
- * All created resources are cleaned up in afterAll.
+ * All created resources are cleaned up in afterAll via the registry.
  *
  * Gate: RUN_E2E=1
  */
@@ -10,10 +10,11 @@
 import { unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CMD_TIMEOUT,
   discoverTeam,
+  makeRegistry,
   parsePlainList,
   parsePlainRecord,
   RUN_E2E,
@@ -28,7 +29,7 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
   let documentId = '';
   let documentTitle = '';
 
-  const createdProjectIds: string[] = [];
+  const reg = makeRegistry();
 
   beforeAll(async () => {
     team = await discoverTeam();
@@ -50,19 +51,8 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
     const data = parsePlainRecord(r.stdout);
     projectId = data['id'] ?? '';
     if (!projectId) throw new Error('No project id returned from create');
-    createdProjectIds.push(projectId);
+    reg.trackProject(projectId);
   }, CMD_TIMEOUT * 2);
-
-  afterAll(async () => {
-    // Best-effort: mark projects as cancelled
-    for (const id of createdProjectIds) {
-      try {
-        await runCLI(['projects', 'update', id, '--state', 'cancelled']);
-      } catch {
-        /* best-effort */
-      }
-    }
-  }, CMD_TIMEOUT * 3);
 
   // ── list (no project filter) ──────────────────────────────────────────────
 
@@ -101,6 +91,7 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
       expect(typeof data['slugId']).toBe('string');
 
       documentId = data['id'] ?? '';
+      if (documentId) reg.trackDocument(documentId);
     },
     CMD_TIMEOUT
   );
@@ -128,6 +119,7 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
         expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
         const data = parsePlainRecord(r.stdout);
         expect(data['id']).toBeTruthy();
+        if (data['id']) reg.trackDocument(data['id']);
         // Content may be normalized by Linear but should contain the text
         if (data['content']) {
           expect(data['content']).toContain('E2E Test Content');

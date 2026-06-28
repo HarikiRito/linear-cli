@@ -168,6 +168,8 @@ export async function getViewer(): Promise<ViewerInfo> {
 export interface CleanupRegistry {
   trackIssue(id: string): void;
   trackComment(id: string): void;
+  trackProject(id: string): void;
+  trackDocument(id: string): void;
 }
 
 /**
@@ -177,6 +179,8 @@ export interface CleanupRegistry {
 export function makeRegistry(): CleanupRegistry {
   const issueIds: string[] = [];
   const commentIds: string[] = [];
+  const projectIds: string[] = [];
+  const documentIds: string[] = [];
 
   afterAll(async () => {
     for (const id of [...commentIds]) {
@@ -193,6 +197,20 @@ export function makeRegistry(): CleanupRegistry {
         /* best-effort */
       }
     }
+    for (const id of [...documentIds]) {
+      try {
+        await runCLI(['documents', 'delete', id, '--yes']);
+      } catch {
+        /* best-effort */
+      }
+    }
+    for (const id of [...projectIds]) {
+      try {
+        await runCLI(['projects', 'delete', id, '--yes']);
+      } catch {
+        /* best-effort */
+      }
+    }
   }, CMD_TIMEOUT * 3);
 
   return {
@@ -201,6 +219,12 @@ export function makeRegistry(): CleanupRegistry {
     },
     trackComment(id: string) {
       commentIds.push(id);
+    },
+    trackProject(id: string) {
+      projectIds.push(id);
+    },
+    trackDocument(id: string) {
+      documentIds.push(id);
     },
   };
 }
