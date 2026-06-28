@@ -1,4 +1,5 @@
 import type { LinearClient } from '@linear/sdk';
+import { LinearDocument } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { coerceCliError, ValidationError } from '../../../lib/errors.js';
@@ -8,6 +9,7 @@ import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 import {
   resolveAssignee,
   resolveCycle,
+  resolveIssueIdentifier,
   resolveLabels,
   resolveMilestone,
   resolveProject,
@@ -31,6 +33,11 @@ export interface CreateIssueOptions {
   cycle?: string;
   parent?: string;
   dueDate?: string;
+  // Relation flags (applied after issue creation)
+  relatedTo?: string;
+  blocks?: string;
+  blockedBy?: string;
+  duplicateOf?: string;
   plain: boolean;
 }
 
@@ -114,6 +121,64 @@ async function resolveAndCreate(
   };
 }
 
+async function createPostRelations(
+  client: LinearClient,
+  newIssueId: string,
+  newIssueIdentifier: string,
+  opts: CreateIssueOptions
+): Promise<void> {
+  const relations: Array<{
+    relatedIssue: string;
+    type: LinearDocument.IssueRelationType;
+    swap?: boolean;
+  }> = [];
+
+  if (opts.relatedTo) {
+    relations.push({ relatedIssue: opts.relatedTo, type: LinearDocument.IssueRelationType.Related });
+  }
+  if (opts.blocks) {
+    relations.push({ relatedIssue: opts.blocks, type: LinearDocument.IssueRelationType.Blocks });
+  }
+  if (opts.blockedBy) {
+    // blocked-by: swap ids so the other issue is the blocker
+    relations.push({
+      relatedIssue: opts.blockedBy,
+      type: LinearDocument.IssueRelationType.Blocks,
+      swap: true,
+    });
+  }
+  if (opts.duplicateOf) {
+    relations.push({ relatedIssue: opts.duplicateOf, type: LinearDocument.IssueRelationType.Duplicate });
+  }
+
+  for (const rel of relations) {
+    try {
+      const targetResult = await resolveIssueIdentifier(rel.relatedIssue, client);
+      if (targetResult.isErr()) {
+        console.error(
+          `Warning: could not resolve issue '${rel.relatedIssue}' for relation: ${targetResult.error.message}`
+        );
+        continue;
+      }
+      const targetId = targetResult.value;
+
+      const [issueId, relatedIssueId] = rel.swap
+        ? [targetId, newIssueId]
+        : [newIssueId, targetId];
+      await client.createIssueRelation({ issueId, relatedIssueId, type: rel.type });
+      const direction = rel.swap
+        ? `${rel.relatedIssue} → ${newIssueIdentifier}`
+        : `${newIssueIdentifier} → ${rel.relatedIssue}`;
+      console.log(`Relation created: ${direction}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(
+        `Warning: failed to create relation to '${rel.relatedIssue}': ${msg}`
+      );
+    }
+  }
+}
+
 export async function createIssue(opts: CreateIssueOptions): Promise<void> {
   if (opts.priority !== undefined && (opts.priority < 0 || opts.priority > 4)) {
     exitError(new ValidationError(`Priority must be between 0 and 4, got ${opts.priority}`));
@@ -129,13 +194,25 @@ export async function createIssue(opts: CreateIssueOptions): Promise<void> {
   }
   const client = clientResult.value;
 
+  // Create the issue first — relations are applied after and must not hide a
+  // successful creation from the user.
   const result = await ResultAsync.fromPromise(
     resolveAndCreate(client, opts, description),
     coerceCliError
   );
 
-  result.match(
-    (issue: IssueResult) => renderIssue(issue, opts.plain),
-    (e) => exitError(e)
-  );
+  if (result.isErr()) {
+    exitError(result.error);
+    return;
+  }
+
+  const issue = result.value;
+  // Render the created issue immediately so the user always sees it, even if
+  // post-create relation calls fail.
+  renderIssue(issue, opts.plain);
+
+  const hasRelations = opts.relatedTo || opts.blocks || opts.blockedBy || opts.duplicateOf;
+  if (hasRelations) {
+    await createPostRelations(client, issue.id, issue.identifier, opts);
+  }
 }

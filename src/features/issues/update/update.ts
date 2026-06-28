@@ -33,6 +33,7 @@ export interface UpdateIssueOptions {
   estimate?: number;
   cycle?: string;
   parent?: string;
+  noParent?: boolean;
   dueDate?: string;
   plain: boolean;
 }
@@ -48,7 +49,11 @@ async function buildInput(
   if (description !== undefined) input.description = description;
   if (opts.priority !== undefined) input.priority = opts.priority;
   if (opts.estimate !== undefined) input.estimate = opts.estimate;
-  if (opts.parent !== undefined) input.parentId = opts.parent;
+  if (opts.noParent) {
+    input.parentId = null;
+  } else if (opts.parent !== undefined) {
+    input.parentId = opts.parent;
+  }
   if (opts.dueDate !== undefined) input.dueDate = opts.dueDate;
 
   let resolvedTeamId: string | undefined;

@@ -21,6 +21,7 @@ export function registerUpdateCommand(issues: Command): void {
     .option('--estimate <number>', 'Story point estimate')
     .option('--cycle <name-or-id>', 'Cycle name or ID (requires --team)')
     .option('--parent <id>', 'Parent issue ID')
+    .option('--no-parent', 'Clear the parent (set parentId to null)')
     .option('--due-date <YYYY-MM-DD>', 'Due date');
 
   addAuthOptions(addPlainOption(cmd)).action(
@@ -38,7 +39,7 @@ export function registerUpdateCommand(issues: Command): void {
         priority?: string;
         estimate?: string;
         cycle?: string;
-        parent?: string;
+        parent?: string | false;
         dueDate?: string;
         apiKey?: string;
         token?: string;
@@ -61,7 +62,8 @@ export function registerUpdateCommand(issues: Command): void {
         priority: opts.priority !== undefined ? Number(opts.priority) : undefined,
         estimate: opts.estimate !== undefined ? Number(opts.estimate) : undefined,
         cycle: opts.cycle,
-        parent: opts.parent,
+        parent: typeof opts.parent === 'string' ? opts.parent : undefined,
+        noParent: opts.parent === false,
         dueDate: opts.dueDate,
         plain: !!opts.plain,
       });

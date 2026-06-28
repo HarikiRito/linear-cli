@@ -18,7 +18,11 @@ export function registerCreateCommand(issues: Command): void {
     .option('--estimate <number>', 'Story point estimate')
     .option('--cycle <name-or-id>', 'Cycle name or ID')
     .option('--parent <id>', 'Parent issue ID')
-    .option('--due-date <YYYY-MM-DD>', 'Due date');
+    .option('--due-date <YYYY-MM-DD>', 'Due date')
+    .option('--related-to <issue>', 'Create a related-to relation with this issue after creation')
+    .option('--blocks <issue>', 'Create a blocking relation with this issue after creation')
+    .option('--blocked-by <issue>', 'Create a blocked-by relation with this issue after creation')
+    .option('--duplicate-of <issue>', 'Create a duplicate-of relation with this issue after creation');
 
   addAuthOptions(addPlainOption(cmd)).action(
     async (opts: {
@@ -35,6 +39,10 @@ export function registerCreateCommand(issues: Command): void {
       cycle?: string;
       parent?: string;
       dueDate?: string;
+      relatedTo?: string;
+      blocks?: string;
+      blockedBy?: string;
+      duplicateOf?: string;
       apiKey?: string;
       token?: string;
       plain?: boolean;
@@ -61,6 +69,10 @@ export function registerCreateCommand(issues: Command): void {
         cycle: opts.cycle,
         parent: opts.parent,
         dueDate: opts.dueDate,
+        relatedTo: opts.relatedTo,
+        blocks: opts.blocks,
+        blockedBy: opts.blockedBy,
+        duplicateOf: opts.duplicateOf,
         plain: !!opts.plain,
       });
     }
