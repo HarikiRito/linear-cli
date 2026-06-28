@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-brand: #6366f1;
+  --font-sans: 'Inter', sans-serif;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
