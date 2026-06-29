@@ -1,7 +1,6 @@
 import path from 'node:path';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 
@@ -33,23 +32,6 @@ export default defineConfig({
 					environment: 'node',
 					include: ['src/**/*.{test,spec}.{js,ts}'],
 					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
-				}
-			},
-			{
-				plugins: [
-					svelte({
-						...runesCompilerOptions,
-						compilerOptions: { ...runesCompilerOptions.compilerOptions, dev: true }
-					})
-				],
-				resolve: {
-					alias,
-					conditions: ['browser', 'svelte', 'import', 'module', 'default']
-				},
-				test: {
-					name: 'component',
-					environment: 'happy-dom',
-					include: ['src/**/*.svelte.{test,spec}.{js,ts}']
 				}
 			}
 		]

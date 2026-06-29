@@ -1,4 +1,6 @@
 allowBuilds:
   '@biomejs/biome': set this to true or false
+  typeit: true
 onlyBuiltDependencies:
   - '@tailwindcss/oxide'
+  - typeit
