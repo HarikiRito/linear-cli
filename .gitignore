@@ -11,3 +11,4 @@ auth.json
 /linear
 .linear
 .linear/auth.json
+.vercel
