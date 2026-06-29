@@ -22,7 +22,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "build": "tsdown",
     "prepublishOnly": "npm run build",
