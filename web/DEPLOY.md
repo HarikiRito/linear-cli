@@ -1,11 +1,11 @@
 # Deploying to Vercel
 
-The `web/` directory is a static SvelteKit SPA (`@sveltejs/adapter-static`, fallback `200.html`). It is deployed via `vercel.json` at the **repo root**.
+The `web/` directory is a static SvelteKit SPA (`@sveltejs/adapter-static`, fallback `200.html`). It is deployed via `vercel.json` inside the `web/` directory.
 
 ## Vercel Dashboard Setup
 
 1. Import the git repository at [vercel.com/new](https://vercel.com/new).
-2. **Root Directory**: leave as the **repo root** (not `web/`). The `vercel.json` commands `cd` into `web/` themselves.
+2. **Root Directory**: set to **`web/`** — this is required for Vercel to pick up `web/vercel.json` and build the right folder.
 3. **Framework Preset**: choose **Other** (`vercel.json` sets `"framework": null`).
 4. Deploy. Every push to `main` triggers an automatic redeploy.
 
@@ -15,12 +15,10 @@ The `web/` directory is a static SvelteKit SPA (`@sveltejs/adapter-static`, fall
 npm i -g vercel
 ```
 
-From the **repo root**:
+From the **`web/` directory**:
 
 - `vercel` — preview deploy
 - `vercel --prod` — production deploy
-
-The root `vercel.json` drives the build; no extra flags or config needed.
 
 ## pnpm Version Note
 
