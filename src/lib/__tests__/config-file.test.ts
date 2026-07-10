@@ -53,4 +53,16 @@ describe('config-file', () => {
     expect(raw).toContain('team_id');
     expect(raw).not.toContain('workspace');
   });
+
+  it('reads a legacy config.toml containing only a workspace key without error', () => {
+    // Simulates a config.toml written by a pre-redesign version of the CLI,
+    // which no longer prompts for/writes `workspace` but must still tolerate
+    // reading one written previously.
+    const filePath = path.join(tmpDir, 'config.toml');
+    fs.writeFileSync(filePath, 'workspace = "acme"\n', 'utf-8');
+
+    const result = readConfig(filePath);
+    expect(result).toEqual({ workspace: 'acme' });
+    expect(result.workspace).toBe('acme');
+  });
 });
