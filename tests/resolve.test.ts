@@ -7,12 +7,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  */
 function makeClient(
   overrides: Partial<{
-    teams: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+    teams: (args?: unknown) => Promise<{ nodes: { id: string; name: string; key?: string }[] }>;
     projects: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
     project: (id: string) => Promise<{
       projectMilestones: () => Promise<{ nodes: { id: string; name: string }[] }>;
     } | null>;
-    users: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
+    users: (
+      args?: unknown
+    ) => Promise<{ nodes: { id: string; name: string; displayName?: string; email?: string }[] }>;
     issueLabels: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
     workflowStates: (args?: unknown) => Promise<{ nodes: { id: string; name: string }[] }>;
     cycles: (args?: unknown) => Promise<{ nodes: { id: string; name?: string }[] }>;
@@ -77,6 +79,111 @@ describe('resolveTeam', () => {
     expect(e.name).toBe('NotFoundError');
     expect(e.message).toContain('team');
     expect(e.message).toContain('nope');
+  });
+
+  // --- H-162: team key resolution (a team's `key`, e.g. "ENG", is distinct from
+  // its display `name`, e.g. "Engineering" — both must resolve without a UUID) ---
+
+  it('team key (not matching display name) resolves to ID case-insensitively', async () => {
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'tid', key: 'H', name: 'Hariki' }] });
+    const client = makeClient({ teams: teamsFn });
+    const { resolveTeam } = await import('../src/features/issues/shared/resolve.js');
+    // "H" does not appear anywhere in "Hariki" as an exact match — only the key matches.
+    const result = await resolveTeam('h', client);
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe('tid');
+  });
+
+  it('team key resolution is case-insensitive and requires no --team UUID', async () => {
+    const teamsFn = vi
+      .fn()
+      .mockResolvedValue({ nodes: [{ id: 'eng-id', key: 'ENG', name: 'Engineering Team' }] });
+    const client = makeClient({ teams: teamsFn });
+    const { resolveTeam } = await import('../src/features/issues/shared/resolve.js');
+    const result = await resolveTeam('eng', client);
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe('eng-id');
+  });
+});
+
+describe('resolveAssignee: name, displayName, and email resolution (H-162)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it('resolves by email without requiring a UUID', async () => {
+    const usersFn = vi.fn().mockResolvedValue({
+      nodes: [{ id: 'user-1', name: 'Alice Anderson', email: 'alice@example.com' }],
+    });
+    const client = makeClient({ users: usersFn });
+    const { resolveAssignee } = await import('../src/features/issues/shared/resolve.js');
+    const result = await resolveAssignee('alice@example.com', client);
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe('user-1');
+  });
+
+  it('resolves by displayName when it differs from name', async () => {
+    const usersFn = vi.fn().mockResolvedValue({
+      nodes: [{ id: 'user-2', name: 'Robert Smith', displayName: 'bobsmith' }],
+    });
+    const client = makeClient({ users: usersFn });
+    const { resolveAssignee } = await import('../src/features/issues/shared/resolve.js');
+    const result = await resolveAssignee('bobsmith', client);
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe('user-2');
+  });
+});
+
+/**
+ * "resolveEntity"-style tests from the plan's Test Plan: entity resolution
+ * (here, team resolution is the representative case) must try human-readable
+ * key/name first, falling back to UUID only when the input already looks like
+ * one, and must surface a clear not-found error naming the entity type/value.
+ */
+describe('resolveEntity: key/name-first resolution with UUID fallback (H-162)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it('prefers key/name over UUID for team', async () => {
+    const teamsFn = vi
+      .fn()
+      .mockResolvedValue({ nodes: [{ id: 'team-uuid', key: 'ENG', name: 'Engineering' }] });
+    const client = makeClient({ teams: teamsFn });
+    const { resolveTeam } = await import('../src/features/issues/shared/resolve.js');
+    const result = await resolveTeam('ENG', client);
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe('team-uuid');
+    expect(teamsFn).toHaveBeenCalledOnce();
+  });
+
+  it('falls back to UUID when the input already looks like one (key/name lookup skipped)', async () => {
+    // A lookup is never even attempted for UUID-shaped input — the entity is
+    // used directly, which is the intended "UUID fallback" behaviour.
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [] });
+    const client = makeClient({ teams: teamsFn });
+    const { resolveTeam } = await import('../src/features/issues/shared/resolve.js');
+    const uuid = '87654321-4321-4321-4321-210987654321';
+    const result = await resolveTeam(uuid, client);
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe(uuid);
+    expect(teamsFn).not.toHaveBeenCalled();
+  });
+
+  it('returns a clear not-found error naming the entity type and invalid value', async () => {
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [] });
+    const client = makeClient({ teams: teamsFn });
+    const { resolveTeam } = await import('../src/features/issues/shared/resolve.js');
+    const result = await resolveTeam('totally-bogus-team', client);
+    expect(result.isErr()).toBe(true);
+    const e = result._unsafeUnwrapErr();
+    expect(e.name).toBe('NotFoundError');
+    expect(e.message).toContain('team');
+    expect(e.message).toContain('totally-bogus-team');
   });
 });
 

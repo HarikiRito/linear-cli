@@ -2,7 +2,7 @@ import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.
 import { exitError } from '../../../lib/runner.js';
 import { buildFilter, type IssueFilterInput } from '../shared/filters.js';
 import { fetchIssues, runAndRender } from '../shared/render.js';
-import { getDefaultTeamId } from '../shared/resolve.js';
+import { getDefaultTeamId, looksLikeId } from '../shared/resolve.js';
 import { buildStateFilter, type StateFilter } from '../shared/stateFilter.js';
 import { LIST_ISSUES_QUERY } from './queries.js';
 
@@ -19,9 +19,15 @@ export interface ListOptions {
 }
 
 export async function listIssues(opts: ListOptions): Promise<void> {
-  // Resolve team: flag → env/config fallback
+  // Resolve team: flag → env/config fallback. Human-readable key is the common
+  // case (filtered server-side by key, no extra API round-trip); a UUID/node ID
+  // falls back to filtering by team id — see H-162 (key/name first, UUID fallback).
   const effectiveTeam = opts.team ?? getDefaultTeamId() ?? undefined;
-  const teamFilter = effectiveTeam ? { team: { key: { eq: effectiveTeam } } } : undefined;
+  const teamFilter = effectiveTeam
+    ? looksLikeId(effectiveTeam)
+      ? { team: { id: { eq: effectiveTeam } } }
+      : { team: { key: { eq: effectiveTeam } } }
+    : undefined;
   const stateFilter: StateFilter | undefined = opts.allStates
     ? undefined
     : buildStateFilter(opts.states);

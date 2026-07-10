@@ -244,6 +244,23 @@ describe('issues list', () => {
     expect(json).toContain('"and"');
   });
 
+  // --- H-162: a UUID/node-ID passed to --team falls back correctly (filters by
+  // team id instead of the key-based server-side filter used for human-readable
+  // keys), instead of requiring a human-readable key only. ---
+  it('--team <uuid> filters by team id instead of key', async () => {
+    const request = vi.fn().mockResolvedValue(makeListResponse([]));
+    stdMocks(request);
+    const program = await buildProgram();
+
+    const uuid = '12345678-1234-1234-1234-123456789012';
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--team', uuid]);
+
+    const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
+    const json = JSON.stringify(vars);
+    expect(json).toContain(uuid);
+    expect(json).toContain('"id"');
+  });
+
   it('--json is an unknown option (errors after removal)', async () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
     const program = await buildProgram();

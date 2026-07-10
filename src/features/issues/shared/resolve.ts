@@ -29,16 +29,54 @@ export function looksLikeId(input: string): boolean {
   return false;
 }
 
+/** Case-insensitive exact-match check against any of a set of optional string fields. */
+function matchesAny(values: (string | null | undefined)[], target: string): boolean {
+  const lower = target.toLowerCase();
+  return values.some((v) => (v ?? '').toLowerCase() === lower);
+}
+
+/**
+ * Match nodes via an arbitrary predicate, then resolve to a single id: zero
+ * matches → NotFoundError, exactly one → its id, more than one → AmbiguousMatchError.
+ */
+function findOneByPredicate<T extends { id: string; name?: string | undefined }>(
+  entityType: string,
+  value: string,
+  nodes: T[],
+  predicate: (n: T) => boolean
+): ResultAsync<string, CliError> {
+  const matches = nodes.filter(predicate);
+  if (matches.length === 0) return errAsync(new NotFoundError(entityType, value));
+  if (matches.length === 1) return okAsync(matches[0].id);
+  return errAsync(new AmbiguousMatchError(entityType, value, matches));
+}
+
+/** Like findOneByPredicate, but matches via a single case-insensitive exact `name` field. */
 function findOne<T extends { id: string; name?: string | undefined }>(
   entityType: string,
   value: string,
   nodes: T[]
 ): ResultAsync<string, CliError> {
-  const lower = value.toLowerCase();
-  const matches = nodes.filter((n) => (n.name ?? '').toLowerCase() === lower);
-  if (matches.length === 0) return errAsync(new NotFoundError(entityType, value));
-  if (matches.length === 1) return okAsync(matches[0].id);
-  return errAsync(new AmbiguousMatchError(entityType, value, matches));
+  return findOneByPredicate(entityType, value, nodes, (n) => matchesAny([n.name], value));
+}
+
+/**
+ * Generic resolve helper: short-circuit on ID, otherwise fetch nodes via
+ * fetchNodes and resolve the unique match via predicate. Used for entity types
+ * that may have multiple human-readable identifiers (e.g. team key + name,
+ * user name + displayName + email) — any exact match wins.
+ */
+function resolveByKeyOrId<TNode extends { id: string; name?: string | undefined }>(
+  input: string,
+  entityType: string,
+  fetchNodes: () => Promise<{ nodes: TNode[] }>,
+  predicate: (n: TNode) => boolean
+): ResultAsync<string, CliError> {
+  if (looksLikeId(input)) return okAsync(input);
+  return ResultAsync.fromPromise(
+    fetchNodes().then((c) => c.nodes),
+    (e) => mapLinearError(e)
+  ).andThen((nodes) => findOneByPredicate(entityType, input, nodes, predicate));
 }
 
 /** Generic helper: short-circuit on ID, otherwise fetch nodes and find by name. */
@@ -47,16 +85,27 @@ function resolveByName<TNode extends { id: string; name?: string | undefined }>(
   entityType: string,
   fetchNodes: () => Promise<{ nodes: TNode[] }>
 ): ResultAsync<string, CliError> {
-  if (looksLikeId(input)) return okAsync(input);
-  return ResultAsync.fromPromise(
-    fetchNodes().then((c) => c.nodes),
-    (e) => mapLinearError(e)
-  ).andThen((nodes) => findOne(entityType, input, nodes));
+  return resolveByKeyOrId(input, entityType, fetchNodes, (n) => matchesAny([n.name], input));
 }
 
+/**
+ * Resolve a team by human-readable identifier first (key OR name, exact match
+ * case-insensitively), falling back to a UUID/node-ID passthrough only when the
+ * input already looks like an ID. Teams have a short `key` (e.g. "ENG") distinct
+ * from their display `name` (e.g. "Engineering") — both must be checked, since a
+ * key rarely matches the name filter used by the generic resolveByName helper.
+ */
 export function resolveTeam(input: string, client: LinearClient): ResultAsync<string, CliError> {
-  return resolveByName(input, 'team', () =>
-    client.teams({ filter: { name: { containsIgnoreCase: input } } })
+  return resolveByKeyOrId(
+    input,
+    'team',
+    () =>
+      client.teams({
+        filter: {
+          or: [{ key: { eqIgnoreCase: input } }, { name: { containsIgnoreCase: input } }],
+        },
+      }),
+    (n) => matchesAny([n.key, n.name], input)
   );
 }
 
@@ -115,6 +164,11 @@ export function resolveMilestone(
   ).andThen((nodes) => findOne('milestone', input, nodes));
 }
 
+/**
+ * Resolve a user by human-readable identifier first (name, display name, OR email,
+ * exact match case-insensitively), falling back to a UUID/node-ID passthrough only
+ * when the input already looks like an ID. Supports "me" as a shortcut for the viewer.
+ */
 export function resolveAssignee(
   input: string,
   client: LinearClient
@@ -125,8 +179,20 @@ export function resolveAssignee(
       (e) => mapLinearError(e)
     );
   }
-  return resolveByName(input, 'user', () =>
-    client.users({ filter: { name: { containsIgnoreCase: input } } })
+  return resolveByKeyOrId(
+    input,
+    'user',
+    () =>
+      client.users({
+        filter: {
+          or: [
+            { name: { containsIgnoreCase: input } },
+            { displayName: { containsIgnoreCase: input } },
+            { email: { containsIgnoreCase: input } },
+          ],
+        },
+      }),
+    (n) => matchesAny([n.name, n.displayName, n.email], input)
   );
 }
 
