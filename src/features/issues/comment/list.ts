@@ -1,9 +1,10 @@
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
-import { mapLinearError } from '../../../lib/errors.js';
+import type { mapLinearError } from '../../../lib/errors.js';
 import type { PlainField } from '../../../lib/output/plain.js';
 import { type ColumnConfig, type PagedResult, renderPaged } from '../../../lib/pagination.js';
 import { exitError } from '../../../lib/runner.js';
+import { mapIssueNotFoundError, resolveIssueIdentifier } from '../shared/resolve.js';
 import { LIST_COMMENTS_QUERY } from './queries.js';
 
 export interface ListCommentsOptions {
@@ -47,6 +48,16 @@ export async function listComments(opts: ListCommentsOptions): Promise<void> {
     return;
   }
   const client = clientResult.value;
+
+  // Resolve bare issue numbers (e.g. "153") via the default team, same as other
+  // issue commands (get/update) — see H-163. Full identifiers/UUIDs pass through.
+  const idResult = await resolveIssueIdentifier(opts.issueId, client);
+  if (idResult.isErr()) {
+    exitError(idResult.error);
+    return;
+  }
+  const issueId = idResult.value;
+
   const requestFn = getRequestFn(client);
 
   const result: ResultAsync<
@@ -54,7 +65,7 @@ export async function listComments(opts: ListCommentsOptions): Promise<void> {
     ReturnType<typeof mapLinearError>
   > = ResultAsync.fromPromise(
     requestFn(LIST_COMMENTS_QUERY, {
-      issueId: opts.issueId,
+      issueId,
       first: opts.limit,
       after: opts.after,
     }).then((data) => {
@@ -71,7 +82,7 @@ export async function listComments(opts: ListCommentsOptions): Promise<void> {
         pageInfo: { hasNextPage: pageInfo.hasNextPage, endCursor: pageInfo.endCursor ?? null },
       };
     }),
-    (e) => mapLinearError(e)
+    (e) => mapIssueNotFoundError(e, issueId)
   );
 
   const r = await result;

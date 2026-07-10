@@ -12,6 +12,7 @@ function makeClientMock(
     updateComment: ReturnType<typeof vi.fn>;
     deleteComment: ReturnType<typeof vi.fn>;
     comment: ReturnType<typeof vi.fn>;
+    team: ReturnType<typeof vi.fn>;
   }>
 ) {
   return overrides;
@@ -195,6 +196,65 @@ describe('comment list', () => {
       expect.objectContaining({ issueId: 'ISSUE-1' })
     );
   });
+
+  // --- H-163: bare issue numbers must resolve via the default team, same as
+  // other issue commands (get/update), instead of failing with a generic
+  // "Argument Validation Error". ---
+
+  it('resolves a bare issue number via the default team before listing comments', async () => {
+    process.env.LINEAR_TEAM_ID = 'team-uuid';
+    const teamFn = vi.fn().mockResolvedValue({ key: 'H' });
+    const requestFn = vi.fn().mockResolvedValue({
+      issue: {
+        comments: {
+          nodes: [],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+    });
+    stdMocks(makeClientMock({ team: teamFn }), requestFn);
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'issues', 'comment', 'list', '153']);
+
+    expect(teamFn).toHaveBeenCalledWith('team-uuid');
+    expect(requestFn).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'Document' }),
+      expect.objectContaining({ issueId: 'H-153' })
+    );
+
+    delete process.env.LINEAR_TEAM_ID;
+  });
+
+  it('a nonexistent bare issue number returns a clear not-found error, not a generic validation error', async () => {
+    process.env.LINEAR_TEAM_ID = 'team-uuid';
+    const teamFn = vi.fn().mockResolvedValue({ key: 'H' });
+    const requestFn = vi
+      .fn()
+      .mockRejectedValue(new Error('Entity not found: Issue - Could not find referenced Issue.'));
+    const exitErrorMock = vi.fn();
+
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok(makeClientMock({ team: teamFn }))),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok(makeClientMock({ team: teamFn }))),
+      getRequestFn: vi.fn().mockReturnValue(requestFn),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue(''),
+      printTable: vi.fn(),
+    }));
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'comment', 'list', '9999']);
+
+    expect(exitErrorMock).toHaveBeenCalledOnce();
+    const err = exitErrorMock.mock.calls[0][0] as { kind: string; message: string };
+    expect(err.kind).toBe('NotFoundError');
+    expect(err.message).not.toContain('Argument Validation Error');
+
+    delete process.env.LINEAR_TEAM_ID;
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -281,6 +341,128 @@ describe('comment add', () => {
 
     expect(createCommentFn).toHaveBeenCalledWith(expect.objectContaining({ body: 'stdin body' }));
   });
+
+  // --- H-163: bare issue numbers must resolve via the default team, same as
+  // other issue commands (get/update), instead of failing with a generic
+  // "Argument Validation Error". ---
+
+  it('resolves a bare issue number via the default team before creating the comment', async () => {
+    process.env.LINEAR_TEAM_ID = 'team-uuid';
+    const teamFn = vi.fn().mockResolvedValue({ key: 'H' });
+    const commentMock = {
+      id: 'c1',
+      body: 'test',
+      url: '',
+      createdAt: new Date('2024-01-01'),
+      get user() {
+        return Promise.resolve(null);
+      },
+    };
+    const payloadMock = {
+      get comment() {
+        return Promise.resolve(commentMock);
+      },
+    };
+    const createCommentFn = vi.fn().mockResolvedValue(payloadMock);
+    stdMocks(makeClientMock({ createComment: createCommentFn, team: teamFn }));
+    const program = await buildProgram();
+
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'comment',
+      'add',
+      '153',
+      '--body',
+      'test',
+    ]);
+
+    expect(teamFn).toHaveBeenCalledWith('team-uuid');
+    expect(createCommentFn).toHaveBeenCalledWith(
+      expect.objectContaining({ issueId: 'H-153', body: 'test' })
+    );
+
+    delete process.env.LINEAR_TEAM_ID;
+  });
+
+  it('a full identifier (e.g. H-153) still succeeds with no regression', async () => {
+    const commentMock = {
+      id: 'c1',
+      body: 'test',
+      url: '',
+      createdAt: new Date('2024-01-01'),
+      get user() {
+        return Promise.resolve(null);
+      },
+    };
+    const payloadMock = {
+      get comment() {
+        return Promise.resolve(commentMock);
+      },
+    };
+    const createCommentFn = vi.fn().mockResolvedValue(payloadMock);
+    stdMocks(makeClientMock({ createComment: createCommentFn }));
+    const program = await buildProgram();
+
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'comment',
+      'add',
+      'H-153',
+      '--body',
+      'test',
+    ]);
+
+    expect(createCommentFn).toHaveBeenCalledWith(
+      expect.objectContaining({ issueId: 'H-153', body: 'test' })
+    );
+  });
+
+  it('a nonexistent bare issue number returns a clear not-found error, not a generic validation error', async () => {
+    process.env.LINEAR_TEAM_ID = 'team-uuid';
+    const teamFn = vi.fn().mockResolvedValue({ key: 'H' });
+    const createCommentFn = vi
+      .fn()
+      .mockRejectedValue(new Error('Entity not found: Issue - Could not find referenced Issue.'));
+    const exitErrorMock = vi.fn();
+
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi
+        .fn()
+        .mockReturnValue(ok(makeClientMock({ createComment: createCommentFn, team: teamFn }))),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(ok(makeClientMock({ createComment: createCommentFn, team: teamFn }))),
+      getRequestFn: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue(''),
+      printTable: vi.fn(),
+    }));
+
+    const program = await buildProgram();
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'comment',
+      'add',
+      '9999',
+      '--body',
+      'test',
+    ]);
+
+    expect(exitErrorMock).toHaveBeenCalledOnce();
+    const err = exitErrorMock.mock.calls[0][0] as { kind: string; message: string };
+    expect(err.kind).toBe('NotFoundError');
+    expect(err.message).not.toContain('Argument Validation Error');
+
+    delete process.env.LINEAR_TEAM_ID;
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -302,7 +484,9 @@ describe('comment reply', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok(makeClientMock({ createComment: createCommentFn }))),
-      getClientWithAuthRetry: vi.fn().mockReturnValue(ok(makeClientMock({ createComment: createCommentFn }))),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(ok(makeClientMock({ createComment: createCommentFn }))),
       getRequestFn: vi.fn().mockReturnValue(requestFn),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
@@ -458,7 +642,9 @@ describe('comment delete', () => {
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok(makeClientMock({ deleteComment: deleteCommentFn }))),
-      getClientWithAuthRetry: vi.fn().mockReturnValue(ok(makeClientMock({ deleteComment: deleteCommentFn }))),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(ok(makeClientMock({ deleteComment: deleteCommentFn }))),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));

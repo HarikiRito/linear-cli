@@ -1,11 +1,11 @@
-import type { LinearClient } from '@linear/sdk';
+import { type LinearClient, LinearError } from '@linear/sdk';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { getRequestFn } from '../../../lib/client/index.js';
 import {
   getGlobalConfigPath,
   getProjectConfigPath,
-  readConfig,
   type LinearConfig,
+  readConfig,
 } from '../../../lib/config-file.js';
 import {
   AmbiguousMatchError,
@@ -215,4 +215,44 @@ export function resolveIssueIdentifier(
     );
   }
   return okAsync(input);
+}
+
+/**
+ * True if the message text indicates a "not found" failure specifically
+ * about an issue, rather than any error that happens to contain the bare
+ * substring "not found" (e.g. a team/workspace/rate-limit error). Requires
+ * both an explicit not-found phrase AND a mention of "issue" so unrelated
+ * errors aren't mislabeled — see H-163 follow-up.
+ */
+function isIssueNotFoundMessage(message: string): boolean {
+  return /not found/i.test(message) && /issue/i.test(message);
+}
+
+/**
+ * Map a raw error from a comment mutation/query (createComment, ListComments)
+ * to a clear NotFoundError('issue', issueId) when it indicates the referenced
+ * issue doesn't exist, otherwise delegate to mapLinearError for generic
+ * handling.
+ *
+ * Prefers the Linear SDK's structured error shape — `LinearError.errors[]`
+ * carries a GraphQL `path` per error, so when that path references the issue
+ * field we trust it directly. Falls back to text-matching the message only
+ * when no structured signal is available (e.g. non-SDK errors, or the plain
+ * `Error` shape used in tests) — see H-163, code review follow-up.
+ */
+export function mapIssueNotFoundError(e: unknown, issueId: string): CliError {
+  if (e instanceof LinearError) {
+    const graphQLErrors = e.errors ?? [];
+    const structuredIssueNotFound = graphQLErrors.some((ge) => {
+      const pathMentionsIssue = ge.path?.some((p) => /issue/i.test(p)) ?? false;
+      return pathMentionsIssue && isIssueNotFoundMessage(ge.message);
+    });
+    if (structuredIssueNotFound) {
+      return new NotFoundError('issue', issueId);
+    }
+  }
+  if (e instanceof Error && isIssueNotFoundMessage(e.message)) {
+    return new NotFoundError('issue', issueId);
+  }
+  return mapLinearError(e);
 }

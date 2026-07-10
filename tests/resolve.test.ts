@@ -189,3 +189,47 @@ describe('resolveLabels', () => {
     expect(e.message).toContain('unknown');
   });
 });
+
+describe('mapIssueNotFoundError', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  /**
+   * Build a realistic LinearError with a populated `errors[]` array, mirroring
+   * the shape produced by the real @linear/sdk LinearGraphQLError/LinearError
+   * classes (both have public, assignable `path`/`message`/`errors` fields).
+   */
+  async function makeStructuredLinearError(path: string[], message: string) {
+    const { LinearError, LinearGraphQLError } = await import('@linear/sdk');
+    const gqlError = new LinearGraphQLError();
+    gqlError.path = path;
+    gqlError.message = message;
+    const linearError = new LinearError();
+    linearError.errors = [gqlError];
+    return linearError;
+  }
+
+  it('resolves via the structured LinearError.errors[].path when it references the issue entity', async () => {
+    const { mapIssueNotFoundError } = await import('../src/features/issues/shared/resolve.js');
+    const structuredError = await makeStructuredLinearError(
+      ['issue'],
+      'Entity not found: Issue - Could not find referenced Issue.'
+    );
+    const result = mapIssueNotFoundError(structuredError, 'ENG-123');
+    expect(result.kind).toBe('NotFoundError');
+    expect(result.message).toContain('ENG-123');
+  });
+
+  it('does not match a structured LinearError whose path references an unrelated entity (e.g. team)', async () => {
+    const { mapIssueNotFoundError } = await import('../src/features/issues/shared/resolve.js');
+    const structuredError = await makeStructuredLinearError(
+      ['team'],
+      'Entity not found: Team - Could not find referenced Team.'
+    );
+    const result = mapIssueNotFoundError(structuredError, 'ENG-123');
+    expect(result.kind).not.toBe('NotFoundError');
+  });
+});
