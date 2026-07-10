@@ -5,6 +5,7 @@ import type { PlainField } from '../../../lib/output/plain.js';
 import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../../lib/output/table.js';
 import { exitError } from '../../../lib/runner.js';
+import { isVisible } from '../shared/render.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 import { GET_ISSUE_QUERY } from './queries.js';
 
@@ -13,6 +14,7 @@ export interface GetIssueOptions {
   token?: string;
   id: string;
   plain: boolean;
+  includeDeleted: boolean;
 }
 
 interface AttachmentRow {
@@ -92,11 +94,13 @@ export async function getIssue(opts: GetIssueOptions): Promise<void> {
         parent: issue.parent
           ? { id: issue.parent.id, identifier: issue.parent.identifier, title: issue.parent.title }
           : null,
-        children: (issue.children?.nodes ?? []).map((c) => ({
-          id: c.id,
-          identifier: c.identifier,
-          title: c.title,
-        })),
+        children: (issue.children?.nodes ?? [])
+          .filter((c) => opts.includeDeleted || isVisible(c))
+          .map((c) => ({
+            id: c.id,
+            identifier: c.identifier,
+            title: c.title,
+          })),
         attachments: (issue.attachments?.nodes ?? []).map((a) => ({
           title: a.title,
           url: a.url,

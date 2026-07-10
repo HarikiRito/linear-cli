@@ -11,5 +11,7 @@ export const IssueFieldsFragment = graphql(`
     state { name }
     assignee { displayName }
     priority
+    trashed
+    archivedAt
   }
 `);

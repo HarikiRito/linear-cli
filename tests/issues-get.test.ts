@@ -165,9 +165,9 @@ describe('issues get', () => {
   });
 
   it('--plain outputs required fields and omits dropped fields', async () => {
-    const requestFn = vi.fn().mockResolvedValue(
-      makeIssueResponse({ description: 'Line one\nLine two' })
-    );
+    const requestFn = vi
+      .fn()
+      .mockResolvedValue(makeIssueResponse({ description: 'Line one\nLine two' }));
     stdMocks(requestFn);
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -220,5 +220,118 @@ describe('issues get', () => {
     await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42']);
 
     expect(exitErrorMock).toHaveBeenCalled();
+  });
+
+  // --- H-161: `issues get <id>` fetches trashed/archived issues directly by ID,
+  // but hides trashed/archived children by default; --include-deleted opts in. ---
+
+  it('fetches a trashed issue directly by ID', async () => {
+    const requestFn = vi.fn().mockResolvedValue(makeIssueResponse({ trashed: true }));
+    stdMocks(requestFn);
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42', '--plain']);
+
+    const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(output).toContain('Issue: ENG-42');
+
+    consoleSpy.mockRestore();
+  });
+
+  it('hides trashed/archived children by default', async () => {
+    const requestFn = vi.fn().mockResolvedValue(
+      makeIssueResponse({
+        children: {
+          nodes: [
+            {
+              id: 'c-active',
+              identifier: 'ENG-43',
+              title: 'Active child',
+              trashed: false,
+              archivedAt: null,
+            },
+            {
+              id: 'c-trashed',
+              identifier: 'ENG-44',
+              title: 'Trashed child',
+              trashed: true,
+              archivedAt: null,
+            },
+            {
+              id: 'c-archived',
+              identifier: 'ENG-45',
+              title: 'Archived child',
+              trashed: false,
+              archivedAt: '2024-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+      })
+    );
+    stdMocks(requestFn);
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42', '--plain']);
+
+    const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(output).toContain('ENG-43');
+    expect(output).not.toContain('ENG-44');
+    expect(output).not.toContain('ENG-45');
+
+    consoleSpy.mockRestore();
+  });
+
+  it('--include-deleted shows trashed/archived children', async () => {
+    const requestFn = vi.fn().mockResolvedValue(
+      makeIssueResponse({
+        children: {
+          nodes: [
+            {
+              id: 'c-active',
+              identifier: 'ENG-43',
+              title: 'Active child',
+              trashed: false,
+              archivedAt: null,
+            },
+            {
+              id: 'c-trashed',
+              identifier: 'ENG-44',
+              title: 'Trashed child',
+              trashed: true,
+              archivedAt: null,
+            },
+            {
+              id: 'c-archived',
+              identifier: 'ENG-45',
+              title: 'Archived child',
+              trashed: false,
+              archivedAt: '2024-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+      })
+    );
+    stdMocks(requestFn);
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const program = await buildProgram();
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'get',
+      'ENG-42',
+      '--plain',
+      '--include-deleted',
+    ]);
+
+    const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(output).toContain('ENG-43');
+    expect(output).toContain('ENG-44');
+    expect(output).toContain('ENG-45');
+
+    consoleSpy.mockRestore();
   });
 });

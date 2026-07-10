@@ -45,6 +45,8 @@ export const GET_ISSUE_QUERY = graphql(`
           id
           identifier
           title
+          trashed
+          archivedAt
         }
       }
       attachments {

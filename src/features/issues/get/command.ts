@@ -5,15 +5,20 @@ import { getIssue } from './get.js';
 export function registerGetCommand(issues: Command): void {
   const cmd = issues
     .command('get <id>')
-    .description('Get full detail for a single issue (identifier like ENG-123 or UUID)');
+    .description('Get full detail for a single issue (identifier like ENG-123 or UUID)')
+    .option('--include-deleted', 'Include trashed/archived child/sub-issues (excluded by default)');
 
   addAuthOptions(addPlainOption(cmd)).action(
-    async (id: string, opts: { apiKey?: string; token?: string; plain?: boolean }) => {
+    async (
+      id: string,
+      opts: { apiKey?: string; token?: string; plain?: boolean; includeDeleted?: boolean }
+    ) => {
       await getIssue({
         apiKey: opts.apiKey,
         token: opts.token,
         id,
         plain: !!opts.plain,
+        includeDeleted: !!opts.includeDeleted,
       });
     }
   );

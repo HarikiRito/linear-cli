@@ -15,7 +15,8 @@ export function registerListCommand(issues: Command): void {
       '--state <tokens>',
       'Filter by state tokens (comma-separated snake_case, e.g. todo,in_progress,dev_review; default: todo,in_progress,dev_review)'
     )
-    .option('--all-states', 'Return issues in ALL states (overrides --state)');
+    .option('--all-states', 'Return issues in ALL states (overrides --state)')
+    .option('--include-deleted', 'Include trashed/archived issues (excluded by default)');
 
   addAuthOptions(addPlainOption(cmd)).action(async (opts) => {
     await listIssues({
@@ -33,6 +34,7 @@ export function registerListCommand(issues: Command): void {
             .filter(Boolean)
         : [...DEFAULT_ISSUE_STATES],
       allStates: !!opts.allStates,
+      includeDeleted: !!opts.includeDeleted,
     });
   });
 }

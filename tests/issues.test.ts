@@ -1,16 +1,25 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function makeIssueNode(id: string, title: string) {
+function makeIssueNode(
+  id: string,
+  title: string,
+  overrides: { trashed?: boolean; archivedAt?: string | null } = {}
+) {
   return {
     identifier: id,
     title,
     state: { name: 'Todo' },
     assignee: { displayName: 'Alice' },
     priority: 0,
+    trashed: overrides.trashed ?? false,
+    archivedAt: overrides.archivedAt ?? null,
   };
 }
 
@@ -242,6 +251,98 @@ describe('issues list', () => {
     expect(json).toContain('"ENG"');
     expect(json).toContain('eqIgnoreCase');
     expect(json).toContain('"and"');
+  });
+
+  it('resolves team automatically from a real project config.toml when --team is omitted (end-to-end)', async () => {
+    // Real project .linear/config.toml — no mocking of the resolve/config-file layer.
+    // Verifies the intended purpose of config.toml: commands that omit --team should
+    // pick up the project-scoped team_id via getDefaultTeamId()'s resolution chain.
+    const tmpProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-list-team-cfg-'));
+    const linearDir = path.join(tmpProjectDir, '.linear');
+    fs.mkdirSync(linearDir, { recursive: true });
+    fs.writeFileSync(path.join(linearDir, 'config.toml'), 'team_id = "PROJCFG"\n', 'utf-8');
+
+    const originalCwd = process.cwd;
+    process.cwd = () => tmpProjectDir;
+
+    try {
+      const request = vi.fn().mockResolvedValue(makeListResponse([]));
+      stdMocks(request);
+      const program = await buildProgram();
+
+      // No --team flag passed — must resolve from the real config.toml above.
+      await program.parseAsync(['node', 'linear', 'issues', 'list']);
+
+      const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
+      expect(JSON.stringify(vars)).toContain('"PROJCFG"');
+    } finally {
+      process.cwd = originalCwd;
+      fs.rmSync(tmpProjectDir, { recursive: true, force: true });
+    }
+  });
+
+  // --- H-161: trashed/archived issues are excluded from `issues list` by
+  // default, with `--include-deleted` opting back in. ---
+
+  it('excludes trashed and archived issues by default', async () => {
+    const nodes = [
+      makeIssueNode('ENG-1', 'Active issue'),
+      makeIssueNode('ENG-2', 'Trashed issue', { trashed: true }),
+      makeIssueNode('ENG-3', 'Archived issue', { archivedAt: '2024-01-01T00:00:00.000Z' }),
+    ];
+    const request = vi.fn().mockResolvedValue(makeListResponse(nodes));
+    let capturedRows: string[][] = [];
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
+    }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((_h: string[], rows: string[][]) => {
+        capturedRows = rows;
+        return '';
+      }),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'list']);
+
+    const identifiers = capturedRows.map((r) => r[0]);
+    expect(identifiers).toEqual(['ENG-1']);
+  });
+
+  it('--include-deleted includes trashed and archived issues', async () => {
+    const nodes = [
+      makeIssueNode('ENG-1', 'Active issue'),
+      makeIssueNode('ENG-2', 'Trashed issue', { trashed: true }),
+      makeIssueNode('ENG-3', 'Archived issue', { archivedAt: '2024-01-01T00:00:00.000Z' }),
+    ];
+    const request = vi.fn().mockResolvedValue(makeListResponse(nodes));
+    let capturedRows: string[][] = [];
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
+    }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((_h: string[], rows: string[][]) => {
+        capturedRows = rows;
+        return '';
+      }),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--include-deleted']);
+
+    const identifiers = capturedRows.map((r) => r[0]);
+    expect(identifiers).toEqual(['ENG-1', 'ENG-2', 'ENG-3']);
+
+    const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
+    expect(vars.includeArchived).toBe(true);
   });
 
   // --- H-162: a UUID/node-ID passed to --team falls back correctly (filters by

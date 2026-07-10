@@ -22,6 +22,8 @@ export interface IssueNode {
   state: { name: string } | null;
   assignee: { displayName: string } | null;
   priority: number;
+  trashed?: boolean | null;
+  archivedAt?: string | null;
 }
 
 export interface IssueRow {
@@ -30,6 +32,8 @@ export interface IssueRow {
   state: string;
   assignee: string;
   priority: number;
+  trashed: boolean;
+  archivedAt: string | null;
 }
 
 export interface IssuesResult {
@@ -42,6 +46,11 @@ export interface IssueQueryData {
   pageInfo: PageInfo;
 }
 
+/** True if an issue/child-issue is neither trashed nor archived (soft-deleted). */
+export function isVisible(issue: { trashed?: boolean | null; archivedAt?: string | null }): boolean {
+  return !issue.trashed && !issue.archivedAt;
+}
+
 /** Convert raw GraphQL node data to flat IssueRow objects. */
 export function toIssueRows(nodes: IssueNode[]): IssueRow[] {
   return nodes.map((n) => ({
@@ -50,6 +59,8 @@ export function toIssueRows(nodes: IssueNode[]): IssueRow[] {
     state: n.state?.name ?? '',
     assignee: n.assignee?.displayName ?? '',
     priority: n.priority,
+    trashed: n.trashed ?? false,
+    archivedAt: n.archivedAt ?? null,
   }));
 }
 
@@ -119,12 +130,7 @@ export function fetchIssues<TData>(
 
 /** Render and output an IssuesResult to stdout. */
 export function renderIssues(result: IssuesResult, plain: boolean): void {
-  renderPaged(
-    { rows: result.issues, pageInfo: result.pageInfo },
-    plain,
-    ISSUE_COLUMNS,
-    'issues'
-  );
+  renderPaged({ rows: result.issues, pageInfo: result.pageInfo }, plain, ISSUE_COLUMNS, 'issues');
 }
 
 /** Unwrap a ResultAsync<IssuesResult>, render on ok, exitError on err. */
