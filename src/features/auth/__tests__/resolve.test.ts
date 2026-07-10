@@ -11,12 +11,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // We DON'T import resolveCredential directly because it has complex async/interactive
 // behaviour. Instead we test the building blocks: session read/write and scope.
 
+import { useTmpProjectAndHome } from '../../../../tests/helpers/tmp-env.js';
 import { findProjectRoot } from '../../../lib/scope.js';
+import { resolveCredential } from '../resolve.js';
 import {
   isApiKeySession,
   isOAuthSession,
   readProjectSession,
   writeProjectSession,
+  writeSession,
 } from '../session.js';
 
 describe('resolveAuth building blocks', () => {
@@ -188,5 +191,98 @@ describe('resolveTeam config resolution', () => {
     const { getDefaultTeamId } = await import('../../../features/issues/shared/resolve.js');
     const teamId = getDefaultTeamId();
     expect(teamId).toBeNull();
+  });
+});
+
+/**
+ * Real two-file precedence tests — exercises resolveCredential() and
+ * getDefaultTeamId() end-to-end against REAL project `.linear/auth.json` (or
+ * `config.toml`) AND REAL global `~/.config/.linear/...` files simultaneously
+ * present on disk, with no mocking of the session/config read layer. This is
+ * the "race" scenario the plan calls out as unexercised by the existing tests
+ * above, which only ever write one side (project OR global) at a time.
+ */
+describe('resolveCredential: real two-file precedence (project vs global)', () => {
+  const tmpEnv = useTmpProjectAndHome({
+    projectPrefix: 'linear-real-project-',
+    homePrefix: 'linear-real-home-',
+    deleteEnvVars: ['LINEAR_API_KEY', 'LINEAR_ACCESS_TOKEN'],
+  });
+
+  it('project session wins when BOTH a real project auth.json and a real global auth.json exist', async () => {
+    // Write the global session for real, under $HOME/.config/.linear/auth.json
+    const globalWrite = writeSession({ apiKey: 'global-real-key' });
+    expect(globalWrite.isOk()).toBe(true);
+
+    // Write a real project session under <tmpEnv.projectDir>/.linear/auth.json
+    const projectWrite = writeProjectSession(tmpEnv.projectDir, { apiKey: 'project-real-key' });
+    expect(projectWrite.isOk()).toBe(true);
+
+    // cwd is inside the project directory, so findProjectRoot discovers .linear/
+    process.cwd = () => tmpEnv.projectDir;
+
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'project-real-key' });
+  });
+
+  it('falls back to the real global session when no project session exists', async () => {
+    const globalWrite = writeSession({ apiKey: 'global-only-real-key' });
+    expect(globalWrite.isOk()).toBe(true);
+
+    // cwd has no .linear/ ancestor at all
+    process.cwd = () => tmpEnv.projectDir;
+
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'global-only-real-key' });
+  });
+});
+
+describe('getDefaultTeamId: real two-file precedence (project vs global)', () => {
+  const tmpEnv = useTmpProjectAndHome({
+    projectPrefix: 'linear-real-team-project-',
+    homePrefix: 'linear-real-team-home-',
+    deleteEnvVars: ['LINEAR_TEAM_ID', 'LINEAR_WORKSPACE'],
+  });
+
+  it('project config.toml team_id wins when BOTH real project and global config.toml set different values', async () => {
+    // Real global config.toml at $HOME/.config/.linear/config.toml
+    const globalLinearDir = path.join(tmpEnv.homeDir, '.config', '.linear');
+    fs.mkdirSync(globalLinearDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(globalLinearDir, 'config.toml'),
+      'team_id = "global-team"\n',
+      'utf-8'
+    );
+
+    // Real project config.toml
+    const projectLinearDir = path.join(tmpEnv.projectDir, '.linear');
+    fs.mkdirSync(projectLinearDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projectLinearDir, 'config.toml'),
+      'team_id = "project-team"\n',
+      'utf-8'
+    );
+
+    process.cwd = () => tmpEnv.projectDir;
+
+    const { getDefaultTeamId } = await import('../../../features/issues/shared/resolve.js');
+    expect(getDefaultTeamId()).toBe('project-team');
+  });
+
+  it('falls back to the real global config.toml team_id when no project config exists', async () => {
+    const globalLinearDir = path.join(tmpEnv.homeDir, '.config', '.linear');
+    fs.mkdirSync(globalLinearDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(globalLinearDir, 'config.toml'),
+      'team_id = "global-only-team"\n',
+      'utf-8'
+    );
+
+    process.cwd = () => tmpEnv.projectDir;
+
+    const { getDefaultTeamId } = await import('../../../features/issues/shared/resolve.js');
+    expect(getDefaultTeamId()).toBe('global-only-team');
   });
 });
