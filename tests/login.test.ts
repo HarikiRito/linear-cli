@@ -15,6 +15,7 @@ vi.mock('@clack/prompts', () => ({
   intro: vi.fn(),
   outro: vi.fn(),
   select: vi.fn(),
+  multiselect: vi.fn(),
   text: vi.fn(),
   spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
   isCancel: vi.fn().mockReturnValue(false),
@@ -50,7 +51,7 @@ vi.mock('../src/lib/gitignore.js', () => ({
   appendAuthToGitignore: vi.fn().mockReturnValue({ isErr: () => false, isOk: () => true }),
 }));
 
-import { isCancel, select, text } from '@clack/prompts';
+import { isCancel, multiselect, select, text } from '@clack/prompts';
 import { LinearClient } from '@linear/sdk';
 import { runLoginFlow } from '../src/features/auth/login.js';
 import { startOAuthFlow } from '../src/features/auth/oauth.js';
@@ -63,6 +64,7 @@ import {
 import { readConfig, writeConfig } from '../src/lib/config-file.js';
 
 const mockSelect = vi.mocked(select);
+const mockMultiselect = vi.mocked(multiselect);
 const mockText = vi.mocked(text);
 const mockIsCancel = vi.mocked(isCancel);
 const mockWriteSession = vi.mocked(writeSession);
@@ -87,6 +89,28 @@ const TWO_TEAMS = [
   { id: 'team-2', key: 'DES', name: 'Design' },
 ];
 const ONE_TEAM = [{ id: 'team-solo', key: 'SOL', name: 'Solo Team' }];
+
+/**
+ * Build a LinearClient mock exposing `viewer` + `teams` + `team(id)`, where
+ * `team(id)` resolves to an object with a `.projects()` method — the shape
+ * selectDefaultProjects() relies on (team-scoped project fetch).
+ */
+function makeClientMockWithProjects(
+  viewer: unknown,
+  teamsFn: ReturnType<typeof vi.fn>,
+  teamFn: ReturnType<typeof vi.fn>
+) {
+  return {
+    viewer: Promise.resolve(viewer),
+    teams: teamsFn,
+    team: teamFn,
+  } as unknown as InstanceType<typeof LinearClient>;
+}
+
+const TWO_PROJECTS = [
+  { id: 'proj-1', name: 'Alpha' },
+  { id: 'proj-2', name: 'Beta' },
+];
 
 describe('runLoginFlow — invalid API key', () => {
   afterEach(() => {
@@ -206,7 +230,7 @@ describe('runLoginFlow — project-scope API key login', () => {
     expect(teamsFn).toHaveBeenCalledOnce();
     expect(mockWriteConfig).toHaveBeenCalledWith(
       '/tmp/test-linear-cli/.linear/config.toml',
-      expect.objectContaining({ team_id: 'team-1' })
+      expect.objectContaining({ team: { id: 'team-1', key: 'ENG' } })
     );
   });
 
@@ -236,7 +260,7 @@ describe('runLoginFlow — project-scope API key login', () => {
     // Team is written to the GLOBAL config, the same way as project scope.
     expect(mockWriteConfig).toHaveBeenCalledWith(
       '/tmp/test-linear-cli/config.toml',
-      expect.objectContaining({ team_id: 'team-solo' })
+      expect.objectContaining({ team: { id: 'team-solo', key: 'SOL' } })
     );
   });
 });
@@ -280,7 +304,7 @@ describe('runLoginFlow — OAuth + project-scope login', () => {
     expect(teamsFn).toHaveBeenCalledOnce();
     expect(mockWriteConfig).toHaveBeenCalledWith(
       '/tmp/test-linear-cli/.linear/config.toml',
-      expect.objectContaining({ team_id: 'team-2' })
+      expect.objectContaining({ team: { id: 'team-2', key: 'DES' } })
     );
   });
 });
@@ -351,7 +375,7 @@ describe('runLoginFlow — team select step', () => {
     expect(teamSelectCall.options).toHaveLength(1);
   });
 
-  it('does not crash and writes no team_id when the user has zero teams', async () => {
+  it('does not crash and writes no team when the user has zero teams', async () => {
     const teamsFn = vi.fn().mockResolvedValue({ nodes: [] });
     mockSelect.mockResolvedValueOnce('global').mockResolvedValueOnce('apikey');
     mockText.mockResolvedValueOnce('lin_api_key');
@@ -375,6 +399,189 @@ describe('runLoginFlow — team select step', () => {
 });
 
 // ---------------------------------------------------------------------------
+// selectDefaultProjects() — team-scoped project picker shown right after team
+// select resolves. See plan: project-id-config-fallback.
+// ---------------------------------------------------------------------------
+describe('runLoginFlow — default project select step', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockReadConfig.mockReturnValue({});
+  });
+
+  it('fetches projects scoped to the selected team only (via client.team(id).projects())', async () => {
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: TWO_TEAMS });
+    const projectsFn = vi.fn().mockResolvedValue({ nodes: TWO_PROJECTS });
+    const teamFn = vi.fn().mockResolvedValue({ projects: projectsFn });
+    mockSelect
+      .mockResolvedValueOnce('global')
+      .mockResolvedValueOnce('apikey')
+      .mockResolvedValueOnce('team-1');
+    mockMultiselect.mockResolvedValueOnce(['proj-1']);
+    mockText.mockResolvedValueOnce('lin_api_key');
+    mockIsCancel.mockReturnValue(false);
+
+    MockLinearClient.mockImplementation(() =>
+      makeClientMockWithProjects({ id: 'user-20', name: 'Twenty' }, teamsFn, teamFn)
+    );
+    mockWriteSession.mockReturnValue({ isErr: () => false, isOk: () => true } as ReturnType<
+      typeof writeSession
+    >);
+
+    await runLoginFlow();
+
+    // team-scoped lookup: client.team(<selected team id>) then .projects() —
+    // never a workspace-wide client.projects() call.
+    expect(teamFn).toHaveBeenCalledWith('team-1');
+    expect(projectsFn).toHaveBeenCalledOnce();
+
+    const multiselectCall = mockMultiselect.mock.calls[0][0] as {
+      options: Array<{ value: string; label: string }>;
+    };
+    expect(multiselectCall.options.map((o) => o.value)).toEqual(['proj-1', 'proj-2']);
+  });
+
+  it('persists the selected projects alongside team in a single config write', async () => {
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: TWO_TEAMS });
+    const projectsFn = vi.fn().mockResolvedValue({ nodes: TWO_PROJECTS });
+    const teamFn = vi.fn().mockResolvedValue({ projects: projectsFn });
+    mockSelect
+      .mockResolvedValueOnce('global')
+      .mockResolvedValueOnce('apikey')
+      .mockResolvedValueOnce('team-1');
+    mockMultiselect.mockResolvedValueOnce(['proj-1', 'proj-2']);
+    mockText.mockResolvedValueOnce('lin_api_key');
+    mockIsCancel.mockReturnValue(false);
+
+    MockLinearClient.mockImplementation(() =>
+      makeClientMockWithProjects({ id: 'user-21', name: 'TwentyOne' }, teamsFn, teamFn)
+    );
+    mockWriteSession.mockReturnValue({ isErr: () => false, isOk: () => true } as ReturnType<
+      typeof writeSession
+    >);
+
+    await runLoginFlow();
+
+    expect(mockWriteConfig).toHaveBeenCalledWith(
+      '/tmp/test-linear-cli/config.toml',
+      expect.objectContaining({
+        team: { id: 'team-1', key: 'ENG' },
+        projects: [
+          { id: 'proj-1', name: 'Alpha' },
+          { id: 'proj-2', name: 'Beta' },
+        ],
+      })
+    );
+  });
+
+  it('zero-selection: projects is omitted from the config write (not written as an empty array)', async () => {
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: TWO_TEAMS });
+    const projectsFn = vi.fn().mockResolvedValue({ nodes: TWO_PROJECTS });
+    const teamFn = vi.fn().mockResolvedValue({ projects: projectsFn });
+    mockSelect
+      .mockResolvedValueOnce('global')
+      .mockResolvedValueOnce('apikey')
+      .mockResolvedValueOnce('team-1');
+    mockMultiselect.mockResolvedValueOnce([]);
+    mockText.mockResolvedValueOnce('lin_api_key');
+    mockIsCancel.mockReturnValue(false);
+
+    MockLinearClient.mockImplementation(() =>
+      makeClientMockWithProjects({ id: 'user-22', name: 'TwentyTwo' }, teamsFn, teamFn)
+    );
+    mockWriteSession.mockReturnValue({ isErr: () => false, isOk: () => true } as ReturnType<
+      typeof writeSession
+    >);
+
+    await runLoginFlow();
+
+    expect(mockWriteConfig).toHaveBeenCalledOnce();
+    const [, writtenConfig] = mockWriteConfig.mock.calls[0] as [string, Record<string, unknown>];
+    expect(writtenConfig).not.toHaveProperty('projects');
+    expect(writtenConfig.team).toEqual({ id: 'team-1', key: 'ENG' });
+  });
+
+  it('cancellation of the project picker: projects is omitted, login still completes non-fatally', async () => {
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: TWO_TEAMS });
+    const projectsFn = vi.fn().mockResolvedValue({ nodes: TWO_PROJECTS });
+    const teamFn = vi.fn().mockResolvedValue({ projects: projectsFn });
+    mockSelect
+      .mockResolvedValueOnce('global')
+      .mockResolvedValueOnce('apikey')
+      .mockResolvedValueOnce('team-1');
+    const CANCEL_SYMBOL = Symbol('cancel');
+    mockMultiselect.mockResolvedValueOnce(CANCEL_SYMBOL);
+    mockText.mockResolvedValueOnce('lin_api_key');
+    mockIsCancel.mockImplementation((v) => v === CANCEL_SYMBOL);
+
+    MockLinearClient.mockImplementation(() =>
+      makeClientMockWithProjects({ id: 'user-23', name: 'TwentyThree' }, teamsFn, teamFn)
+    );
+    mockWriteSession.mockReturnValue({ isErr: () => false, isOk: () => true } as ReturnType<
+      typeof writeSession
+    >);
+
+    await runLoginFlow();
+
+    expect(mockWriteConfig).toHaveBeenCalledOnce();
+    const [, writtenConfig] = mockWriteConfig.mock.calls[0] as [string, Record<string, unknown>];
+    expect(writtenConfig).not.toHaveProperty('projects');
+    expect(writtenConfig.team).toEqual({ id: 'team-1', key: 'ENG' });
+  });
+
+  it('zero projects available for the team: no multiselect prompt is shown, login completes non-fatally', async () => {
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: TWO_TEAMS });
+    const projectsFn = vi.fn().mockResolvedValue({ nodes: [] });
+    const teamFn = vi.fn().mockResolvedValue({ projects: projectsFn });
+    mockSelect
+      .mockResolvedValueOnce('global')
+      .mockResolvedValueOnce('apikey')
+      .mockResolvedValueOnce('team-1');
+    mockText.mockResolvedValueOnce('lin_api_key');
+    mockIsCancel.mockReturnValue(false);
+
+    MockLinearClient.mockImplementation(() =>
+      makeClientMockWithProjects({ id: 'user-24', name: 'TwentyFour' }, teamsFn, teamFn)
+    );
+    mockWriteSession.mockReturnValue({ isErr: () => false, isOk: () => true } as ReturnType<
+      typeof writeSession
+    >);
+
+    await runLoginFlow();
+
+    expect(mockMultiselect).not.toHaveBeenCalled();
+    expect(mockWriteConfig).toHaveBeenCalledOnce();
+    const [, writtenConfig] = mockWriteConfig.mock.calls[0] as [string, Record<string, unknown>];
+    expect(writtenConfig).not.toHaveProperty('projects');
+  });
+
+  it('project fetch failure: warns non-fatally, projects omitted, login still completes', async () => {
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: TWO_TEAMS });
+    const teamFn = vi.fn().mockRejectedValue(new Error('network down'));
+    mockSelect
+      .mockResolvedValueOnce('global')
+      .mockResolvedValueOnce('apikey')
+      .mockResolvedValueOnce('team-1');
+    mockText.mockResolvedValueOnce('lin_api_key');
+    mockIsCancel.mockReturnValue(false);
+
+    MockLinearClient.mockImplementation(() =>
+      makeClientMockWithProjects({ id: 'user-25', name: 'TwentyFive' }, teamsFn, teamFn)
+    );
+    mockWriteSession.mockReturnValue({ isErr: () => false, isOk: () => true } as ReturnType<
+      typeof writeSession
+    >);
+
+    await runLoginFlow();
+
+    expect(mockMultiselect).not.toHaveBeenCalled();
+    expect(mockWriteConfig).toHaveBeenCalledOnce();
+    const [, writtenConfig] = mockWriteConfig.mock.calls[0] as [string, Record<string, unknown>];
+    expect(writtenConfig).not.toHaveProperty('projects');
+    expect(writtenConfig.team).toEqual({ id: 'team-1', key: 'ENG' });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // config.toml merge/preserve behavior — see code review follow-up: writeConfig
 // used to be called unconditionally with a fresh `{}`/`{ team_id }`, silently
 // wiping any pre-existing team_id/workspace when team-select yields no team
@@ -386,12 +593,15 @@ describe('runLoginFlow — config.toml preserve/merge on write', () => {
     mockReadConfig.mockReturnValue({});
   });
 
-  it('preserves a pre-existing team_id/workspace when team fetch fails (Global scope)', async () => {
+  it('preserves a pre-existing team/workspace when team fetch fails (Global scope)', async () => {
     const teamsFn = vi.fn().mockRejectedValue(new Error('network down'));
     mockSelect.mockResolvedValueOnce('global').mockResolvedValueOnce('apikey');
     mockText.mockResolvedValueOnce('lin_api_key');
     mockIsCancel.mockReturnValue(false);
-    mockReadConfig.mockReturnValue({ team_id: 'existing-team', workspace: 'acme' });
+    mockReadConfig.mockReturnValue({
+      team: { id: 'existing-team', key: 'EXIST' },
+      workspace: 'acme',
+    });
 
     MockLinearClient.mockImplementation(() =>
       makeClientMock({ id: 'user-10', name: 'Ten' }, teamsFn)
@@ -407,12 +617,15 @@ describe('runLoginFlow — config.toml preserve/merge on write', () => {
     expect(mockWriteConfig).not.toHaveBeenCalled();
   });
 
-  it('preserves a pre-existing team_id/workspace when team fetch fails (Project scope)', async () => {
+  it('preserves a pre-existing team/workspace when team fetch fails (Project scope)', async () => {
     const teamsFn = vi.fn().mockRejectedValue(new Error('network down'));
     mockSelect.mockResolvedValueOnce('project').mockResolvedValueOnce('apikey');
     mockText.mockResolvedValueOnce('lin_api_key');
     mockIsCancel.mockReturnValue(false);
-    mockReadConfig.mockReturnValue({ team_id: 'existing-team', workspace: 'acme' });
+    mockReadConfig.mockReturnValue({
+      team: { id: 'existing-team', key: 'EXIST' },
+      workspace: 'acme',
+    });
 
     MockLinearClient.mockImplementation(() =>
       makeClientMock({ id: 'user-11', name: 'Eleven' }, teamsFn)
@@ -426,7 +639,7 @@ describe('runLoginFlow — config.toml preserve/merge on write', () => {
     expect(mockWriteConfig).not.toHaveBeenCalled();
   });
 
-  it('preserves a pre-existing team_id when the user cancels the team-select prompt', async () => {
+  it('preserves a pre-existing team when the user cancels the team-select prompt', async () => {
     const teamsFn = vi.fn().mockResolvedValue({ nodes: TWO_TEAMS });
     mockSelect
       .mockResolvedValueOnce('global')
@@ -434,7 +647,7 @@ describe('runLoginFlow — config.toml preserve/merge on write', () => {
       .mockResolvedValueOnce(undefined); // team select cancelled
     mockText.mockResolvedValueOnce('lin_api_key');
     mockIsCancel.mockImplementation((v) => v === undefined);
-    mockReadConfig.mockReturnValue({ team_id: 'existing-team' });
+    mockReadConfig.mockReturnValue({ team: { id: 'existing-team', key: 'EXIST' } });
 
     MockLinearClient.mockImplementation(() =>
       makeClientMock({ id: 'user-12', name: 'Twelve' }, teamsFn)
@@ -448,7 +661,7 @@ describe('runLoginFlow — config.toml preserve/merge on write', () => {
     expect(mockWriteConfig).not.toHaveBeenCalled();
   });
 
-  it('merges the newly-resolved team_id onto the existing config, preserving other keys', async () => {
+  it('merges the newly-resolved team onto the existing config, preserving other keys', async () => {
     const teamsFn = vi.fn().mockResolvedValue({ nodes: TWO_TEAMS });
     mockSelect
       .mockResolvedValueOnce('global')
@@ -456,7 +669,10 @@ describe('runLoginFlow — config.toml preserve/merge on write', () => {
       .mockResolvedValueOnce('team-1');
     mockText.mockResolvedValueOnce('lin_api_key');
     mockIsCancel.mockReturnValue(false);
-    mockReadConfig.mockReturnValue({ team_id: 'stale-team', workspace: 'acme' });
+    mockReadConfig.mockReturnValue({
+      team: { id: 'stale-team', key: 'STALE' },
+      workspace: 'acme',
+    });
 
     MockLinearClient.mockImplementation(() =>
       makeClientMock({ id: 'user-13', name: 'Thirteen' }, teamsFn)
@@ -469,7 +685,7 @@ describe('runLoginFlow — config.toml preserve/merge on write', () => {
 
     expect(mockWriteConfig).toHaveBeenCalledWith(
       '/tmp/test-linear-cli/config.toml',
-      expect.objectContaining({ team_id: 'team-1', workspace: 'acme' })
+      expect.objectContaining({ team: { id: 'team-1', key: 'ENG' }, workspace: 'acme' })
     );
   });
 });

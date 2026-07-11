@@ -9,7 +9,7 @@ import {
 import { type CliError, mapLinearError } from '../errors.js';
 import type { RequestFn } from '../pagination.js';
 
-function buildLinearClient(cred: ResolvedCredential): LinearClient {
+export function buildLinearClient(cred: ResolvedCredential): LinearClient {
   return cred.type === 'apiKey'
     ? new LinearClient({ apiKey: cred.value })
     : new LinearClient({ accessToken: cred.value });

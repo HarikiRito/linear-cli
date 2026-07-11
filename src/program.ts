@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { version } from '../package.json';
-import { registerAuthCommands } from './features/auth/command.js';
+import { registerAuthCommands, registerTeamSelectCommand } from './features/auth/command.js';
 import { registerWhoami } from './features/auth/whoami.js';
 import { registerCycles } from './features/cycles/command.js';
 import { registerDocuments } from './features/documents/command.js';
@@ -23,6 +23,7 @@ export function createProgram(): Command {
     .exitOverride(); // Commander parse errors become thrown exceptions, not process.exit
 
   registerAuthCommands(program);
+  registerTeamSelectCommand(program);
   registerWhoami(program);
   registerIssues(program);
   registerTeams(program);

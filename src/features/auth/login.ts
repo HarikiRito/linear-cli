@@ -1,81 +1,32 @@
 import { intro, isCancel, outro, select, spinner, text } from '@clack/prompts';
-import { LinearClient } from '@linear/sdk';
+import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
-import {
-  getGlobalConfigPath,
-  getProjectConfigPath,
-  type LinearConfig,
-  readConfig,
-  writeConfig,
-} from '../../lib/config-file.js';
+import { buildLinearClient } from '../../lib/client/index.js';
+import { getGlobalConfigPath, getProjectConfigPath } from '../../lib/config-file.js';
 import { toError } from '../../lib/errors.js';
 import { appendAuthToGitignore } from '../../lib/gitignore.js';
 import { startOAuthFlow } from './oauth.js';
 import { deleteSession, readSession, writeProjectSession, writeSession } from './session.js';
+import { selectAndPersistTeamAndProjects } from './team-select.js';
 
 /**
- * Fetch the authenticated user's teams and let them pick a default team for
- * this login. Applies to both API-key and OAuth paths, and both Global and
- * Project save scopes. When exactly one team exists it is pre-selected as the
- * initial value — the user still confirms via Enter, the prompt is not skipped.
- * Returns undefined if the fetch fails, no teams exist, or the user cancels —
- * callers should treat that as "no default team selected" (non-fatal).
+ * Prompt for an authentication method (OAuth2 or API key), run it to
+ * completion, and persist the resulting session to the given scope. Shared
+ * by `runLoginFlow()` (where `scope` comes from an earlier prompt) and the
+ * standalone `linear team select` command's no-valid-session fallback (where
+ * `scope` is hardcoded to 'project' and the scope prompt is skipped
+ * entirely). Returns a LinearClient built from the newly-authenticated
+ * session, or undefined if the method prompt was cancelled — callers that
+ * need a hard failure (as `runLoginFlow()` does on invalid credentials) rely
+ * on this function's internal process.exit() calls rather than a return
+ * value.
  */
-async function selectDefaultTeam(client: LinearClient): Promise<string | undefined> {
-  const teamsResult = await ResultAsync.fromPromise(
-    (async () => {
-      const c = await client.teams();
-      return c.nodes;
-    })(),
-    toError
-  );
-
-  if (teamsResult.isErr()) {
-    console.error(pc.yellow(`Warning: could not fetch teams: ${teamsResult.error.message}`));
-    return undefined;
-  }
-
-  const teams = teamsResult.value;
-  if (teams.length === 0) {
-    return undefined;
-  }
-
-  const options = teams.map((t) => ({ value: t.id, label: `${t.name} (${t.key})` }));
-  const initialValue = teams.length === 1 ? teams[0].id : undefined;
-
-  const picked = await select({
-    message: 'Default team for this project:',
-    options,
-    initialValue,
-  });
-
-  if (isCancel(picked)) {
-    return undefined;
-  }
-
-  return picked;
-}
-
-export async function runLoginFlow(): Promise<void> {
-  intro(pc.bold('Linear CLI Login'));
-
-  const scope = await select({
-    message: 'Save credentials to:',
-    options: [
-      { value: 'global', label: 'Global (~/.config/.linear/)', hint: 'default' },
-      { value: 'project', label: 'Project (./.linear/)' },
-    ],
-    initialValue: 'global',
-  });
-
-  if (isCancel(scope)) {
-    process.exit(0);
-  }
-
-  const projectDir = process.cwd();
-
-  const method = await select({
+export async function runAuthMethodFlow(
+  scope: 'global' | 'project',
+  projectDir: string
+): Promise<LinearClient | undefined> {
+  const method = await select<'oauth' | 'apikey'>({
     message: 'How would you like to authenticate?',
     options: [
       { value: 'oauth', label: 'OAuth2 (browser)' },
@@ -87,8 +38,6 @@ export async function runLoginFlow(): Promise<void> {
     process.exit(0);
   }
 
-  // Client used to fetch teams after a successful auth — set by whichever
-  // method branch below succeeds.
   let client: LinearClient | undefined;
 
   if (method === 'apikey') {
@@ -112,7 +61,7 @@ export async function runLoginFlow(): Promise<void> {
     let candidateClient: LinearClient | undefined;
     const validateResult = await ResultAsync.fromPromise(
       (async () => {
-        candidateClient = new LinearClient({ apiKey: keyStr });
+        candidateClient = buildLinearClient({ type: 'apiKey', value: keyStr });
         await candidateClient.viewer;
       })(),
       toError
@@ -162,43 +111,45 @@ export async function runLoginFlow(): Promise<void> {
     }
 
     if (globalSession && 'accessToken' in globalSession) {
-      client = new LinearClient({ accessToken: globalSession.accessToken });
+      client = buildLinearClient({ type: 'accessToken', value: globalSession.accessToken });
     }
 
     s.stop(pc.green('OAuth2 authentication successful!'));
   }
 
-  // Fetch and select a default team — applies to both Global and Project scope,
-  // and both API-key and OAuth paths (login flow redesign).
-  const teamId = client ? await selectDefaultTeam(client) : undefined;
+  return client;
+}
 
-  // Only touch config.toml when this run actually resolved a team — never
-  // write on failure/cancel, so a pre-existing team_id/workspace in the
-  // config is left untouched rather than silently wiped by an empty write.
-  if (teamId) {
+export async function runLoginFlow(): Promise<void> {
+  intro(pc.bold('Linear CLI Login'));
+
+  const scope = await select<'global' | 'project'>({
+    message: 'Save credentials to:',
+    options: [
+      { value: 'global', label: 'Global (~/.config/.linear/)', hint: 'default' },
+      { value: 'project', label: 'Project (./.linear/)' },
+    ],
+    initialValue: 'global',
+  });
+
+  if (isCancel(scope)) {
+    process.exit(0);
+  }
+
+  const projectDir = process.cwd();
+
+  // Client used to fetch teams after a successful auth — set by whichever
+  // method branch inside runAuthMethodFlow succeeds.
+  const client = await runAuthMethodFlow(scope, projectDir);
+
+  // Fetch/select a default team, then default project(s) scoped to that
+  // team, then persist both to config.toml — applies to both Global and
+  // Project scope, and both API-key and OAuth paths. Only attempted when a
+  // client was actually resolved.
+  if (client) {
     const configPath =
       scope === 'project' ? getProjectConfigPath(projectDir) : getGlobalConfigPath();
-
-    let existingConfig: LinearConfig = {};
-    try {
-      existingConfig = readConfig(configPath);
-    } catch (e) {
-      console.error(
-        pc.yellow(
-          `Warning: could not read existing config.toml, it will be overwritten: ${toError(e).message}`
-        )
-      );
-    }
-
-    // Merge onto the existing config so unrelated keys (including legacy
-    // `workspace`) survive; only team_id is updated by this run.
-    const config: LinearConfig = { ...existingConfig, team_id: teamId };
-    const configResult = writeConfig(configPath, config);
-    if (configResult.isErr()) {
-      console.error(
-        pc.yellow(`Warning: could not write config.toml: ${configResult.error.message}`)
-      );
-    }
+    await selectAndPersistTeamAndProjects(client, configPath);
   }
 
   if (scope === 'project') {

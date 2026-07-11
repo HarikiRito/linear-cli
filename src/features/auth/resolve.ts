@@ -24,6 +24,12 @@ export interface ResolveOptions {
   token?: string;
   allowInteractive?: boolean;
   forceRefresh?: boolean;
+  /**
+   * Pre-resolved project root, for callers that already computed it (e.g.
+   * runTeamSelectFlow) — avoids a redundant findProjectRoot(process.cwd())
+   * directory walk for the same cwd. When omitted, resolved internally.
+   */
+  projectRoot?: string | null;
 }
 
 type Scope = { type: 'project'; projectRoot: string } | { type: 'global' };
@@ -114,7 +120,8 @@ export function resolveCredential(
   }
 
   // 3) Project-scoped session, then 4) global session (with OAuth refresh)
-  const projectRoot = findProjectRoot(process.cwd());
+  const projectRoot =
+    opts.projectRoot !== undefined ? opts.projectRoot : findProjectRoot(process.cwd());
   const stored = resolveFromStoredSession(projectRoot, opts.forceRefresh);
 
   // If a stored session was found (including after refresh), return it.
