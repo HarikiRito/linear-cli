@@ -118,17 +118,63 @@ describe('milestones list', () => {
     process.exitCode = undefined;
   });
 
-  it('missing --project causes Commander error', async () => {
+  it('missing --project and no default project configured calls exitError (--project no longer Commander-required)', async () => {
     const requestFn = vi.fn();
+    const exitErrorMock = vi.fn();
     stdMocksWithRequest(requestFn);
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(undefined) };
+    });
     const program = await buildProgram();
 
-    await expect(
-      program.parseAsync(['node', 'linear', 'milestones', 'list'])
-    ).rejects.toThrow();
+    await program.parseAsync(['node', 'linear', 'milestones', 'list']);
+
+    expect(exitErrorMock).toHaveBeenCalled();
+    expect(requestFn).not.toHaveBeenCalled();
   });
 
+  it('missing --project but a default project is configured succeeds via fallback', async () => {
+    const requestFn = vi.fn().mockResolvedValue({
+      projectMilestones: makeMilestoneConn([makeMilestoneNode()]),
+    });
+    stdMocksWithRequest(requestFn);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue([PROJ_ID]) };
+    });
+    const program = await buildProgram();
 
+    await program.parseAsync(['node', 'linear', 'milestones', 'list']);
+
+    expect(requestFn).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ filter: { project: { id: { in: [PROJ_ID] } } } })
+    );
+  });
+
+  it('no --project falls back to an OR/"in" filter across all configured default project IDs', async () => {
+    const requestFn = vi.fn().mockResolvedValue({
+      projectMilestones: makeMilestoneConn([makeMilestoneNode()]),
+    });
+    stdMocksWithRequest(requestFn);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(['p1', 'p2']) };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'milestones', 'list']);
+
+    expect(requestFn).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ filter: { project: { id: { in: ['p1', 'p2'] } } } })
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -141,7 +187,6 @@ describe('milestones get', () => {
     vi.resetModules();
     process.exitCode = undefined;
   });
-
 
   it('unknown ID calls exitError with NotFoundError', async () => {
     const requestFn = vi.fn().mockResolvedValue({ projectMilestone: null });
@@ -211,14 +256,37 @@ describe('milestones create', () => {
     expect(createFn).toHaveBeenCalledWith(expect.objectContaining({ targetDate: '2026-12-31' }));
   });
 
-  it('missing --project causes Commander error', async () => {
+  it('missing --project and no default project configured calls exitError (--project no longer Commander-required)', async () => {
     const clientMock = makeClientMock({});
+    const exitErrorMock = vi.fn();
     stdMocksWithClient(clientMock);
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(undefined) };
+    });
     const program = await buildProgram();
 
-    await expect(
-      program.parseAsync(['node', 'linear', 'milestones', 'create', '--name', 'M1'])
-    ).rejects.toThrow();
+    await program.parseAsync(['node', 'linear', 'milestones', 'create', '--name', 'M1']);
+
+    expect(exitErrorMock).toHaveBeenCalled();
+  });
+
+  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+    const createFn = vi.fn().mockResolvedValue(makeMilestonePayload());
+    const clientMock = makeClientMock({ createProjectMilestone: createFn });
+    stdMocksWithClient(clientMock);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue([PROJ_ID, 'proj-2']) };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'milestones', 'create', '--name', 'M1']);
+
+    expect(createFn).toHaveBeenCalledWith(expect.objectContaining({ projectId: PROJ_ID }));
   });
 
   it('missing --name causes Commander error', async () => {

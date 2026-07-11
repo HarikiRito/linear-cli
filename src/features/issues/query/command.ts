@@ -7,6 +7,7 @@ export function registerQueryCommand(issues: Command): void {
   const cmd = issues
     .command('query <term>')
     .description('Search issues by text term')
+    .option('--project <id-or-name>', 'Filter by project ID or name')
     .option('--limit <n>', 'Number of issues per page (default: 50)', '50')
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)')
@@ -21,6 +22,7 @@ export function registerQueryCommand(issues: Command): void {
       apiKey: opts.apiKey,
       token: opts.token,
       term,
+      project: opts.project,
       limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
       after: opts.after,
       all: !!opts.all,

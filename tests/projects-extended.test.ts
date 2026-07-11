@@ -116,25 +116,45 @@ describe('projects labels', () => {
     stdMocks(requestFn);
 
     const program = await buildProgram();
-    await program.parseAsync([
-      'node',
-      'linear',
-      'projects',
-      'labels',
-      '--project',
-      PROJ_UUID,
-    ]);
+    await program.parseAsync(['node', 'linear', 'projects', 'labels', '--project', PROJ_UUID]);
 
     expect(requestFn).toHaveBeenCalledOnce();
   });
 
-  it('missing --project causes Commander error', async () => {
+  it('missing --project and no default project configured calls exitError (--project no longer Commander-required)', async () => {
     const requestFn = vi.fn();
+    const exitErrorMock = vi.fn();
     stdMocks(requestFn);
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(undefined) };
+    });
     const program = await buildProgram();
 
-    await expect(
-      program.parseAsync(['node', 'linear', 'projects', 'labels'])
-    ).rejects.toThrow();
+    await program.parseAsync(['node', 'linear', 'projects', 'labels']);
+
+    expect(exitErrorMock).toHaveBeenCalled();
+    expect(requestFn).not.toHaveBeenCalled();
+  });
+
+  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+    const labelNodes = [{ id: 'label-1', name: 'bug', color: '#ff0000', parent: null }];
+    const requestFn = vi.fn().mockResolvedValue(makeProjectLabelsResponse(labelNodes));
+    stdMocks(requestFn);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue([PROJ_UUID, 'proj-2']) };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'projects', 'labels']);
+
+    expect(requestFn).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: PROJ_UUID })
+    );
   });
 });

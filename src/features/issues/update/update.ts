@@ -1,14 +1,21 @@
 import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
-import { coerceCliError, type CliError, validatePriority, ValidationError } from '../../../lib/errors.js';
+import {
+  coerceCliError,
+  type CliError,
+  validatePriority,
+  ValidationError,
+} from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
 import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 import {
+  getDefaultProjectIds,
   looksLikeId,
   resolveAssignee,
   resolveCycle,
+  resolveDefaultProjectId,
   resolveIssueIdentifier,
   resolveLabels,
   resolveMilestone,
@@ -64,14 +71,17 @@ async function buildInput(
     input.teamId = resolvedTeamId;
   }
 
-  // Resolve project — milestone depends on projectId
-  let resolvedProjectId: string | undefined;
+  // Resolve project — milestone depends on projectId. Explicit --project
+  // always wins; when omitted, fall back to the first configured default
+  // project (deterministic, no prompt) — see resolveDefaultProjectId().
+  let explicitProjectId: string | undefined;
   if (opts.project !== undefined) {
     const r = await resolveProject(opts.project, client);
     if (r.isErr()) throw r.error;
-    resolvedProjectId = r.value;
-    input.projectId = resolvedProjectId;
+    explicitProjectId = r.value;
   }
+  const resolvedProjectId = resolveDefaultProjectId(explicitProjectId, getDefaultProjectIds);
+  if (resolvedProjectId !== undefined) input.projectId = resolvedProjectId;
 
   if (opts.milestone !== undefined && !resolvedProjectId) {
     throw new ValidationError('--milestone requires --project to be specified');

@@ -2,7 +2,8 @@ import { getClientWithAuthRetry, getRequestFn } from '../../lib/client/index.js'
 import type { PlainField } from '../../lib/output/plain.js';
 import { type ColumnConfig, fetchPaged, runAndRenderPaged } from '../../lib/pagination.js';
 import { exitError } from '../../lib/runner.js';
-import { resolveProject } from '../issues/shared/resolve.js';
+import { buildDefaultProjectFilter } from '../issues/shared/filters.js';
+import { getDefaultProjectIds, resolveProject } from '../issues/shared/resolve.js';
 import { LIST_DOCUMENTS_QUERY } from './queries.js';
 
 export interface ListDocumentsOptions {
@@ -65,19 +66,21 @@ export async function listDocuments(opts: ListDocumentsOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  let projectId: string | undefined;
-  if (opts.project) {
+  // Explicit --project always wins (id or name, via resolveProject). When
+  // omitted, fall back to an OR/"in" filter across all configured default
+  // project IDs, rather than narrowing to a single id.
+  let explicitProjectId: string | undefined;
+  if (opts.project !== undefined) {
     const resolvedResult = await resolveProject(opts.project, client);
     if (resolvedResult.isErr()) {
       exitError(resolvedResult.error);
       return;
     }
-    projectId = resolvedResult.value;
+    explicitProjectId = resolvedResult.value;
   }
+  const filter = buildDefaultProjectFilter(explicitProjectId, getDefaultProjectIds);
 
   const requestFn = getRequestFn(client);
-
-  const filter = projectId ? { project: { id: { eq: projectId } } } : undefined;
 
   const resultAsync = fetchPaged(
     requestFn,

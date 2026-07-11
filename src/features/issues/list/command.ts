@@ -8,6 +8,7 @@ export function registerListCommand(issues: Command): void {
     .command('list')
     .description('List all issues (optionally filtered by team)')
     .option('--team <team>', 'Filter by team key')
+    .option('--project <id-or-name>', 'Filter by project ID or name')
     .option('--limit <n>', 'Number of issues per page (default: 50)', '50')
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)')
@@ -23,6 +24,7 @@ export function registerListCommand(issues: Command): void {
       apiKey: opts.apiKey,
       token: opts.token,
       team: opts.team,
+      project: opts.project,
       limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
       after: opts.after,
       all: !!opts.all,

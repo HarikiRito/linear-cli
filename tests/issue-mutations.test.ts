@@ -207,6 +207,63 @@ describe('issues create', () => {
       expect.objectContaining({ priority: 2, labelIds: ['label-bug'], stateId: 'state-id' })
     );
   });
+
+  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+    const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'eng' }] });
+    const clientMock = makeClientMock({ createIssue: createIssueFn, teams: teamsFn });
+    stdMocks(clientMock);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(['p1', 'p2', 'p3']) };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'create',
+      '--title',
+      'T',
+      '--team',
+      'eng',
+    ]);
+
+    expect(createIssueFn).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1' }));
+  });
+
+  it('explicit --project bypasses the config fallback entirely', async () => {
+    const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'eng' }] });
+    const clientMock = makeClientMock({ createIssue: createIssueFn, teams: teamsFn });
+    stdMocks(clientMock);
+    const getDefaultProjectIdsMock = vi.fn().mockReturnValue(['p1', 'p2']);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: getDefaultProjectIdsMock };
+    });
+    const program = await buildProgram();
+
+    const uuid = '44444444-4444-4444-4444-444444444444';
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'create',
+      '--title',
+      'T',
+      '--team',
+      'eng',
+      '--project',
+      uuid,
+    ]);
+
+    expect(createIssueFn).toHaveBeenCalledWith(expect.objectContaining({ projectId: uuid }));
+    expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -256,17 +313,17 @@ describe('issues update', () => {
     const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
     const clientMock = makeClientMock({ updateIssue: updateIssueFn });
     stdMocks(clientMock);
+    // No project_ids configured — pin explicitly so the projectId fallback
+    // never interferes with this "no other fields" assertion regardless of
+    // what's on the machine running the test.
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(undefined) };
+    });
     const program = await buildProgram();
 
-    await program.parseAsync([
-      'node',
-      'linear',
-      'issues',
-      'update',
-      'ISSUE-1',
-      '--title',
-      'New',
-    ]);
+    await program.parseAsync(['node', 'linear', 'issues', 'update', 'ISSUE-1', '--title', 'New']);
 
     expect(updateIssueFn).toHaveBeenCalledWith(
       'ISSUE-1',
@@ -302,6 +359,47 @@ describe('issues update', () => {
       expect.objectContaining({ labelIds: ['bug-id', 'feat-id'] })
     );
   });
+
+  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+    const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    stdMocks(clientMock);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(['p1', 'p2', 'p3']) };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'issues', 'update', 'ISSUE-1']);
+
+    expect(updateIssueFn).toHaveBeenCalledWith(
+      'ISSUE-1',
+      expect.objectContaining({ projectId: 'p1' })
+    );
+  });
+
+  it('explicit --project bypasses the config fallback entirely', async () => {
+    const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    stdMocks(clientMock);
+    const getDefaultProjectIdsMock = vi.fn().mockReturnValue(['p1', 'p2']);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: getDefaultProjectIdsMock };
+    });
+    const program = await buildProgram();
+
+    const uuid = '55555555-5555-5555-5555-555555555555';
+    await program.parseAsync(['node', 'linear', 'issues', 'update', 'ISSUE-1', '--project', uuid]);
+
+    expect(updateIssueFn).toHaveBeenCalledWith(
+      'ISSUE-1',
+      expect.objectContaining({ projectId: uuid })
+    );
+    expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -324,10 +422,24 @@ describe('issues batch-update', () => {
     const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
     const clientMock = makeClientMock({ updateIssue: updateIssueFn });
     stdMocks(clientMock);
+    // No project_ids configured — pin explicitly so the projectId fallback
+    // never interferes with this exact-equality assertion.
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(undefined) };
+    });
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'batch-update', 'ENG-1', 'ENG-2', '--title', 'Batch Title',
+      'node',
+      'linear',
+      'issues',
+      'batch-update',
+      'ENG-1',
+      'ENG-2',
+      '--title',
+      'Batch Title',
     ]);
 
     expect(updateIssueFn).toHaveBeenCalledTimes(2);
@@ -347,7 +459,14 @@ describe('issues batch-update', () => {
     const program = await buildProgram();
 
     await program.parseAsync([
-      'node', 'linear', 'issues', 'batch-update', 'ENG-1', 'ENG-2', '--title', 'X',
+      'node',
+      'linear',
+      'issues',
+      'batch-update',
+      'ENG-1',
+      'ENG-2',
+      '--title',
+      'X',
     ]);
 
     expect(process.exitCode).toBe(1);
@@ -359,9 +478,7 @@ describe('issues batch-update', () => {
     stdMocks(clientMock);
     const program = await buildProgram();
 
-    await program.parseAsync([
-      'node', 'linear', 'issues', 'batch-update', 'ENG-1', '--title', 'X',
-    ]);
+    await program.parseAsync(['node', 'linear', 'issues', 'batch-update', 'ENG-1', '--title', 'X']);
 
     expect(process.exitCode).toBeUndefined();
   });
@@ -383,7 +500,13 @@ describe('issues batch-update', () => {
 
     const program = await buildProgram();
     await program.parseAsync([
-      'node', 'linear', 'issues', 'batch-update', 'ENG-1', '--priority', '5',
+      'node',
+      'linear',
+      'issues',
+      'batch-update',
+      'ENG-1',
+      '--priority',
+      '5',
     ]);
 
     expect(exitErrorMock).toHaveBeenCalledOnce();
@@ -419,18 +542,26 @@ describe('issues batch-update', () => {
   });
 
   it('runBatchUpdate processes all IDs and partial failures do not block other updates', async () => {
-    const { runBatchUpdate } = await import(
-      '../src/features/issues/batch-update/batch-update.js'
-    );
+    const { runBatchUpdate } = await import('../src/features/issues/batch-update/batch-update.js');
 
     let callCount = 0;
-    const updateFn = vi.fn().mockImplementation(
-      async (id: string): Promise<{ ok: true; issue: { id: string; identifier: string; title: string; url: string; state: string } } | { ok: false; id: string; error: string }> => {
-        callCount++;
-        if (id === 'ENG-2') return { ok: false, id, error: 'failed' };
-        return { ok: true, issue: { id, identifier: id, title: 'T', url: 'u', state: 's' } };
-      }
-    );
+    const updateFn = vi
+      .fn()
+      .mockImplementation(
+        async (
+          id: string
+        ): Promise<
+          | {
+              ok: true;
+              issue: { id: string; identifier: string; title: string; url: string; state: string };
+            }
+          | { ok: false; id: string; error: string }
+        > => {
+          callCount++;
+          if (id === 'ENG-2') return { ok: false, id, error: 'failed' };
+          return { ok: true, issue: { id, identifier: id, title: 'T', url: 'u', state: 's' } };
+        }
+      );
 
     const results = await runBatchUpdate(['ENG-1', 'ENG-2', 'ENG-3'], updateFn);
 
@@ -448,7 +579,12 @@ describe('issues batch-update', () => {
 
     const ids = Array.from({ length: BATCH_CHUNK_SIZE + 2 }, (_, i) => `ENG-${i + 1}`);
     const updateFn = vi.fn().mockImplementation(
-      async (id: string): Promise<{ ok: true; issue: { id: string; identifier: string; title: string; url: string; state: string } }> => ({
+      async (
+        id: string
+      ): Promise<{
+        ok: true;
+        issue: { id: string; identifier: string; title: string; url: string; state: string };
+      }> => ({
         ok: true,
         issue: { id, identifier: id, title: 'T', url: 'u', state: 's' },
       })
@@ -458,6 +594,51 @@ describe('issues batch-update', () => {
 
     expect(results).toHaveLength(ids.length);
     expect(updateFn).toHaveBeenCalledTimes(ids.length);
+  });
+
+  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+    const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    stdMocks(clientMock);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(['p1', 'p2', 'p3']) };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'issues', 'batch-update', 'ENG-1']);
+
+    const [, input] = updateIssueFn.mock.calls[0] as [string, Record<string, unknown>];
+    expect(input).toEqual(expect.objectContaining({ projectId: 'p1' }));
+  });
+
+  it('explicit --project bypasses the config fallback entirely', async () => {
+    const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    stdMocks(clientMock);
+    const getDefaultProjectIdsMock = vi.fn().mockReturnValue(['p1', 'p2']);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: getDefaultProjectIdsMock };
+    });
+    const program = await buildProgram();
+
+    const uuid = '66666666-6666-6666-6666-666666666666';
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'batch-update',
+      'ENG-1',
+      '--project',
+      uuid,
+    ]);
+
+    const [, input] = updateIssueFn.mock.calls[0] as [string, Record<string, unknown>];
+    expect(input).toEqual(expect.objectContaining({ projectId: uuid }));
+    expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
   });
 });
 

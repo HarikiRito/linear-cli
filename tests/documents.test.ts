@@ -112,25 +112,50 @@ describe('documents list', () => {
     process.exitCode = undefined;
   });
 
-
   it('--project scopes filter to project id', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeDocumentsResponse([]));
     stdMocks(requestFn);
     const program = await buildProgram();
 
-    await program.parseAsync([
-      'node',
-      'linear',
-      'documents',
-      'list',
-      '--project',
-      PROJ_UUID,
-    ]);
+    await program.parseAsync(['node', 'linear', 'documents', 'list', '--project', PROJ_UUID]);
 
     const [, vars] = requestFn.mock.calls[0] as [unknown, Record<string, unknown>];
     expect(JSON.stringify(vars)).toContain(PROJ_UUID);
   });
 
+  it('no --project falls back to an OR/"in" filter across all configured default project IDs', async () => {
+    const requestFn = vi.fn().mockResolvedValue(makeDocumentsResponse([]));
+    stdMocks(requestFn);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(['p1', 'p2']) };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'documents', 'list']);
+
+    const [, vars] = requestFn.mock.calls[0] as [unknown, { filter?: unknown }];
+    expect(vars.filter).toEqual({ project: { id: { in: ['p1', 'p2'] } } });
+  });
+
+  it('explicit --project bypasses the OR-filter fallback entirely', async () => {
+    const requestFn = vi.fn().mockResolvedValue(makeDocumentsResponse([]));
+    stdMocks(requestFn);
+    const getDefaultProjectIdsMock = vi.fn().mockReturnValue(['p1', 'p2']);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: getDefaultProjectIdsMock };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'documents', 'list', '--project', PROJ_UUID]);
+
+    const [, vars] = requestFn.mock.calls[0] as [unknown, { filter?: unknown }];
+    expect(vars.filter).toEqual({ project: { id: { in: [PROJ_UUID] } } });
+    expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -144,7 +169,6 @@ describe('documents get', () => {
     process.exitCode = undefined;
   });
 
-
   it('unknown ID calls exitError', async () => {
     const requestFn = vi.fn().mockResolvedValue({ document: null });
     const exitErrorMock = vi.fn();
@@ -157,7 +181,6 @@ describe('documents get', () => {
 
     expect(exitErrorMock).toHaveBeenCalled();
   });
-
 });
 
 // ---------------------------------------------------------------------------
@@ -186,14 +209,7 @@ describe('documents create', () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync([
-      'node',
-      'linear',
-      'documents',
-      'create',
-      '--title',
-      'My Doc',
-    ]);
+    await program.parseAsync(['node', 'linear', 'documents', 'create', '--title', 'My Doc']);
 
     expect(createFn).toHaveBeenCalledOnce();
     const input = createFn.mock.calls[0][0] as Record<string, unknown>;

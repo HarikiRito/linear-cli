@@ -2,6 +2,7 @@ import { type LinearClient, LinearError } from '@linear/sdk';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { getRequestFn } from '../../../lib/client/index.js';
 import {
+  type DefaultTeam,
   getGlobalConfigPath,
   getProjectConfigPath,
   type LinearConfig,
@@ -110,28 +111,93 @@ export function resolveTeam(input: string, client: LinearClient): ResultAsync<st
 }
 
 /**
- * Resolve a config value from precedence chain:
+ * Scalar (string-valued) LinearConfig keys — excludes structured fields like
+ * `team` (nested table) and `projects` (array of tables), which have their
+ * own dedicated resolution helpers (see resolveDefaultTeam and
+ * getDefaultProjectIds), since this precedence chain only handles single
+ * string values.
+ */
+type ScalarConfigKey = 'workspace';
+
+interface MergedConfigs {
+  projectConfig: LinearConfig;
+  globalConfig: LinearConfig;
+}
+
+/**
+ * Per-process memoization cache for readMergedConfigs(), keyed by the
+ * resolved project-config-path + global-config-path pair. Both
+ * resolveConfigValue() and getDefaultProjectIds() can be invoked multiple
+ * times within a single CLI invocation (e.g. a command resolving both a
+ * default team AND default project ids); without this cache each call would
+ * independently re-walk the directory tree for a project root and re-read +
+ * re-parse both TOML files from disk. Keying by path (rather than caching
+ * unconditionally) keeps this safe if cwd/HOME ever change mid-process.
+ */
+const mergedConfigsCache = new Map<string, MergedConfigs>();
+
+/**
+ * Resolve the project root (if any) once, read the project-scope and
+ * global-scope config files once, and return both parsed configs. Shared by
+ * resolveConfigValue() (scalar keys) and getDefaultProjectIds() (array key)
+ * so neither duplicates the project-root walk or the file reads.
+ */
+function readMergedConfigs(): MergedConfigs {
+  const projectRoot = findProjectRoot(process.cwd());
+  const projectConfigPath = projectRoot ? getProjectConfigPath(projectRoot) : null;
+  const globalConfigPath = getGlobalConfigPath();
+
+  const cacheKey = `${projectConfigPath ?? ''} ${globalConfigPath}`;
+  const cached = mergedConfigsCache.get(cacheKey);
+  if (cached) return cached;
+
+  const configs: MergedConfigs = {
+    projectConfig: projectConfigPath ? readConfig(projectConfigPath) : {},
+    globalConfig: readConfig(globalConfigPath),
+  };
+  mergedConfigsCache.set(cacheKey, configs);
+  return configs;
+}
+
+/**
+ * Resolve a scalar config value from precedence chain:
  * env var → project config → global config → null
  */
-function resolveConfigValue(envVar: string, key: keyof LinearConfig): string | null {
+function resolveConfigValue(envVar: string, key: ScalarConfigKey): string | null {
   const envVal = process.env[envVar];
   if (envVal) return envVal;
-  const projectRoot = findProjectRoot(process.cwd());
-  if (projectRoot) {
-    const projectConfig = readConfig(getProjectConfigPath(projectRoot));
-    if (projectConfig[key]) return projectConfig[key]!;
-  }
-  const globalConfig = readConfig(getGlobalConfigPath());
+  const { projectConfig, globalConfig } = readMergedConfigs();
+  if (projectConfig[key]) return projectConfig[key]!;
   if (globalConfig[key]) return globalConfig[key]!;
   return null;
 }
 
 /**
+ * Resolve the full default `team` table from precedence chain (no env var,
+ * no API lookup): project config `team` → global config `team` → null.
+ * Sibling to resolveConfigValue(), which only handles scalar (string) keys —
+ * `team` is a nested `{id, key}` table so it needs its own precedence walk.
+ * Exported for direct testing of the nested-table precedence behavior.
+ */
+export function resolveDefaultTeam(): DefaultTeam | null {
+  const { projectConfig, globalConfig } = readMergedConfigs();
+  if (projectConfig.team) return projectConfig.team;
+  if (globalConfig.team) return globalConfig.team;
+  return null;
+}
+
+/**
  * Resolve team ID from precedence chain (no API lookup):
- * env LINEAR_TEAM_ID → project config team_id → global config team_id → null
+ * env LINEAR_TEAM_ID → project config team.id → global config team.id → null
+ *
+ * The env var, when set, bypasses the `team` config table entirely (same
+ * precedence as before this field became a nested table).
  */
 export function getDefaultTeamId(): string | null {
-  return resolveConfigValue('LINEAR_TEAM_ID', 'team_id');
+  const envVal = process.env.LINEAR_TEAM_ID;
+  if (envVal) return envVal;
+  const team = resolveDefaultTeam();
+  return team ? team.id : null;
 }
 
 /**
@@ -140,6 +206,61 @@ export function getDefaultTeamId(): string | null {
  */
 export function getDefaultWorkspace(): string | null {
   return resolveConfigValue('LINEAR_WORKSPACE', 'workspace');
+}
+
+/**
+ * Resolve default project IDs from precedence chain (no env var, no API lookup):
+ * project config projects → global config projects → undefined.
+ *
+ * Unlike resolveConfigValue, this is array-specific rather than scalar (no env
+ * var override — that was an intentional design decision), but it shares the
+ * same project-root walk + file reads via readMergedConfigs(). An empty array
+ * at either scope is treated as unset (falls through to the next scope, or to
+ * undefined) rather than as an explicit empty selection. `projects` entries
+ * are `{id, name}` tables — only the bare `id` is extracted here so this
+ * keeps returning the same `string[] | undefined` shape callers relied on
+ * before `project_ids` became a structured array of tables.
+ */
+export function getDefaultProjectIds(): string[] | undefined {
+  const { projectConfig, globalConfig } = readMergedConfigs();
+  if (projectConfig.projects && projectConfig.projects.length > 0) {
+    return projectConfig.projects.map((p) => p.id);
+  }
+  if (globalConfig.projects && globalConfig.projects.length > 0) {
+    return globalConfig.projects.map((p) => p.id);
+  }
+  return undefined;
+}
+
+/**
+ * Error message shown when a command requires a project (--project or a
+ * configured default) but neither is available. Shared by all commands that
+ * treat a resolved default project as mandatory rather than optional.
+ */
+export const DEFAULT_PROJECT_REQUIRED_ERROR =
+  '--project is required (no default project configured)';
+
+/**
+ * Resolve the effective single project ID for commands that accept a single
+ * --project flag: the already-resolved explicit value when the caller
+ * provided one, otherwise the first entry of the caller-supplied default
+ * project ID list, otherwise undefined when neither is available.
+ *
+ * Takes `getDefaultIds` as a lazy accessor (rather than calling
+ * getDefaultProjectIds() itself) for two reasons: (1) it must NOT be invoked
+ * at all when an explicit project was given — callers/tests assert
+ * getDefaultProjectIds() is skipped in that case — and (2) passing the
+ * caller's own imported function reference (instead of this module reaching
+ * for its own internal binding) keeps this helper correctly mockable via the
+ * same `getDefaultProjectIds` export callers already use.
+ */
+export function resolveDefaultProjectId(
+  explicitProjectId: string | undefined,
+  getDefaultIds: () => string[] | undefined
+): string | undefined {
+  if (explicitProjectId !== undefined) return explicitProjectId;
+  const defaultProjectIds = getDefaultIds();
+  return defaultProjectIds && defaultProjectIds.length > 0 ? defaultProjectIds[0] : undefined;
 }
 
 export function resolveProject(input: string, client: LinearClient): ResultAsync<string, CliError> {
@@ -264,7 +385,7 @@ export function resolveIssueIdentifier(
     if (!teamId) {
       return errAsync(
         new ValidationError(
-          'No default team configured. Set a default team with LINEAR_TEAM_ID, or configure team_id in your Linear config.'
+          'No default team configured. Set a default team with LINEAR_TEAM_ID, or run `linear team select` / `linear login` to configure a default team.'
         )
       );
     }

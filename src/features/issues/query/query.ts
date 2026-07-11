@@ -1,6 +1,8 @@
 import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
 import { exitError } from '../../../lib/runner.js';
+import { buildDefaultProjectFilter, buildFilter, type IssueFilterInput } from '../shared/filters.js';
 import { fetchIssues, runAndRender } from '../shared/render.js';
+import { getDefaultProjectIds, resolveProject } from '../shared/resolve.js';
 import { buildStateFilter } from '../shared/stateFilter.js';
 import { SEARCH_ISSUES_QUERY } from './queries.js';
 
@@ -8,6 +10,7 @@ export interface QueryOptions {
   apiKey?: string;
   token?: string;
   term: string;
+  project?: string;
   limit: number;
   after?: string;
   all: boolean;
@@ -17,9 +20,6 @@ export interface QueryOptions {
 }
 
 export async function queryIssues(opts: QueryOptions): Promise<void> {
-  // searchIssues accepts filter: IssueFilter — pass state filter server-side.
-  const filter = opts.allStates ? undefined : buildStateFilter(opts.states);
-
   const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
@@ -27,6 +27,28 @@ export async function queryIssues(opts: QueryOptions): Promise<void> {
   }
   const client = clientResult.value;
   const requestFn = getRequestFn(client);
+
+  // searchIssues accepts filter: IssueFilter — pass state filter server-side.
+  const stateFilter = opts.allStates ? undefined : buildStateFilter(opts.states);
+
+  // Resolve project: explicit --project always wins (id or name, via
+  // resolveProject). When omitted, fall back to an OR/"in" filter across all
+  // configured default project IDs.
+  let explicitProjectId: string | undefined;
+  if (opts.project !== undefined) {
+    const projectResult = await resolveProject(opts.project, client);
+    if (projectResult.isErr()) {
+      exitError(projectResult.error);
+      return;
+    }
+    explicitProjectId = projectResult.value;
+  }
+  const projectFilter: IssueFilterInput | undefined = buildDefaultProjectFilter(
+    explicitProjectId,
+    getDefaultProjectIds
+  );
+
+  const filter = buildFilter(stateFilter as IssueFilterInput | undefined, projectFilter);
 
   await runAndRender(
     fetchIssues(requestFn, SEARCH_ISSUES_QUERY, { term: opts.term, filter }, 'searchIssues', {

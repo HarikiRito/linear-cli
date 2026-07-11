@@ -8,7 +8,7 @@ function makeDocumentMock(title = 'Test Doc', content: string | null = null) {
     slugId: 'test-doc-abc',
     content,
     updatedAt: '2026-01-01T00:00:00.000Z',
-    get project() {
+    get project(): Promise<{ id: string; name: string } | null> {
       return Promise.resolve({ id: 'proj-uuid', name: 'My Project' });
     },
   };
@@ -128,6 +128,49 @@ describe('documents create', () => {
     );
     const clientMock = makeClientMock({ createDocument: createDocumentFn });
     stdMocks(clientMock);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(undefined) };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'documents', 'create', '--title', 'Standalone']);
+
+    expect(createDocumentFn).toHaveBeenCalledOnce();
+    const callArg = createDocumentFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArg).toMatchObject({ title: 'Standalone' });
+    expect(callArg).not.toHaveProperty('projectId');
+  });
+
+  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+    const createDocumentFn = vi.fn().mockResolvedValue(makeDocumentPayloadMock());
+    const clientMock = makeClientMock({ createDocument: createDocumentFn });
+    stdMocks(clientMock);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue([PROJ_UUID, 'proj-2']) };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'documents', 'create', '--title', 'Doc']);
+
+    expect(createDocumentFn).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: PROJ_UUID })
+    );
+  });
+
+  it('explicit --project bypasses the config fallback entirely', async () => {
+    const createDocumentFn = vi.fn().mockResolvedValue(makeDocumentPayloadMock());
+    const clientMock = makeClientMock({ createDocument: createDocumentFn });
+    stdMocks(clientMock);
+    const getDefaultProjectIdsMock = vi.fn().mockReturnValue(['p1', 'p2']);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: getDefaultProjectIdsMock };
+    });
     const program = await buildProgram();
 
     await program.parseAsync([
@@ -136,13 +179,15 @@ describe('documents create', () => {
       'documents',
       'create',
       '--title',
-      'Standalone',
+      'Doc',
+      '--project',
+      PROJ_UUID,
     ]);
 
-    expect(createDocumentFn).toHaveBeenCalledOnce();
-    const callArg = createDocumentFn.mock.calls[0][0] as Record<string, unknown>;
-    expect(callArg).toMatchObject({ title: 'Standalone' });
-    expect(callArg).not.toHaveProperty('projectId');
+    expect(createDocumentFn).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: PROJ_UUID })
+    );
+    expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
   });
 });
 

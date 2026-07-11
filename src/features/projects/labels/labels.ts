@@ -9,13 +9,18 @@ import {
   runAndRenderPaged,
 } from '../../../lib/pagination.js';
 import { exitError } from '../../../lib/runner.js';
-import { resolveProject } from '../../issues/shared/resolve.js';
+import {
+  DEFAULT_PROJECT_REQUIRED_ERROR,
+  getDefaultProjectIds,
+  resolveDefaultProjectId,
+  resolveProject,
+} from '../../issues/shared/resolve.js';
 import { PROJECT_LABELS_QUERY } from './queries.js';
 
 export interface ListProjectLabelsOptions {
   apiKey?: string;
   token?: string;
-  project: string;
+  project?: string;
   limit: number;
   after?: string;
   all: boolean;
@@ -49,11 +54,6 @@ function toRows(
 }
 
 export async function listProjectLabels(opts: ListProjectLabelsOptions): Promise<void> {
-  if (!opts.project) {
-    exitError(new ValidationError('--project is required'));
-    return;
-  }
-
   const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
@@ -61,12 +61,24 @@ export async function listProjectLabels(opts: ListProjectLabelsOptions): Promise
   }
   const client = clientResult.value;
 
-  const resolvedResult = await resolveProject(opts.project, client);
-  if (resolvedResult.isErr()) {
-    exitError(resolvedResult.error);
+  // Explicit --project always wins (id or name, via resolveProject). When
+  // omitted, fall back to the first configured default project (deterministic,
+  // no prompt) — only error when neither is available.
+  let explicitProjectId: string | undefined;
+  if (opts.project !== undefined) {
+    const resolvedResult = await resolveProject(opts.project, client);
+    if (resolvedResult.isErr()) {
+      exitError(resolvedResult.error);
+      return;
+    }
+    explicitProjectId = resolvedResult.value;
+  }
+  const resolvedProjectId = resolveDefaultProjectId(explicitProjectId, getDefaultProjectIds);
+  if (resolvedProjectId === undefined) {
+    exitError(new ValidationError(DEFAULT_PROJECT_REQUIRED_ERROR));
     return;
   }
-  const projectId = resolvedResult.value;
+  const projectId = resolvedProjectId;
   const requestFn = getRequestFn(client);
 
   const resultAsync = ResultAsync.fromPromise(
@@ -79,7 +91,7 @@ export async function listProjectLabels(opts: ListProjectLabelsOptions): Promise
 
       if (!opts.all) {
         const data = await requestFn(PROJECT_LABELS_QUERY, baseVars);
-        if (!data.project) throw new NotFoundError('project', opts.project);
+        if (!data.project) throw new NotFoundError('project', projectId);
         const conn = data.project.labels;
         return { rows: toRows(conn.nodes), pageInfo: normalizePageInfo(conn.pageInfo) };
       }
@@ -90,7 +102,7 @@ export async function listProjectLabels(opts: ListProjectLabelsOptions): Promise
 
       do {
         const data = await requestFn(PROJECT_LABELS_QUERY, { ...baseVars, after: cursor });
-        if (!data.project) throw new NotFoundError('project', opts.project);
+        if (!data.project) throw new NotFoundError('project', projectId);
         const conn = data.project.labels;
         allRows = allRows.concat(toRows(conn.nodes));
         lastPageInfo = normalizePageInfo(conn.pageInfo);

@@ -115,14 +115,7 @@ describe('issues list', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync([
-      'node',
-      'linear',
-      'issues',
-      'list',
-      '--after',
-      'cursor123',
-    ]);
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--after', 'cursor123']);
 
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'Document' }),
@@ -146,7 +139,6 @@ describe('issues list', () => {
         )
       );
     stdMocks(request);
-
 
     const program = await buildProgram();
     await program.parseAsync(['node', 'linear', 'issues', 'list', '--all']);
@@ -256,11 +248,15 @@ describe('issues list', () => {
   it('resolves team automatically from a real project config.toml when --team is omitted (end-to-end)', async () => {
     // Real project .linear/config.toml — no mocking of the resolve/config-file layer.
     // Verifies the intended purpose of config.toml: commands that omit --team should
-    // pick up the project-scoped team_id via getDefaultTeamId()'s resolution chain.
+    // pick up the project-scoped team.id via getDefaultTeamId()'s resolution chain.
     const tmpProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-list-team-cfg-'));
     const linearDir = path.join(tmpProjectDir, '.linear');
     fs.mkdirSync(linearDir, { recursive: true });
-    fs.writeFileSync(path.join(linearDir, 'config.toml'), 'team_id = "PROJCFG"\n', 'utf-8');
+    fs.writeFileSync(
+      path.join(linearDir, 'config.toml'),
+      '[team]\nid = "PROJCFG"\nkey = "PC"\n',
+      'utf-8'
+    );
 
     const originalCwd = process.cwd;
     process.cwd = () => tmpProjectDir;
@@ -372,10 +368,7 @@ describe('issues list', () => {
   });
 
   it('--plain outputs Issue block-format with --- separator between records', async () => {
-    const nodes = [
-      makeIssueNode('ENG-1', 'First Issue'),
-      makeIssueNode('ENG-2', 'Second Issue'),
-    ];
+    const nodes = [makeIssueNode('ENG-1', 'First Issue'), makeIssueNode('ENG-2', 'Second Issue')];
     const request = vi.fn().mockResolvedValue(makeListResponse(nodes));
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -405,6 +398,69 @@ describe('issues list', () => {
     expect(output).toContain('---');
 
     consoleSpy.mockRestore();
+  });
+
+  it('registers a --project <id-or-name> option', async () => {
+    const program = await buildProgram();
+    const listCmd = program.commands
+      .find((c) => c.name() === 'issues')
+      ?.commands.find((c) => c.name() === 'list');
+    const projectOption = listCmd?.options.find((o) => o.long === '--project');
+    expect(projectOption).toBeDefined();
+  });
+
+  it('explicit --project resolves via resolveProject and filters by id (in: [id])', async () => {
+    const request = vi.fn().mockResolvedValue(makeListResponse([]));
+    stdMocks(request);
+    const program = await buildProgram();
+
+    const uuid = '22222222-2222-2222-2222-222222222222';
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--project', uuid]);
+
+    const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
+    const json = JSON.stringify(vars);
+    expect(json).toContain(uuid);
+    expect(json).toContain('"in"');
+  });
+
+  it('no --project falls back to an OR/"in" filter across all configured default project IDs', async () => {
+    const request = vi.fn().mockResolvedValue(makeListResponse([]));
+    stdMocks(request);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(['p1', 'p2']) };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'issues', 'list']);
+
+    const [, vars] = request.mock.calls[0] as [string, { filter?: Record<string, unknown> }];
+    const json = JSON.stringify(vars.filter);
+    expect(json).toContain('"p1"');
+    expect(json).toContain('"p2"');
+    expect(json).toContain('"in"');
+  });
+
+  it('explicit --project bypasses the config fallback entirely', async () => {
+    const request = vi.fn().mockResolvedValue(makeListResponse([]));
+    stdMocks(request);
+    const getDefaultProjectIdsMock = vi.fn().mockReturnValue(['p1', 'p2']);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: getDefaultProjectIdsMock };
+    });
+    const program = await buildProgram();
+
+    const uuid = '33333333-3333-3333-3333-333333333333';
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--project', uuid]);
+
+    const [, vars] = request.mock.calls[0] as [string, { filter?: Record<string, unknown> }];
+    const json = JSON.stringify(vars.filter);
+    expect(json).toContain(uuid);
+    expect(json).not.toContain('"p1"');
+    expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
   });
 });
 
@@ -589,15 +645,7 @@ describe('issues query', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync([
-      'node',
-      'linear',
-      'issues',
-      'query',
-      'bug',
-      '--limit',
-      '20',
-    ]);
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--limit', '20']);
 
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'Document' }),
@@ -610,15 +658,7 @@ describe('issues query', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync([
-      'node',
-      'linear',
-      'issues',
-      'query',
-      'bug',
-      '--after',
-      'qCursor',
-    ]);
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--after', 'qCursor']);
 
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'Document' }),
@@ -642,7 +682,6 @@ describe('issues query', () => {
         )
       );
     stdMocks(request);
-
 
     const program = await buildProgram();
     await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--all']);
@@ -703,19 +742,75 @@ describe('issues query', () => {
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync([
-      'node',
-      'linear',
-      'issues',
-      'query',
-      'bug',
-      '--all-states',
-    ]);
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--all-states']);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
     const json = JSON.stringify(vars);
     expect(json).not.toContain('eqIgnoreCase');
     expect(json).toContain('"bug"');
+  });
+
+  it('registers a --project <id-or-name> option', async () => {
+    const program = await buildProgram();
+    const queryCmd = program.commands
+      .find((c) => c.name() === 'issues')
+      ?.commands.find((c) => c.name() === 'query');
+    const projectOption = queryCmd?.options.find((o) => o.long === '--project');
+    expect(projectOption).toBeDefined();
+  });
+
+  it('explicit --project resolves via resolveProject and filters by id (in: [id])', async () => {
+    const request = vi.fn().mockResolvedValue(makeSearchResponse([]));
+    stdMocks(request);
+    const program = await buildProgram();
+
+    const uuid = '22222222-2222-2222-2222-222222222222';
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--project', uuid]);
+
+    const [, vars] = request.mock.calls[0] as [string, { filter?: Record<string, unknown> }];
+    const json = JSON.stringify(vars.filter);
+    expect(json).toContain(uuid);
+    expect(json).toContain('"in"');
+  });
+
+  it('no --project falls back to an OR/"in" filter across all configured default project IDs', async () => {
+    const request = vi.fn().mockResolvedValue(makeSearchResponse([]));
+    stdMocks(request);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(['p1', 'p2']) };
+    });
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug']);
+
+    const [, vars] = request.mock.calls[0] as [string, { filter?: Record<string, unknown> }];
+    const json = JSON.stringify(vars.filter);
+    expect(json).toContain('"p1"');
+    expect(json).toContain('"p2"');
+    expect(json).toContain('"in"');
+  });
+
+  it('explicit --project bypasses the config fallback entirely', async () => {
+    const request = vi.fn().mockResolvedValue(makeSearchResponse([]));
+    stdMocks(request);
+    const getDefaultProjectIdsMock = vi.fn().mockReturnValue(['p1', 'p2']);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return { ...actual, getDefaultProjectIds: getDefaultProjectIdsMock };
+    });
+    const program = await buildProgram();
+
+    const uuid = '33333333-3333-3333-3333-333333333333';
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--project', uuid]);
+
+    const [, vars] = request.mock.calls[0] as [string, { filter?: Record<string, unknown> }];
+    const json = JSON.stringify(vars.filter);
+    expect(json).toContain(uuid);
+    expect(json).not.toContain('"p1"');
+    expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
   });
 });
 

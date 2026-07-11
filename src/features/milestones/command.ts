@@ -20,14 +20,17 @@ export function registerMilestones(program: Command): void {
   const listCmd = milestones
     .command('list')
     .description('List milestones for a project')
-    .requiredOption('--project <id-or-name>', 'Project ID or name (required)')
+    .option(
+      '--project <id-or-name>',
+      'Project ID or name (required, unless a default project is configured — see login)'
+    )
     .option('--limit <n>', 'Number of milestones per page (default: 50)', '50')
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)');
 
   addAuthOptions(addPlainOption(listCmd)).action(
     async (opts: {
-      project: string;
+      project?: string;
       limit: string;
       after?: string;
       all?: boolean;
@@ -48,9 +51,7 @@ export function registerMilestones(program: Command): void {
   );
 
   // milestones get
-  const getCmd = milestones
-    .command('get <id>')
-    .description('Get a single milestone by ID');
+  const getCmd = milestones.command('get <id>').description('Get a single milestone by ID');
 
   addAuthOptions(addPlainOption(getCmd)).action(
     async (id: string, opts: { apiKey?: string; token?: string; plain?: boolean }) => {
@@ -67,14 +68,17 @@ export function registerMilestones(program: Command): void {
   const createCmd = milestones
     .command('create')
     .description('Create a new project milestone')
-    .requiredOption('--project <id-or-name>', 'Project ID or name (required)')
+    .option(
+      '--project <id-or-name>',
+      'Project ID or name (required, unless a default project is configured — see login)'
+    )
     .requiredOption('--name <name>', 'Milestone name (required)')
     .option('--target-date <YYYY-MM-DD>', 'Target date for the milestone')
     .option('--description <text>', 'Milestone description');
 
   addAuthOptions(addPlainOption(createCmd)).action(
     async (opts: {
-      project: string;
+      project?: string;
       name: string;
       targetDate?: string;
       description?: string;
@@ -133,10 +137,7 @@ export function registerMilestones(program: Command): void {
     .option('--yes', 'Skip confirmation prompt');
 
   addAuthOptions(deleteCmd).action(
-    async (
-      id: string,
-      opts: { yes?: boolean; apiKey?: string; token?: string }
-    ) => {
+    async (id: string, opts: { yes?: boolean; apiKey?: string; token?: string }) => {
       await deleteMilestone({
         apiKey: opts.apiKey,
         token: opts.token,

@@ -6,14 +6,17 @@ export function registerLabelsCommand(projects: Command): void {
   const cmd = projects
     .command('labels')
     .description('List labels for a project')
-    .requiredOption('--project <id-or-name>', 'Project ID or name')
+    .option(
+      '--project <id-or-name>',
+      'Project ID or name (required, unless a default project is configured — see login)'
+    )
     .option('--limit <n>', 'Number of labels per page (default: 50)', '50')
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)');
 
   addAuthOptions(addPlainOption(cmd)).action(
     async (opts: {
-      project: string;
+      project?: string;
       limit: string;
       after?: string;
       all?: boolean;

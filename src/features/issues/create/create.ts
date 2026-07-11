@@ -7,8 +7,10 @@ import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
 import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 import {
+  getDefaultProjectIds,
   resolveAssignee,
   resolveCycle,
+  resolveDefaultProjectId,
   resolveIssueIdentifier,
   resolveLabels,
   resolveMilestone,
@@ -58,12 +60,17 @@ async function resolveAndCreate(
   if (opts.parent !== undefined) input.parentId = opts.parent;
   if (opts.dueDate !== undefined) input.dueDate = opts.dueDate;
 
-  // Resolve project first — milestone depends on projectId
+  // Resolve project first — milestone depends on projectId. Explicit --project
+  // always wins; when omitted, fall back to the first configured default
+  // project (deterministic, no prompt) — see resolveDefaultProjectId().
+  let explicitProjectId: string | undefined;
   if (opts.project !== undefined) {
     const r = await resolveProject(opts.project, client);
     if (r.isErr()) throw r.error;
-    input.projectId = r.value;
+    explicitProjectId = r.value;
   }
+  const projectId = resolveDefaultProjectId(explicitProjectId, getDefaultProjectIds);
+  if (projectId !== undefined) input.projectId = projectId;
 
   // Milestone validation must precede the parallel batch
   if (opts.milestone !== undefined && !input.projectId) {
@@ -134,7 +141,10 @@ async function createPostRelations(
   }> = [];
 
   if (opts.relatedTo) {
-    relations.push({ relatedIssue: opts.relatedTo, type: LinearDocument.IssueRelationType.Related });
+    relations.push({
+      relatedIssue: opts.relatedTo,
+      type: LinearDocument.IssueRelationType.Related,
+    });
   }
   if (opts.blocks) {
     relations.push({ relatedIssue: opts.blocks, type: LinearDocument.IssueRelationType.Blocks });
@@ -148,7 +158,10 @@ async function createPostRelations(
     });
   }
   if (opts.duplicateOf) {
-    relations.push({ relatedIssue: opts.duplicateOf, type: LinearDocument.IssueRelationType.Duplicate });
+    relations.push({
+      relatedIssue: opts.duplicateOf,
+      type: LinearDocument.IssueRelationType.Duplicate,
+    });
   }
 
   for (const rel of relations) {
@@ -162,9 +175,7 @@ async function createPostRelations(
       }
       const targetId = targetResult.value;
 
-      const [issueId, relatedIssueId] = rel.swap
-        ? [targetId, newIssueId]
-        : [newIssueId, targetId];
+      const [issueId, relatedIssueId] = rel.swap ? [targetId, newIssueId] : [newIssueId, targetId];
       await client.createIssueRelation({ issueId, relatedIssueId, type: rel.type });
       const direction = rel.swap
         ? `${rel.relatedIssue} → ${newIssueIdentifier}`
@@ -172,9 +183,7 @@ async function createPostRelations(
       console.log(`Relation created: ${direction}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(
-        `Warning: failed to create relation to '${rel.relatedIssue}': ${msg}`
-      );
+      console.error(`Warning: failed to create relation to '${rel.relatedIssue}': ${msg}`);
     }
   }
 }

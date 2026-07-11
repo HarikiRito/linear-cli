@@ -1,6 +1,6 @@
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry, getRequestFn } from '../../lib/client/index.js';
-import { coerceCliError, NotFoundError } from '../../lib/errors.js';
+import { coerceCliError, ValidationError } from '../../lib/errors.js';
 import type { PlainField } from '../../lib/output/plain.js';
 import {
   type ColumnConfig,
@@ -9,13 +9,18 @@ import {
   runAndRenderPaged,
 } from '../../lib/pagination.js';
 import { exitError } from '../../lib/runner.js';
-import { resolveProject } from '../issues/shared/resolve.js';
-import { LIST_PROJECT_MILESTONES_QUERY } from './queries.js';
+import { buildDefaultProjectFilter } from '../issues/shared/filters.js';
+import {
+  DEFAULT_PROJECT_REQUIRED_ERROR,
+  getDefaultProjectIds,
+  resolveProject,
+} from '../issues/shared/resolve.js';
+import { LIST_PROJECT_MILESTONES_BY_FILTER_QUERY } from './queries.js';
 
 export interface ListMilestonesOptions {
   apiKey?: string;
   token?: string;
-  project: string;
+  project?: string;
   limit: number;
   after?: string;
   all: boolean;
@@ -52,12 +57,23 @@ export async function listMilestones(opts: ListMilestonesOptions): Promise<void>
   }
   const client = clientResult.value;
 
-  const resolvedResult = await resolveProject(opts.project, client);
-  if (resolvedResult.isErr()) {
-    exitError(resolvedResult.error);
+  // Explicit --project always wins (id or name, via resolveProject). When
+  // omitted, fall back to an OR/"in" filter across all configured default
+  // project IDs — only error when neither is available.
+  let explicitProjectId: string | undefined;
+  if (opts.project !== undefined) {
+    const resolvedResult = await resolveProject(opts.project, client);
+    if (resolvedResult.isErr()) {
+      exitError(resolvedResult.error);
+      return;
+    }
+    explicitProjectId = resolvedResult.value;
+  }
+  const filter = buildDefaultProjectFilter(explicitProjectId, getDefaultProjectIds);
+  if (!filter) {
+    exitError(new ValidationError(DEFAULT_PROJECT_REQUIRED_ERROR));
     return;
   }
-  const projectId = resolvedResult.value;
 
   const requestFn = getRequestFn(client);
 
@@ -68,13 +84,12 @@ export async function listMilestones(opts: ListMilestonesOptions): Promise<void>
       let pageInfo = normalizePageInfo({ hasNextPage: false, endCursor: null });
 
       do {
-        const data = await requestFn(LIST_PROJECT_MILESTONES_QUERY, {
-          id: projectId,
+        const data = await requestFn(LIST_PROJECT_MILESTONES_BY_FILTER_QUERY, {
+          filter,
           first: opts.limit,
           after,
         });
-        const conn = data.project?.projectMilestones;
-        if (!conn) throw new NotFoundError('project', projectId);
+        const conn = data.projectMilestones;
         for (const n of conn.nodes) {
           rows.push({
             id: n.id,

@@ -1,15 +1,20 @@
 import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../lib/client/index.js';
-import { coerceCliError } from '../../lib/errors.js';
+import { coerceCliError, ValidationError } from '../../lib/errors.js';
 import { exitError } from '../../lib/runner.js';
-import { resolveProject } from '../issues/shared/resolve.js';
+import {
+  DEFAULT_PROJECT_REQUIRED_ERROR,
+  getDefaultProjectIds,
+  resolveDefaultProjectId,
+  resolveProject,
+} from '../issues/shared/resolve.js';
 import { type MilestoneResult, renderMilestoneResult } from './shared.js';
 
 export interface CreateMilestoneOptions {
   apiKey?: string;
   token?: string;
-  project: string;
+  project?: string;
   name: string;
   targetDate?: string;
   description?: string;
@@ -50,12 +55,24 @@ export async function createMilestone(opts: CreateMilestoneOptions): Promise<voi
   }
   const client = clientResult.value;
 
-  const resolvedResult = await resolveProject(opts.project, client);
-  if (resolvedResult.isErr()) {
-    exitError(resolvedResult.error);
+  // Explicit --project always wins; when omitted, fall back to the first
+  // configured default project (deterministic, no prompt). Only error when
+  // neither is available.
+  let explicitProjectId: string | undefined;
+  if (opts.project !== undefined) {
+    const resolvedResult = await resolveProject(opts.project, client);
+    if (resolvedResult.isErr()) {
+      exitError(resolvedResult.error);
+      return;
+    }
+    explicitProjectId = resolvedResult.value;
+  }
+  const resolvedProjectId = resolveDefaultProjectId(explicitProjectId, getDefaultProjectIds);
+  if (resolvedProjectId === undefined) {
+    exitError(new ValidationError(DEFAULT_PROJECT_REQUIRED_ERROR));
     return;
   }
-  const projectId = resolvedResult.value;
+  const projectId = resolvedProjectId;
 
   const result = await ResultAsync.fromPromise(doCreate(client, projectId, opts), coerceCliError);
 

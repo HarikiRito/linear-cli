@@ -5,7 +5,11 @@ import { getClientWithAuthRetry } from '../../lib/client/index.js';
 import { coerceCliError } from '../../lib/errors.js';
 import { exitError } from '../../lib/runner.js';
 import { readStdin } from '../../lib/stdin.js';
-import { resolveProject } from '../issues/shared/resolve.js';
+import {
+  getDefaultProjectIds,
+  resolveDefaultProjectId,
+  resolveProject,
+} from '../issues/shared/resolve.js';
 import { type DocumentResult, normalizeUpdatedAt, renderDocumentResult } from './shared.js';
 
 export interface CreateDocumentOptions {
@@ -25,11 +29,17 @@ async function doCreate(
 ): Promise<DocumentResult> {
   const input: Record<string, unknown> = { title: opts.title };
 
+  // Explicit --project always wins; when omitted, fall back to the first
+  // configured default project (deterministic, no prompt) — see
+  // resolveDefaultProjectId().
+  let explicitProjectId: string | undefined;
   if (opts.project !== undefined) {
     const projectResult = await resolveProject(opts.project, client);
     if (projectResult.isErr()) throw projectResult.error;
-    input.projectId = projectResult.value;
+    explicitProjectId = projectResult.value;
   }
+  const projectId = resolveDefaultProjectId(explicitProjectId, getDefaultProjectIds);
+  if (projectId !== undefined) input.projectId = projectId;
 
   if (content !== undefined) input.content = content;
 
