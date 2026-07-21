@@ -2,6 +2,7 @@ import { intro, isCancel, outro, select, spinner, text } from '@clack/prompts';
 import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
+import { notifyUpdate } from '../../lib/check-version.js';
 import { buildLinearClient } from '../../lib/client/index.js';
 import { getGlobalConfigPath, getProjectConfigPath } from '../../lib/config-file.js';
 import { toError } from '../../lib/errors.js';
@@ -164,4 +165,7 @@ export async function runLoginFlow(): Promise<void> {
   } else {
     outro('You are now logged in.');
   }
+
+  // Fire-and-forget: don't block CLI exit on this best-effort notice.
+  void notifyUpdate();
 }
