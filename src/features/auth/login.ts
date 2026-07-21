@@ -166,5 +166,6 @@ export async function runLoginFlow(): Promise<void> {
     outro('You are now logged in.');
   }
 
-  await notifyUpdate();
+  // Fire-and-forget: don't block CLI exit on this best-effort notice.
+  void notifyUpdate();
 }

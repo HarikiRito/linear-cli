@@ -1,9 +1,12 @@
+import { ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
 import { version as pkgVersion } from '../../package.json';
+import { toError } from './errors.js';
 
 const PKG_NAME = '@harikidev/linear-cli';
 const REGISTRY_URL = `https://registry.npmjs.org/${PKG_NAME}/latest`;
-const FETCH_TIMEOUT_MS = 5_000;
+// best-effort notice — bound worst-case delay, don't make an instant command feel slow
+const FETCH_TIMEOUT_MS = 1_500;
 
 /**
  * Compare two semver strings. Returns true when `latest` is strictly newer
@@ -28,6 +31,26 @@ export function isNewerVersion(installed: string, latest: string): boolean {
   return hasPre(installed) && !hasPre(latest);
 }
 
+interface RegistryResponse {
+  version?: string;
+}
+
+/**
+ * Fetch the latest published version from the npm registry.
+ * Ok(undefined) — not an error — on non-ok response or missing version field.
+ * Err only for genuine fetch/parse failures (network error, abort/timeout, invalid JSON).
+ */
+export function fetchLatestVersion(signal: AbortSignal): ResultAsync<string | undefined, Error> {
+  return ResultAsync.fromPromise(
+    fetch(REGISTRY_URL, { signal }).then(async (res) => {
+      if (!res.ok) return undefined;
+      const data = (await res.json()) as RegistryResponse;
+      return data.version;
+    }),
+    toError
+  );
+}
+
 /**
  * Fetch the latest published version from npm and print a one-line notice
  * if a newer version is available. Silently swallows all errors (network
@@ -40,21 +63,17 @@ export async function notifyUpdate(opts: { plain?: boolean } = {}): Promise<void
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-  try {
-    const res = await fetch(REGISTRY_URL, { signal: controller.signal });
+  const result = await fetchLatestVersion(controller.signal);
+  clearTimeout(timer);
 
-    if (!res.ok) return;
-
-    const data = (await res.json()) as { version?: string };
-    const latest = data.version;
-    if (!latest) return;
-
-    if (isNewerVersion(pkgVersion, latest)) {
-      console.log(pc.yellow(`Update available: ${pkgVersion} → ${latest}`));
+  result.match(
+    (latest) => {
+      if (latest && isNewerVersion(pkgVersion, latest)) {
+        console.log(pc.yellow(`Update available: ${pkgVersion} → ${latest}`));
+      }
+    },
+    () => {
+      // Swallow: network failure, timeout, parse error — no notice, no error
     }
-  } catch {
-    // Swallow: network failure, timeout, parse error — no notice, no error
-  } finally {
-    clearTimeout(timer);
-  }
+  );
 }

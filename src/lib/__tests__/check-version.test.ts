@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isNewerVersion } from '../check-version.js';
+import { fetchLatestVersion, isNewerVersion } from '../check-version.js';
 
 // ---------------------------------------------------------------------------
 // isNewerVersion — pure semver comparison
@@ -41,6 +41,58 @@ describe('isNewerVersion', () => {
     expect(isNewerVersion('1.0.0-rc1', '1.0.0-rc1')).toBe(false);
     // different major with pre-release
     expect(isNewerVersion('1.0.0-alpha', '2.0.0')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchLatestVersion — registry fetch, Ok/Err mapping
+// ---------------------------------------------------------------------------
+
+describe('fetchLatestVersion', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns Ok(version) on a successful response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ version: '0.4.0' }),
+    } as unknown as Response);
+
+    const result = await fetchLatestVersion(new AbortController().signal);
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe('0.4.0');
+  });
+
+  it('returns Ok(undefined) on a non-ok response (not an error)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({}),
+    } as unknown as Response);
+
+    const result = await fetchLatestVersion(new AbortController().signal);
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBeUndefined();
+  });
+
+  it('returns Err on network failure', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network failure'));
+
+    const result = await fetchLatestVersion(new AbortController().signal);
+
+    expect(result.isErr()).toBe(true);
+  });
+
+  it('returns Err on AbortError (timeout)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new DOMException('The operation was aborted', 'AbortError')
+    );
+
+    const result = await fetchLatestVersion(new AbortController().signal);
+
+    expect(result.isErr()).toBe(true);
   });
 });
 

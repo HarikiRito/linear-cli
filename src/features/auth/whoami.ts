@@ -37,8 +37,8 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
     )
   );
 
-  await result.match(
-    async (data) => {
+  result.match(
+    (data) => {
       if (opts.plain) {
         console.log(renderPlainRecord('User', data.name, [
           { key: 'id', value: data.id },
@@ -54,7 +54,8 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
         printTable(prettyTable(['Field', 'Value'], rows));
       }
 
-      await notifyUpdate({ plain: opts.plain });
+      // Fire-and-forget: don't block CLI exit on this best-effort notice.
+      void notifyUpdate({ plain: opts.plain });
     },
     (e) => {
       if (e.kind === 'UnauthenticatedError') {
