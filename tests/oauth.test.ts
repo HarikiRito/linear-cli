@@ -56,6 +56,7 @@ describe('OAuth token refresh (PKCE)', () => {
       delete process.env.LINEAR_CLIENT_ID;
     }
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 
@@ -186,6 +187,7 @@ describe('OAuth token refresh (PKCE)', () => {
 describe('OAuth startOAuthFlow (PKCE)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 
@@ -491,6 +493,7 @@ describe('OAuth startOAuthFlow — workspace-switching safety', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 
@@ -686,6 +689,7 @@ describe('OAuth startOAuthFlow — workspace-switching safety', () => {
 describe('login.ts — API-key path writes session only on success', () => {
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 
