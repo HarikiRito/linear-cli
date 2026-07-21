@@ -19,12 +19,13 @@ import { registerRemindCommand } from './remind/command.js';
 import { registerSubscribeCommand, registerUnsubscribeCommand } from './subscribe/command.js';
 import { registerUnmarkCommand } from './unmark/command.js';
 import { registerUpdateCommand } from './update/command.js';
+import { registerUploadCommand } from './upload/command.js';
 
 export function registerIssues(program: Command): void {
   const issues = program
     .command('issues')
     .description(
-      'Issue commands: list, get, me, query, create, update, batch-update, delete, comment, mark, unmark, relations, link, unlink, favorite, unfavorite, subscribe, unsubscribe, archive, unarchive, remind, copy, history'
+      'Issue commands: list, get, me, query, create, update, batch-update, delete, comment, mark, unmark, relations, link, unlink, upload, favorite, unfavorite, subscribe, unsubscribe, archive, unarchive, remind, copy, history'
     )
     .addHelpCommand(false);
 
@@ -33,6 +34,7 @@ export function registerIssues(program: Command): void {
     issues.help();
   });
 
+  registerUploadCommand(issues);
   registerListCommand(issues);
   registerGetCommand(issues);
   registerMeCommand(issues);

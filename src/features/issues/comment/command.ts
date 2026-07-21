@@ -42,11 +42,12 @@ export function registerCommentCommand(issues: Command): void {
       .command('add <issue>')
       .description('Add a comment to an issue')
       .requiredOption('--body <text>', 'Comment body (use - to read from stdin)')
+      .option('--file <path>', 'Local file to upload and attach as markdown in the comment body')
   );
   addPlainOption(addCmd).action(
     async (
       issue: string,
-      opts: { body: string; apiKey?: string; token?: string; plain?: boolean }
+      opts: { body: string; apiKey?: string; token?: string; plain?: boolean; file?: string }
     ) => {
       await addComment({
         apiKey: opts.apiKey,
@@ -54,6 +55,7 @@ export function registerCommentCommand(issues: Command): void {
         issueId: issue,
         body: opts.body,
         plain: !!opts.plain,
+        file: opts.file,
       });
     }
   );
@@ -84,11 +86,12 @@ export function registerCommentCommand(issues: Command): void {
       .command('update <comment>')
       .description('Update a comment body')
       .requiredOption('--body <text>', 'New comment body (use - to read from stdin)')
+      .option('--file <path>', 'Local file to upload and attach as markdown in the comment body')
   );
   addPlainOption(updateCmd).action(
     async (
       commentId: string,
-      opts: { body: string; apiKey?: string; token?: string; plain?: boolean }
+      opts: { body: string; apiKey?: string; token?: string; plain?: boolean; file?: string }
     ) => {
       await updateComment({
         apiKey: opts.apiKey,
@@ -96,6 +99,7 @@ export function registerCommentCommand(issues: Command): void {
         id: commentId,
         body: opts.body,
         plain: !!opts.plain,
+        file: opts.file,
       });
     }
   );
