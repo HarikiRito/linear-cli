@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import { ResultAsync } from 'neverthrow';
+import { notifyUpdate } from '../../lib/check-version.js';
 import { getClientWithAuthRetry } from '../../lib/client/index.js';
 import { addPlainOption } from '../../lib/commandOptions.js';
 import { mapLinearError } from '../../lib/errors.js';
@@ -36,8 +37,8 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
     )
   );
 
-  result.match(
-    (data) => {
+  await result.match(
+    async (data) => {
       if (opts.plain) {
         console.log(renderPlainRecord('User', data.name, [
           { key: 'id', value: data.id },
@@ -52,6 +53,8 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
         ];
         printTable(prettyTable(['Field', 'Value'], rows));
       }
+
+      await notifyUpdate({ plain: opts.plain });
     },
     (e) => {
       if (e.kind === 'UnauthenticatedError') {
