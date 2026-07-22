@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, extname } from 'node:path';
 import type { LinearClient } from '@linear/sdk';
 import { err, ok, type Result, ResultAsync } from 'neverthrow';
-import { coerceCliError } from './errors.js';
+import pc from 'picocolors';
+import { type CliError, coerceCliError } from './errors.js';
 
 const IMAGE_EXTENSIONS = /^\.(png|jpg|jpeg|gif|webp|svg)$/i;
 
@@ -53,14 +54,21 @@ export interface UploadResult {
 }
 
 /**
+ * Whether a filename's extension is one of the recognized image types.
+ * Shared by `embedMarkdown` (rendering) and callers deciding whether to embed
+ * inline vs. register a resource-tab attachment.
+ */
+export function isImageFile(filename: string): boolean {
+  return IMAGE_EXTENSIONS.test(extname(filename));
+}
+
+/**
  * Build a markdown snippet from an uploaded file result.
  * Images render as `![filename](url)`, everything else as `[filename](url)`.
  */
 export function embedMarkdown(result: UploadResult): string {
   const { assetUrl, filename } = result;
-  const ext = extname(filename);
-  const isImage = IMAGE_EXTENSIONS.test(ext);
-  return isImage ? `![${filename}](${assetUrl})` : `[${filename}](${assetUrl})`;
+  return isImageFile(filename) ? `![${filename}](${assetUrl})` : `[${filename}](${assetUrl})`;
 }
 
 /**
@@ -122,4 +130,82 @@ export async function uploadFile(
   }
 
   return ok({ assetUrl, uploadUrl, filename });
+}
+
+/**
+ * Register an uploaded asset as a real Linear issue attachment via the
+ * `createAttachment` mutation. Returns the new attachment's ID on success.
+ */
+export function createAttachmentRecord(
+  client: LinearClient,
+  issueId: string,
+  title: string,
+  url: string
+): ResultAsync<string, CliError> {
+  return ResultAsync.fromPromise(
+    client
+      .createAttachment({ issueId, title, url })
+      .then(async (payload) => {
+        const attachment = await payload.attachment;
+        if (!attachment) throw new Error('attachment payload returned no attachment');
+        return attachment.id;
+      }),
+    coerceCliError
+  );
+}
+
+/**
+ * Result of uploading a local file (`--file`) and classifying it as an inline
+ * image embed vs. a resource-tab attachment. Shared by every command that
+ * accepts `--file` (comment add/update, issue create/update) to dedupe the
+ * upload → classify → embed sequence.
+ */
+export interface FileAttachResult {
+  uploaded: UploadResult;
+  isImage: boolean;
+  /** Markdown to append to the body/description; empty string for non-image (attachment-only) files. */
+  embedMarkdown: string;
+}
+
+/**
+ * Upload a local file and classify it. Does not need an issueId — pair this
+ * with `attachIfNonImage` once the issue/comment the file belongs to exists.
+ * Callers append `.embedMarkdown` into the body/description themselves when
+ * `isImage` is true (needed BEFORE the create/update mutation runs, since it
+ * must land in the mutation's input).
+ */
+export async function uploadAndClassify(
+  client: LinearClient,
+  filePath: string
+): Promise<Result<FileAttachResult, Error>> {
+  const uploadResult = await uploadFile(client, filePath);
+  if (uploadResult.isErr()) return err(uploadResult.error);
+  const uploaded = uploadResult.value;
+  const isImage = isImageFile(uploaded.filename);
+  return ok({ uploaded, isImage, embedMarkdown: isImage ? embedMarkdown(uploaded) : '' });
+}
+
+/**
+ * Best-effort: register a non-image upload as a real attachment on the
+ * issue's resource tab. No-op if `result` is undefined or was an image
+ * (already embedded inline by the caller). The primary mutation (comment/issue
+ * create or update) has already succeeded by the time this runs, so a
+ * failure here is only ever logged as a warning, never thrown.
+ */
+export async function attachIfNonImage(
+  client: LinearClient,
+  issueId: string,
+  result: FileAttachResult | undefined
+): Promise<void> {
+  if (!result || result.isImage) return;
+  const attachResult = await createAttachmentRecord(
+    client,
+    issueId,
+    result.uploaded.filename,
+    result.uploaded.assetUrl
+  );
+  attachResult.match(
+    () => {},
+    (e) => console.error(pc.yellow(`Warning: could not register file attachment: ${e.message}`))
+  );
 }

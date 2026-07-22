@@ -1,8 +1,6 @@
-import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
-import { coerceCliError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
-import { uploadFile } from '../../../lib/upload.js';
+import { createAttachmentRecord, uploadFile } from '../../../lib/upload.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 
 export interface AttachFileOptions {
@@ -35,15 +33,7 @@ export async function attachFile(opts: AttachFileOptions): Promise<void> {
 
   const { assetUrl, filename } = uploadResult.value;
 
-  const result = await ResultAsync.fromPromise(
-    client
-      .createAttachment({ issueId: resolvedId, title: filename, url: assetUrl })
-      .then(async (payload) => {
-        const attachment = await payload.attachment;
-        return attachment?.id ?? '(unknown)';
-      }),
-    coerceCliError
-  );
+  const result = await createAttachmentRecord(client, resolvedId, filename, assetUrl);
 
   result.match(
     (attachmentId) => {

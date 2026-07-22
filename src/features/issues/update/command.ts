@@ -22,7 +22,11 @@ export function registerUpdateCommand(issues: Command): void {
     .option('--cycle <name-or-id>', 'Cycle name or ID (requires --team)')
     .option('--parent <id>', 'Parent issue ID')
     .option('--no-parent', 'Clear the parent (set parentId to null)')
-    .option('--due-date <YYYY-MM-DD>', 'Due date');
+    .option('--due-date <YYYY-MM-DD>', 'Due date')
+    .option(
+      '--file <path>',
+      'Local file to upload; images are embedded inline in the description, other file types are attached to the resource tab'
+    );
 
   addAuthOptions(addPlainOption(cmd)).action(
     async (
@@ -41,6 +45,7 @@ export function registerUpdateCommand(issues: Command): void {
         cycle?: string;
         parent?: string | false;
         dueDate?: string;
+        file?: string;
         apiKey?: string;
         token?: string;
         plain?: boolean;
@@ -65,6 +70,7 @@ export function registerUpdateCommand(issues: Command): void {
         parent: typeof opts.parent === 'string' ? opts.parent : undefined,
         noParent: opts.parent === false,
         dueDate: opts.dueDate,
+        file: opts.file,
         plain: !!opts.plain,
       });
     }

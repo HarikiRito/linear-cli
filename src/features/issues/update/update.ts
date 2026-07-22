@@ -1,5 +1,6 @@
 import type { LinearClient } from '@linear/sdk';
-import { ResultAsync } from 'neverthrow';
+import { type Result, ResultAsync } from 'neverthrow';
+import pc from 'picocolors';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import {
   coerceCliError,
@@ -9,6 +10,12 @@ import {
 } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
+import {
+  attachIfNonImage,
+  type FileAttachResult,
+  isImageFile,
+  uploadAndClassify,
+} from '../../../lib/upload.js';
 import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 import {
   getDefaultProjectIds,
@@ -42,6 +49,11 @@ export interface UpdateIssueOptions {
   parent?: string;
   noParent?: boolean;
   dueDate?: string;
+  // Local file to upload. Images are embedded inline in the description (appended
+  // to an explicit --description, or to the issue's current description if
+  // --description wasn't given); other file types are attached to the resource
+  // tab after the update, description left untouched.
+  file?: string;
   plain: boolean;
 }
 
@@ -191,13 +203,80 @@ export async function updateIssue(opts: UpdateIssueOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const result = await ResultAsync.fromPromise(
-    resolveAndUpdate(client, opts, description),
+  const idResult = await resolveIssueIdentifier(opts.id, client);
+  if (idResult.isErr()) {
+    exitError(idResult.error);
+    return;
+  }
+  const resolvedId = idResult.value;
+
+  // Upload file if --file provided. Images embed inline in the description
+  // (appended to an explicit --description, or fetched-and-appended to the
+  // current description otherwise); other file types are attached to the
+  // resource tab after the update (below), and the description is left
+  // untouched.
+  let finalDescription = description;
+  let fileOutcome: FileAttachResult | undefined;
+  let pendingUpload: Promise<Result<FileAttachResult, Error>> | undefined;
+  if (opts.file) {
+    if (isImageFile(opts.file)) {
+      // Sequential: the embed markdown must land in the description before updateIssue runs.
+      const outcomeResult = await uploadAndClassify(client, opts.file);
+      if (outcomeResult.isErr()) {
+        exitError(outcomeResult.error);
+        return;
+      }
+      fileOutcome = outcomeResult.value;
+      const md = fileOutcome.embedMarkdown;
+      if (description !== undefined) {
+        finalDescription = description ? `${description}\n\n${md}` : md;
+      } else {
+        const currentIssueResult = await ResultAsync.fromPromise(
+          client.issue(resolvedId),
+          coerceCliError
+        );
+        if (currentIssueResult.isErr()) {
+          exitError(currentIssueResult.error);
+          return;
+        }
+        const currentDescription = currentIssueResult.value.description ?? '';
+        finalDescription = currentDescription ? `${currentDescription}\n\n${md}` : md;
+      }
+    } else {
+      // Non-image: doesn't affect the description, so upload it concurrently
+      // with resolveAndUpdate below instead of blocking on it first.
+      pendingUpload = uploadAndClassify(client, opts.file);
+    }
+  }
+
+  const updatePromise = ResultAsync.fromPromise(
+    resolveAndUpdate(client, { ...opts, id: resolvedId }, finalDescription),
     coerceCliError
   );
 
-  result.match(
-    (issue: IssueResult) => renderIssue(issue, opts.plain),
-    (e) => exitError(e)
-  );
+  const [result, uploadOutcome] = pendingUpload
+    ? await Promise.all([updatePromise, pendingUpload])
+    : [await updatePromise, undefined];
+
+  if (result.isErr()) {
+    exitError(result.error);
+    return;
+  }
+
+  const issue = result.value;
+  renderIssue(issue, opts.plain);
+
+  if (uploadOutcome) {
+    // The update already succeeded by the time the concurrent upload settles,
+    // so an upload failure here is a warning, not a hard error.
+    if (uploadOutcome.isErr()) {
+      console.error(pc.yellow(`Warning: file upload failed: ${uploadOutcome.error.message}`));
+    } else {
+      fileOutcome = uploadOutcome.value;
+    }
+  }
+
+  // Best-effort: register a non-image upload as a real attachment on the
+  // resource tab. Images were already embedded above.
+  await attachIfNonImage(client, resolvedId, fileOutcome);
 }

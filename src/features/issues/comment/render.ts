@@ -1,4 +1,4 @@
-import type { CommentPayload } from '@linear/sdk';
+import type { Comment, CommentPayload } from '@linear/sdk';
 import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../../lib/output/table.js';
 
@@ -10,13 +10,8 @@ export interface CommentResult {
   author: string;
 }
 
-/**
- * Resolve payload.comment, null-check it, await the user relation, and return a CommentResult.
- * Throws if the payload returns no comment (SDK contract violation).
- */
-export async function buildCommentResult(payload: CommentPayload): Promise<CommentResult> {
-  const comment = await payload.comment;
-  if (!comment) throw new Error('comment payload returned no comment');
+/** Await the user relation on an already-fetched Comment and shape it into a CommentResult. */
+export async function toCommentResult(comment: Comment): Promise<CommentResult> {
   const user = await comment.user;
   return {
     id: comment.id,
@@ -25,6 +20,16 @@ export async function buildCommentResult(payload: CommentPayload): Promise<Comme
     createdAt: comment.createdAt.toISOString(),
     author: user?.name ?? '',
   };
+}
+
+/**
+ * Resolve payload.comment, null-check it, await the user relation, and return a CommentResult.
+ * Throws if the payload returns no comment (SDK contract violation).
+ */
+export async function buildCommentResult(payload: CommentPayload): Promise<CommentResult> {
+  const comment = await payload.comment;
+  if (!comment) throw new Error('comment payload returned no comment');
+  return toCommentResult(comment);
 }
 
 const COLUMNS = ['ID', 'Body', 'URL', 'CreatedAt', 'Author'];

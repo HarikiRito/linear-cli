@@ -12,6 +12,18 @@ export const LINEAR_TOKEN_URL = 'https://api.linear.app/oauth/token';
 export const CALLBACK_PATH = '/callback';
 export const CANDIDATE_PORTS = [9876, 9877, 9878] as const;
 
+// Hosts Linear itself serves attachment assets from. Only these (and their
+// subdomains) are safe to receive the CLI's live Linear credentials — an
+// attachment's `url` can be an arbitrary external link, so it must never be
+// trusted with the Authorization header by default.
+export const TRUSTED_ATTACHMENT_HOSTS = ['uploads.linear.app'] as const;
+
+export function isTrustedAttachmentHost(hostname: string): boolean {
+  return TRUSTED_ATTACHMENT_HOSTS.some(
+    (host) => hostname === host || hostname.endsWith(`.${host}`)
+  );
+}
+
 // Default state filter tokens (snake_case). Used by issues subcommands unless overridden.
 // Underscores are converted to spaces when building the GraphQL eqIgnoreCase filter.
 export const DEFAULT_ISSUE_STATES = ['todo', 'in_progress', 'dev_review'] as const;
