@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import { registerArchiveCommand, registerUnarchiveCommand } from './archive/command.js';
+import { registerAttachmentsCommand } from './attachments/command.js';
 import { registerBatchUpdateCommand } from './batch-update/command.js';
 import { registerBranchCommand } from './branch/command.js';
 import { registerCommentCommand } from './comment/command.js';
@@ -25,7 +26,7 @@ export function registerIssues(program: Command): void {
   const issues = program
     .command('issues')
     .description(
-      'Issue commands: list, get, me, query, create, update, batch-update, delete, comment, mark, unmark, relations, link, unlink, upload, favorite, unfavorite, subscribe, unsubscribe, archive, unarchive, remind, copy, history'
+      'Issue commands: list, get, me, query, create, update, batch-update, delete, comment, mark, unmark, relations, link, unlink, upload, attachments, favorite, unfavorite, subscribe, unsubscribe, archive, unarchive, remind, copy, history'
     )
     .addHelpCommand(false);
 
@@ -35,6 +36,7 @@ export function registerIssues(program: Command): void {
   });
 
   registerUploadCommand(issues);
+  registerAttachmentsCommand(issues);
   registerListCommand(issues);
   registerGetCommand(issues);
   registerMeCommand(issues);
