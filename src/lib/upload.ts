@@ -83,7 +83,7 @@ export async function uploadFile(
   const size = buffer.length;
 
   const uploadResult = await ResultAsync.fromPromise(
-    client.fileUpload(contentType, filename, size, { makePublic: true }),
+    client.fileUpload(contentType, filename, size),
     coerceCliError
   );
 
