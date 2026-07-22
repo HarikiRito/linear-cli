@@ -5,6 +5,7 @@ import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { coerceCliError, ValidationError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
+import { attachIfNonImage, type FileAttachResult, uploadAndClassify } from '../../../lib/upload.js';
 import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 import {
   getDefaultProjectIds,
@@ -35,6 +36,9 @@ export interface CreateIssueOptions {
   cycle?: string;
   parent?: string;
   dueDate?: string;
+  // Local file to upload. Images are embedded inline in the description before
+  // creation; other file types are attached to the resource tab after creation.
+  file?: string;
   // Relation flags (applied after issue creation)
   relatedTo?: string;
   blocks?: string;
@@ -203,10 +207,32 @@ export async function createIssue(opts: CreateIssueOptions): Promise<void> {
   }
   const client = clientResult.value;
 
+  // Upload file if --file provided, before creating the issue. Images embed
+  // inline in the description; other file types are attached to the resource
+  // tab after creation (below), and the description is left untouched. The
+  // issue doesn't exist yet, so a non-image upload has nothing to run
+  // concurrently with here — the create mutation needs to happen regardless,
+  // and the attach step needs the resulting issue.id either way.
+  let finalDescription = description;
+  let fileOutcome: FileAttachResult | undefined;
+  if (opts.file) {
+    const outcomeResult = await uploadAndClassify(client, opts.file);
+    if (outcomeResult.isErr()) {
+      exitError(outcomeResult.error);
+      return;
+    }
+    fileOutcome = outcomeResult.value;
+    if (fileOutcome.isImage) {
+      finalDescription = finalDescription
+        ? `${finalDescription}\n\n${fileOutcome.embedMarkdown}`
+        : fileOutcome.embedMarkdown;
+    }
+  }
+
   // Create the issue first — relations are applied after and must not hide a
   // successful creation from the user.
   const result = await ResultAsync.fromPromise(
-    resolveAndCreate(client, opts, description),
+    resolveAndCreate(client, opts, finalDescription),
     coerceCliError
   );
 
@@ -219,6 +245,11 @@ export async function createIssue(opts: CreateIssueOptions): Promise<void> {
   // Render the created issue immediately so the user always sees it, even if
   // post-create relation calls fail.
   renderIssue(issue, opts.plain);
+
+  // Best-effort: register a non-image upload as a real attachment on the
+  // resource tab. The issue already got created successfully, so a failure
+  // here is a warning, not a hard error. Images were already embedded above.
+  await attachIfNonImage(client, issue.id, fileOutcome);
 
   const hasRelations = opts.relatedTo || opts.blocks || opts.blockedBy || opts.duplicateOf;
   if (hasRelations) {

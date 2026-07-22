@@ -22,7 +22,11 @@ export function registerCreateCommand(issues: Command): void {
     .option('--related-to <issue>', 'Create a related-to relation with this issue after creation')
     .option('--blocks <issue>', 'Create a blocking relation with this issue after creation')
     .option('--blocked-by <issue>', 'Create a blocked-by relation with this issue after creation')
-    .option('--duplicate-of <issue>', 'Create a duplicate-of relation with this issue after creation');
+    .option('--duplicate-of <issue>', 'Create a duplicate-of relation with this issue after creation')
+    .option(
+      '--file <path>',
+      'Local file to upload; images are embedded inline in the description, other file types are attached to the resource tab'
+    );
 
   addAuthOptions(addPlainOption(cmd)).action(
     async (opts: {
@@ -43,6 +47,7 @@ export function registerCreateCommand(issues: Command): void {
       blocks?: string;
       blockedBy?: string;
       duplicateOf?: string;
+      file?: string;
       apiKey?: string;
       token?: string;
       plain?: boolean;
@@ -73,6 +78,7 @@ export function registerCreateCommand(issues: Command): void {
         blocks: opts.blocks,
         blockedBy: opts.blockedBy,
         duplicateOf: opts.duplicateOf,
+        file: opts.file,
         plain: !!opts.plain,
       });
     }

@@ -17,6 +17,8 @@ type Documents = {
     "\n  query ListCycles($first: Int, $after: String, $filter: CycleFilter) {\n    cycles(first: $first, after: $after, filter: $filter) {\n      nodes {\n        id\n        name\n        number\n        startsAt\n        endsAt\n        completedAt\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n    }\n  }\n": typeof types.ListCyclesDocument,
     "\n  query ListDocuments($first: Int, $after: String, $filter: DocumentFilter) {\n    documents(first: $first, after: $after, filter: $filter) {\n      nodes {\n        id\n        title\n        slugId\n        updatedAt\n        project {\n          id\n          name\n        }\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n    }\n  }\n": typeof types.ListDocumentsDocument,
     "\n  query GetDocument($id: String!) {\n    document(id: $id) {\n      id\n      title\n      slugId\n      content\n      updatedAt\n      project {\n        id\n        name\n      }\n      creator {\n        id\n        name\n        displayName\n      }\n    }\n  }\n": typeof types.GetDocumentDocument,
+    "\n  query ListAttachments($id: String!) {\n    issue(id: $id) {\n      id\n      attachments {\n        nodes {\n          id\n          title\n          url\n        }\n      }\n    }\n  }\n": typeof types.ListAttachmentsDocument,
+    "\n  query GetAttachment($id: String!) {\n    attachment(id: $id) {\n      id\n      title\n      url\n      issue {\n        id\n      }\n    }\n  }\n": typeof types.GetAttachmentDocument,
     "\n  query GetIssueBranch($id: String!) {\n    issue(id: $id) {\n      id\n      branchName\n    }\n  }\n": typeof types.GetIssueBranchDocument,
     "\n  query ListComments($issueId: String!, $first: Int, $after: String) {\n    issue(id: $issueId) {\n      comments(first: $first, after: $after) {\n        nodes {\n          id\n          body\n          createdAt\n          parentId\n          user {\n            name\n          }\n        }\n        pageInfo {\n          hasNextPage\n          endCursor\n        }\n      }\n    }\n  }\n": typeof types.ListCommentsDocument,
     "\n  query CommentIssueId($id: String!) {\n    comment(id: $id) {\n      issueId\n    }\n  }\n": typeof types.CommentIssueIdDocument,
@@ -43,6 +45,8 @@ const documents: Documents = {
     "\n  query ListCycles($first: Int, $after: String, $filter: CycleFilter) {\n    cycles(first: $first, after: $after, filter: $filter) {\n      nodes {\n        id\n        name\n        number\n        startsAt\n        endsAt\n        completedAt\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n    }\n  }\n": types.ListCyclesDocument,
     "\n  query ListDocuments($first: Int, $after: String, $filter: DocumentFilter) {\n    documents(first: $first, after: $after, filter: $filter) {\n      nodes {\n        id\n        title\n        slugId\n        updatedAt\n        project {\n          id\n          name\n        }\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n    }\n  }\n": types.ListDocumentsDocument,
     "\n  query GetDocument($id: String!) {\n    document(id: $id) {\n      id\n      title\n      slugId\n      content\n      updatedAt\n      project {\n        id\n        name\n      }\n      creator {\n        id\n        name\n        displayName\n      }\n    }\n  }\n": types.GetDocumentDocument,
+    "\n  query ListAttachments($id: String!) {\n    issue(id: $id) {\n      id\n      attachments {\n        nodes {\n          id\n          title\n          url\n        }\n      }\n    }\n  }\n": types.ListAttachmentsDocument,
+    "\n  query GetAttachment($id: String!) {\n    attachment(id: $id) {\n      id\n      title\n      url\n      issue {\n        id\n      }\n    }\n  }\n": types.GetAttachmentDocument,
     "\n  query GetIssueBranch($id: String!) {\n    issue(id: $id) {\n      id\n      branchName\n    }\n  }\n": types.GetIssueBranchDocument,
     "\n  query ListComments($issueId: String!, $first: Int, $after: String) {\n    issue(id: $issueId) {\n      comments(first: $first, after: $after) {\n        nodes {\n          id\n          body\n          createdAt\n          parentId\n          user {\n            name\n          }\n        }\n        pageInfo {\n          hasNextPage\n          endCursor\n        }\n      }\n    }\n  }\n": types.ListCommentsDocument,
     "\n  query CommentIssueId($id: String!) {\n    comment(id: $id) {\n      issueId\n    }\n  }\n": types.CommentIssueIdDocument,
@@ -92,6 +96,14 @@ export function graphql(source: "\n  query ListDocuments($first: Int, $after: St
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query GetDocument($id: String!) {\n    document(id: $id) {\n      id\n      title\n      slugId\n      content\n      updatedAt\n      project {\n        id\n        name\n      }\n      creator {\n        id\n        name\n        displayName\n      }\n    }\n  }\n"): (typeof documents)["\n  query GetDocument($id: String!) {\n    document(id: $id) {\n      id\n      title\n      slugId\n      content\n      updatedAt\n      project {\n        id\n        name\n      }\n      creator {\n        id\n        name\n        displayName\n      }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query ListAttachments($id: String!) {\n    issue(id: $id) {\n      id\n      attachments {\n        nodes {\n          id\n          title\n          url\n        }\n      }\n    }\n  }\n"): (typeof documents)["\n  query ListAttachments($id: String!) {\n    issue(id: $id) {\n      id\n      attachments {\n        nodes {\n          id\n          title\n          url\n        }\n      }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query GetAttachment($id: String!) {\n    attachment(id: $id) {\n      id\n      title\n      url\n      issue {\n        id\n      }\n    }\n  }\n"): (typeof documents)["\n  query GetAttachment($id: String!) {\n    attachment(id: $id) {\n      id\n      title\n      url\n      issue {\n        id\n      }\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
