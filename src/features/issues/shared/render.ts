@@ -19,6 +19,9 @@ export type { PageInfo, PaginationOptions, RequestFn };
 export interface IssueNode {
   identifier: string;
   title: string;
+  // Only present when the source query selects it (e.g. search); optional so
+  // list-style queries that don't fetch it are unaffected.
+  description?: string | null;
   state: { name: string } | null;
   assignee: { displayName: string } | null;
   priority: number;
@@ -29,6 +32,7 @@ export interface IssueNode {
 export interface IssueRow {
   identifier: string;
   title: string;
+  description?: string | null;
   state: string;
   assignee: string;
   priority: number;
@@ -56,6 +60,7 @@ export function toIssueRows(nodes: IssueNode[]): IssueRow[] {
   return nodes.map((n) => ({
     identifier: n.identifier,
     title: n.title,
+    description: n.description ?? null,
     state: n.state?.name ?? '',
     assignee: n.assignee?.displayName ?? '',
     priority: n.priority,

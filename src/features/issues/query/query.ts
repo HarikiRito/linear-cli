@@ -5,6 +5,7 @@ import { fetchIssues, runAndRender } from '../shared/render.js';
 import { getDefaultProjectIds, resolveProject } from '../shared/resolve.js';
 import { buildStateFilter } from '../shared/stateFilter.js';
 import { SEARCH_ISSUES_QUERY } from './queries.js';
+import { filterByTermRelevance } from './relevance.js';
 
 export interface QueryOptions {
   apiKey?: string;
@@ -50,12 +51,18 @@ export async function queryIssues(opts: QueryOptions): Promise<void> {
 
   const filter = buildFilter(stateFilter as IssueFilterInput | undefined, projectFilter);
 
-  await runAndRender(
-    fetchIssues(requestFn, SEARCH_ISSUES_QUERY, { term: opts.term, filter }, 'searchIssues', {
+  // see relevance.ts for why client-side filtering is needed here
+  const result = fetchIssues(
+    requestFn,
+    SEARCH_ISSUES_QUERY,
+    { term: opts.term, filter },
+    'searchIssues',
+    {
       all: opts.all,
       after: opts.after,
       limit: opts.limit,
-    }),
-    opts.plain
-  );
+    }
+  ).map((r) => ({ ...r, issues: filterByTermRelevance(r.issues, opts.term) }));
+
+  await runAndRender(result, opts.plain);
 }
