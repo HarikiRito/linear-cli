@@ -5,6 +5,7 @@ vi.mock('../../../../lib/client/index.js', () => ({
   getRequestFn: vi.fn(),
 }));
 
+import type { LinearClient } from '@linear/sdk';
 import { ok } from 'neverthrow';
 import { getClientWithAuthRetry, getRequestFn } from '../../../../lib/client/index.js';
 import { queryIssues } from '../query.js';
@@ -32,15 +33,18 @@ function makeSearchResponse(nodes: FakeIssueNode[]) {
 
 describe('queryIssues', () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.mocked(getClientWithAuthRetry).mockResolvedValue(ok({}) as any);
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(getClientWithAuthRetry).mockResolvedValue(ok({} as unknown as LinearClient));
   });
 
   afterEach(() => {
     logSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   const clusterNodes: FakeIssueNode[] = [
@@ -136,5 +140,63 @@ describe('queryIssues', () => {
     const [, variables] = requestFn.mock.calls[0];
     expect(variables.term).toBe('batch review');
     expect(variables.filter).toBeDefined();
+  });
+
+  it('warns when relevance filtering drops rows from a limited (non --all) page', async () => {
+    // Simulate the server returning a full page (pageInfo unchanged/raw) where
+    // most rows are irrelevant to the term and get filtered out client-side.
+    const requestFn = vi.fn().mockResolvedValue(makeSearchResponse(clusterNodes));
+    vi.mocked(getRequestFn).mockReturnValue(requestFn);
+
+    await queryIssues({
+      term: 'batch review',
+      project: FAKE_PROJECT_ID,
+      limit: 50,
+      all: false,
+      plain: true,
+      states: [],
+      allStates: true,
+    });
+
+    // 5 raw rows in, only ENG-1 matches "batch review" -> 4 filtered out.
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const warning = errorSpy.mock.calls[0][0] as string;
+    expect(warning).toContain('Filtered 4 of 5 results by relevance');
+    expect(warning).toContain('--all');
+  });
+
+  it('does not warn when relevance filtering keeps every row on the page', async () => {
+    const matchingOnly = clusterNodes.slice(0, 1); // only ENG-1, matches "batch review"
+    const requestFn = vi.fn().mockResolvedValue(makeSearchResponse(matchingOnly));
+    vi.mocked(getRequestFn).mockReturnValue(requestFn);
+
+    await queryIssues({
+      term: 'batch review',
+      project: FAKE_PROJECT_ID,
+      limit: 50,
+      all: false,
+      plain: true,
+      states: [],
+      allStates: true,
+    });
+
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not warn when --all is set, even if filtering drops rows', async () => {
+    const requestFn = vi.fn().mockResolvedValue(makeSearchResponse(clusterNodes));
+    vi.mocked(getRequestFn).mockReturnValue(requestFn);
+
+    await queryIssues({
+      term: 'batch review',
+      project: FAKE_PROJECT_ID,
+      limit: 50,
+      all: true,
+      plain: true,
+      states: [],
+      allStates: true,
+    });
+
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 });
