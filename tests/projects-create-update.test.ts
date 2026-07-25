@@ -147,15 +147,7 @@ describe('projects update', () => {
     stdMocks(clientMock);
     const program = await buildProgram();
 
-    await program.parseAsync([
-      'node',
-      'linear',
-      'projects',
-      'update',
-      'Old Name',
-      '--name',
-      'Bar',
-    ]);
+    await program.parseAsync(['node', 'linear', 'projects', 'update', 'Old Name', '--name', 'Bar']);
 
     // Should be called with only { name: 'Bar' } — no other spurious fields
     const callArg = updateProjectFn.mock.calls[0][1];

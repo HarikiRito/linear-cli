@@ -258,7 +258,7 @@ describe('issues list', () => {
       'utf-8'
     );
 
-    const originalCwd = process.cwd;
+    const originalCwd = process.cwd.bind(process);
     process.cwd = () => tmpProjectDir;
 
     try {

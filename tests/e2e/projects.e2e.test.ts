@@ -37,9 +37,9 @@ describe.skipIf(!RUN_E2E)('projects E2E', () => {
       expect(r.code).toBe(0);
       const records = parsePlainList(r.stdout);
       for (const p of records) {
-        expect(typeof p['_primaryId']).toBe('string');  // name
-        expect(p['_primaryId']).not.toBe('');
-        expect(typeof p['state']).toBe('string');
+        expect(typeof p._primaryId).toBe('string'); // name
+        expect(p._primaryId).not.toBe('');
+        expect(typeof p.state).toBe('string');
       }
     },
     CMD_TIMEOUT

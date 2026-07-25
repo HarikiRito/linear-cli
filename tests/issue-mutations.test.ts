@@ -545,23 +545,24 @@ describe('issues batch-update', () => {
     const { runBatchUpdate } = await import('../src/features/issues/batch-update/batch-update.js');
 
     let callCount = 0;
-    const updateFn = vi
-      .fn()
-      .mockImplementation(
-        async (
-          id: string
-        ): Promise<
-          | {
-              ok: true;
-              issue: { id: string; identifier: string; title: string; url: string; state: string };
-            }
-          | { ok: false; id: string; error: string }
-        > => {
-          callCount++;
-          if (id === 'ENG-2') return { ok: false, id, error: 'failed' };
-          return { ok: true, issue: { id, identifier: id, title: 'T', url: 'u', state: 's' } };
-        }
-      );
+    const updateFn = vi.fn().mockImplementation(
+      (
+        id: string
+      ): Promise<
+        | {
+            ok: true;
+            issue: { id: string; identifier: string; title: string; url: string; state: string };
+          }
+        | { ok: false; id: string; error: string }
+      > => {
+        callCount++;
+        if (id === 'ENG-2') return Promise.resolve({ ok: false, id, error: 'failed' });
+        return Promise.resolve({
+          ok: true,
+          issue: { id, identifier: id, title: 'T', url: 'u', state: 's' },
+        });
+      }
+    );
 
     const results = await runBatchUpdate(['ENG-1', 'ENG-2', 'ENG-3'], updateFn);
 
@@ -579,15 +580,16 @@ describe('issues batch-update', () => {
 
     const ids = Array.from({ length: BATCH_CHUNK_SIZE + 2 }, (_, i) => `ENG-${i + 1}`);
     const updateFn = vi.fn().mockImplementation(
-      async (
+      (
         id: string
       ): Promise<{
         ok: true;
         issue: { id: string; identifier: string; title: string; url: string; state: string };
-      }> => ({
-        ok: true,
-        issue: { id, identifier: id, title: 'T', url: 'u', state: 's' },
-      })
+      }> =>
+        Promise.resolve({
+          ok: true,
+          issue: { id, identifier: id, title: 'T', url: 'u', state: 's' },
+        })
     );
 
     const results = await runBatchUpdate(ids, updateFn);

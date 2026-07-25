@@ -69,7 +69,6 @@ describe('cycles list', () => {
     process.exitCode = undefined;
   });
 
-
   it('--limit passes first variable', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeCyclesResponse([]));
     stdMocks(requestFn);
@@ -120,17 +119,8 @@ describe('cycles list', () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync([
-      'node',
-      'linear',
-      'cycles',
-      'list',
-      '--team',
-      TEAM_UUID,
-      '--all',
-    ]);
+    await program.parseAsync(['node', 'linear', 'cycles', 'list', '--team', TEAM_UUID, '--all']);
 
     expect(requestFn).toHaveBeenCalledTimes(2);
   });
-
 });

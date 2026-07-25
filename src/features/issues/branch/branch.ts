@@ -44,15 +44,22 @@ export async function branchIssue(opts: BranchIssueOptions): Promise<void> {
     (branchName) => {
       if (opts.checkout) {
         const checkoutResult = Result.fromThrowable(
-          () => execFileSync('git', ['checkout', '-b', branchName], { stdio: 'inherit', cwd: process.cwd() }),
-          (e) => new ValidationError(`git checkout -b failed: ${e instanceof Error ? e.message : String(e)}`)
+          () =>
+            execFileSync('git', ['checkout', '-b', branchName], {
+              stdio: 'inherit',
+              cwd: process.cwd(),
+            }),
+          (e) =>
+            new ValidationError(
+              `git checkout -b failed: ${e instanceof Error ? e.message : String(e)}`
+            )
         )();
         if (checkoutResult.isErr()) {
           exitError(checkoutResult.error);
         }
         return;
       }
-      process.stdout.write(branchName + '\n');
+      process.stdout.write(`${branchName}\n`);
     },
     (e) => exitError(e)
   );

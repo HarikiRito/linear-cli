@@ -49,7 +49,7 @@ describe.skipIf(!RUN_E2E)('issues read E2E', () => {
       throw new Error(`Setup: could not create query-probe issue\nstderr: ${r.stderr}`);
     }
     const data = parsePlainRecord(r.stdout);
-    queryIssueId = data['id'];
+    queryIssueId = data.id;
     reg.trackIssue(queryIssueId);
   }, CMD_TIMEOUT);
 
@@ -116,11 +116,11 @@ describe.skipIf(!RUN_E2E)('issues read E2E', () => {
       expect(r.code).toBe(0);
       const records = parsePlainList(r.stdout);
       for (const issue of records) {
-        expect(typeof issue['_primaryId']).toBe('string');  // identifier
-        expect(typeof issue['title']).toBe('string');
-        expect(typeof issue['state']).toBe('string');
+        expect(typeof issue._primaryId).toBe('string'); // identifier
+        expect(typeof issue.title).toBe('string');
+        expect(typeof issue.state).toBe('string');
         // identifier must match generic team-key + number pattern
-        expect(issue['_primaryId']).toMatch(/^[A-Z0-9]+-\d+$/);
+        expect(issue._primaryId).toMatch(/^[A-Z0-9]+-\d+$/);
       }
     },
     CMD_TIMEOUT

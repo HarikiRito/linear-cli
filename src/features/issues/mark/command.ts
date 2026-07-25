@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { addAuthOptions } from '../../../lib/commandOptions.js';
-import { VALID_RELATIONS, markRelation } from './mark.js';
+import { markRelation, VALID_RELATIONS } from './mark.js';
 
 export function registerMarkCommand(issues: Command): void {
   addAuthOptions(

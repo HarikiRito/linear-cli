@@ -44,7 +44,7 @@ export function useTmpProjectAndHome(options: TmpEnvOptions): TmpEnvHandle {
     projectDir = fs.mkdtempSync(path.join(os.tmpdir(), projectPrefix));
     homeDir = fs.mkdtempSync(path.join(os.tmpdir(), homePrefix));
     originalEnv = { ...process.env };
-    originalCwd = process.cwd;
+    originalCwd = process.cwd.bind(process);
     originalHome = process.env.HOME;
     for (const key of deleteEnvVars) delete process.env[key];
     process.env.HOME = homeDir;

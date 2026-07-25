@@ -167,8 +167,8 @@ function resolveConfigValue(envVar: string, key: ScalarConfigKey): string | null
   const envVal = process.env[envVar];
   if (envVal) return envVal;
   const { projectConfig, globalConfig } = readMergedConfigs();
-  if (projectConfig[key]) return projectConfig[key]!;
-  if (globalConfig[key]) return globalConfig[key]!;
+  if (projectConfig[key]) return projectConfig[key];
+  if (globalConfig[key]) return globalConfig[key];
   return null;
 }
 

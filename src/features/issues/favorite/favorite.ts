@@ -62,8 +62,7 @@ export async function unfavoriteIssue(opts: FavoriteOptions): Promise<void> {
       // that both input forms work correctly.
       const match = data.favorites.nodes.find(
         (f) =>
-          f.type === 'issue' &&
-          (f.issue?.id === resolvedId || f.issue?.identifier === resolvedId)
+          f.type === 'issue' && (f.issue?.id === resolvedId || f.issue?.identifier === resolvedId)
       );
       if (!match) {
         throw new NotFoundError('favorite', opts.issue);

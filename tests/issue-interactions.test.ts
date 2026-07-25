@@ -9,7 +9,10 @@ function makeClientMock(overrides: Record<string, unknown>) {
   return overrides;
 }
 
-function stdMocks(clientMock: ReturnType<typeof makeClientMock>, requestFn?: ReturnType<typeof vi.fn>) {
+function stdMocks(
+  clientMock: ReturnType<typeof makeClientMock>,
+  requestFn?: ReturnType<typeof vi.fn>
+) {
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok(clientMock)),
     getClientWithAuthRetry: vi.fn().mockReturnValue(ok(clientMock)),
@@ -70,7 +73,15 @@ describe('issues mark (integration)', () => {
     }));
 
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'mark', 'invalid-relation', 'ENG-1', 'ENG-2']);
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'mark',
+      'invalid-relation',
+      'ENG-1',
+      'ENG-2',
+    ]);
 
     expect(exitErrorMock).toHaveBeenCalled();
     expect(createIssueRelationFn).not.toHaveBeenCalled();
@@ -145,7 +156,11 @@ describe('issues link (integration)', () => {
   });
 
   it('calls attachmentLinkURL with issue ID and URL', async () => {
-    const payloadMock = { get attachment() { return Promise.resolve({ id: 'att-uuid' }); } };
+    const payloadMock = {
+      get attachment() {
+        return Promise.resolve({ id: 'att-uuid' });
+      },
+    };
     const attachmentLinkURLFn = vi.fn().mockResolvedValue(payloadMock);
     const clientMock = makeClientMock({ attachmentLinkURL: attachmentLinkURLFn });
     stdMocks(clientMock);
@@ -183,7 +198,9 @@ describe('issues favorite (integration)', () => {
     const deleteFavoriteFn = vi.fn().mockResolvedValue({ success: true });
     const requestFn = vi.fn().mockResolvedValue({
       favorites: {
-        nodes: [{ id: 'fav-uuid', type: 'issue', issue: { id: 'issue-uuid', identifier: 'ENG-1' } }],
+        nodes: [
+          { id: 'fav-uuid', type: 'issue', issue: { id: 'issue-uuid', identifier: 'ENG-1' } },
+        ],
       },
     });
     const clientMock = makeClientMock({ deleteFavorite: deleteFavoriteFn });
@@ -245,7 +262,14 @@ describe('issues remind (integration)', () => {
     stdMocks(clientMock);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'remind', 'ENG-1', '2026-07-01T09:00:00']);
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'remind',
+      'ENG-1',
+      '2026-07-01T09:00:00',
+    ]);
 
     expect(issueReminderFn).toHaveBeenCalledWith('ENG-1', expect.any(Date));
     const date = issueReminderFn.mock.calls[0][1] as Date;
@@ -386,9 +410,15 @@ describe('issues update --no-parent (integration)', () => {
         identifier: 'ENG-1',
         title: 'Test',
         url: 'https://linear.app/ENG-1',
-        get state() { return Promise.resolve(stateMock); },
+        get state() {
+          return Promise.resolve(stateMock);
+        },
       };
-      return { get issue() { return Promise.resolve(issueMock); } };
+      return {
+        get issue() {
+          return Promise.resolve(issueMock);
+        },
+      };
     }
 
     const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());

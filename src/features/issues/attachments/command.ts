@@ -31,7 +31,10 @@ export function registerAttachmentsCommand(issues: Command): void {
     attachments
       .command('download <issue> <attachmentId>')
       .description('Download an issue attachment to a local file')
-      .option('--output <path>', 'Local file path to write to (default: derived from the attachment)')
+      .option(
+        '--output <path>',
+        'Local file path to write to (default: derived from the attachment)'
+      )
   ).action(
     async (
       issue: string,

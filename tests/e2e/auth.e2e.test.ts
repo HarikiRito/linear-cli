@@ -23,14 +23,14 @@ describe.skipIf(!RUN_E2E)('auth E2E', () => {
       const r = await runCLI(['whoami', '--plain']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(typeof data['id']).toBe('string');
-      expect(data['id']).not.toBe('');
-      expect(typeof data['_primaryId']).toBe('string');  // name
-      expect(data['_primaryId']).not.toBe('');
-      expect(typeof data['email']).toBe('string');
-      expect(data['email']).toContain('@');
-      expect(typeof data['workspace']).toBe('string');
-      expect(data['workspace']).not.toBe('');
+      expect(typeof data.id).toBe('string');
+      expect(data.id).not.toBe('');
+      expect(typeof data._primaryId).toBe('string'); // name
+      expect(data._primaryId).not.toBe('');
+      expect(typeof data.email).toBe('string');
+      expect(data.email).toContain('@');
+      expect(typeof data.workspace).toBe('string');
+      expect(data.workspace).not.toBe('');
     },
     CMD_TIMEOUT
   );

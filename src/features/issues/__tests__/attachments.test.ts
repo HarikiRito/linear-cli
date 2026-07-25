@@ -37,7 +37,11 @@ describe('listAttachments', () => {
   it('renders rows for each attachment', async () => {
     const requestFn = vi.fn().mockResolvedValue(
       makeAttachmentsResponse([
-        { id: 'att-1', title: 'screenshot.png', url: 'https://uploads.linear.app/screenshot.png' },
+        {
+          id: 'att-1',
+          title: 'screenshot.png',
+          url: 'https://uploads.linear.app/screenshot.png',
+        },
       ])
     );
     const capturedRows: string[][] = [];
@@ -121,7 +125,7 @@ describe('downloadAttachment', () => {
       ok: true,
       status: 200,
       statusText: 'OK',
-      arrayBuffer: async () => new TextEncoder().encode('hello world').buffer,
+      arrayBuffer: () => Promise.resolve(new TextEncoder().encode('hello world').buffer),
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -153,7 +157,7 @@ describe('downloadAttachment', () => {
       ok: true,
       status: 200,
       statusText: 'OK',
-      arrayBuffer: async () => new ArrayBuffer(0),
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
     });
     vi.stubGlobal('fetch', fetchMock);
 

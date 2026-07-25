@@ -60,9 +60,7 @@ describe('renderPlainRecord', () => {
   });
 
   it('omits empty array', () => {
-    const out = renderPlainRecord('Issue', 'ENG-1', [
-      { key: 'labels', value: [] },
-    ]);
+    const out = renderPlainRecord('Issue', 'ENG-1', [{ key: 'labels', value: [] }]);
     expect(out).not.toContain('labels:');
   });
 });

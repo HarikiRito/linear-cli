@@ -1,11 +1,11 @@
 import { writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { ResultAsync } from 'neverthrow';
-import { resolveCredential } from '../../auth/resolve.js';
 import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
 import { isTrustedAttachmentHost } from '../../../lib/config.js';
 import { coerceCliError, NotFoundError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
+import { resolveCredential } from '../../auth/resolve.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 import { GET_ATTACHMENT_QUERY } from './queries.js';
 

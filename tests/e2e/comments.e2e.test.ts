@@ -70,7 +70,7 @@ describe.skipIf(!RUN_E2E)('comments E2E', () => {
       );
     }
     const data = parsePlainRecord(r.stdout);
-    issueId = data['id'];
+    issueId = data.id;
     reg.trackIssue(issueId);
   }, CMD_TIMEOUT);
 
@@ -85,11 +85,11 @@ describe.skipIf(!RUN_E2E)('comments E2E', () => {
       const r = await runCLI(['issues', 'comment', 'add', issueId, '--body', body, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['_primaryId']).toBeTruthy();  // comment UUID as primaryId
-      expect(data['body']).toBe(body);
-      expect(data['url']).toContain('linear.app');
+      expect(data._primaryId).toBeTruthy(); // comment UUID as primaryId
+      expect(data.body).toBe(body);
+      expect(data.url).toContain('linear.app');
 
-      rootCommentId = data['_primaryId'];
+      rootCommentId = data._primaryId;
       reg.trackComment(rootCommentId);
     },
     CMD_TIMEOUT
@@ -107,8 +107,8 @@ describe.skipIf(!RUN_E2E)('comments E2E', () => {
       );
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      const commentId2 = data['_primaryId'] ?? '';
-      const commentBody2 = data['body'] ?? '';
+      const commentId2 = data._primaryId ?? '';
+      const commentBody2 = data.body ?? '';
       expect(commentId2).toBeTruthy();
       expect(commentBody2).toBe(stdinBody);
       reg.trackComment(commentId2);
@@ -135,10 +135,10 @@ describe.skipIf(!RUN_E2E)('comments E2E', () => {
       ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['_primaryId']).toBeTruthy();  // comment UUID
-      expect(data['body']).toBe(replyBody);
+      expect(data._primaryId).toBeTruthy(); // comment UUID
+      expect(data.body).toBe(replyBody);
 
-      replyCommentId = data['_primaryId'];
+      replyCommentId = data._primaryId;
       reg.trackComment(replyCommentId);
     },
     CMD_TIMEOUT
@@ -163,8 +163,8 @@ describe.skipIf(!RUN_E2E)('comments E2E', () => {
       ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['_primaryId']).toBe(rootCommentId);
-      expect(data['body']).toBe(editedBody);
+      expect(data._primaryId).toBe(rootCommentId);
+      expect(data.body).toBe(editedBody);
     },
     CMD_TIMEOUT
   );
@@ -179,13 +179,16 @@ describe.skipIf(!RUN_E2E)('comments E2E', () => {
 
       const r = await runCLI(['issues', 'comment', 'list', issueId, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
-      const records = r.stdout.trim().split('\n---\n').map((s) => parsePlainRecord(s));
-      const ids = records.map((c) => c['_primaryId']);
+      const records = r.stdout
+        .trim()
+        .split('\n---\n')
+        .map((s) => parsePlainRecord(s));
+      const ids = records.map((c) => c._primaryId);
       expect(ids).toContain(rootCommentId);
       if (replyCommentId) {
         expect(ids).toContain(replyCommentId);
-        const reply = records.find((c) => c['_primaryId'] === replyCommentId);
-        expect(reply?.['thread']).toContain(rootCommentId);
+        const reply = records.find((c) => c._primaryId === replyCommentId);
+        expect(reply?.thread).toContain(rootCommentId);
       }
     },
     CMD_TIMEOUT

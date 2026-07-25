@@ -85,7 +85,6 @@ describe('statuses list', () => {
     process.exitCode = undefined;
   });
 
-
   it('scopes filter to resolved team id', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeStatusesResponse([]));
     stdMocks(requestFn);

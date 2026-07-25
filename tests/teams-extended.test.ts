@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Team UUID: bypasses resolveTeam network call (looksLikeId short-circuits)
 const TEAM_UUID = '11111111-1111-1111-1111-111111111111';
 
-function makeTeamMock(
+function _makeTeamMock(
   overrides: Partial<{
     id: string;
     name: string;
@@ -34,7 +34,7 @@ function makeTeamMock(
   };
 }
 
-function stdMocks(teamFn: ReturnType<typeof vi.fn>) {
+function _stdMocks(teamFn: ReturnType<typeof vi.fn>) {
   // resolveTeam with UUID short-circuits (no teams call needed)
   vi.doMock('../src/lib/client/index.js', () => ({
     getClient: vi.fn().mockReturnValue(ok({ team: teamFn })),
@@ -68,7 +68,6 @@ describe('teams get', () => {
     process.exitCode = undefined;
   });
 
-
   it('null team calls exitError with NotFoundError', async () => {
     const teamFn = vi.fn().mockResolvedValue(null);
     const exitErrorMock = vi.fn();
@@ -89,5 +88,4 @@ describe('teams get', () => {
 
     expect(exitErrorMock).toHaveBeenCalled();
   });
-
 });

@@ -8,6 +8,7 @@ vi.mock('../../update/update.js', () => ({
   resolveUpdateInput: vi.fn(),
 }));
 
+import type { LinearClient } from '@linear/sdk';
 import { ok, okAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../../../lib/client/index.js';
 import { resolveUpdateInput } from '../../update/update.js';
@@ -15,9 +16,9 @@ import {
   BATCH_CHUNK_SIZE,
   batchUpdateIssues,
   formatSummary,
+  type IssueUpdateResult,
   parseIds,
   runBatchUpdate,
-  type IssueUpdateResult,
 } from '../batch-update.js';
 
 // ---------------------------------------------------------------------------
@@ -118,11 +119,14 @@ describe('formatSummary', () => {
 
 describe('runBatchUpdate', () => {
   it('partial failure: one Ok and one Err in results', async () => {
-    const updateFn = vi.fn(async (id: string): Promise<IssueUpdateResult> => {
+    const updateFn = vi.fn((id: string): Promise<IssueUpdateResult> => {
       if (id === 'ENG-1') {
-        return { ok: true, issue: { id: 'id-1', identifier: 'ENG-1', title: 'T', url: '', state: 'Done' } };
+        return Promise.resolve({
+          ok: true,
+          issue: { id: 'id-1', identifier: 'ENG-1', title: 'T', url: '', state: 'Done' },
+        });
       }
-      return { ok: false, id, error: 'not found' };
+      return Promise.resolve({ ok: false, id, error: 'not found' });
     });
 
     const results = await runBatchUpdate(['ENG-1', 'ENG-2'], updateFn);
@@ -137,7 +141,7 @@ describe('runBatchUpdate', () => {
 
   it('all fail: all results have ok=false', async () => {
     const updateFn = vi.fn(
-      async (id: string): Promise<IssueUpdateResult> => ({ ok: false, id, error: 'err' })
+      (id: string): Promise<IssueUpdateResult> => Promise.resolve({ ok: false, id, error: 'err' })
     );
 
     const results = await runBatchUpdate(['ENG-1', 'ENG-2'], updateFn);
@@ -147,10 +151,11 @@ describe('runBatchUpdate', () => {
 
   it('all succeed: all results have ok=true', async () => {
     const updateFn = vi.fn(
-      async (id: string): Promise<IssueUpdateResult> => ({
-        ok: true,
-        issue: { id: `id-${id}`, identifier: id, title: 'T', url: '', state: 'Done' },
-      })
+      (id: string): Promise<IssueUpdateResult> =>
+        Promise.resolve({
+          ok: true,
+          issue: { id: `id-${id}`, identifier: id, title: 'T', url: '', state: 'Done' },
+        })
     );
 
     const results = await runBatchUpdate(['ENG-1'], updateFn);
@@ -184,12 +189,12 @@ describe('runBatchUpdate', () => {
 
   it('processes all IDs even across multiple chunks', async () => {
     const processed: string[] = [];
-    const updateFn = vi.fn(async (id: string): Promise<IssueUpdateResult> => {
+    const updateFn = vi.fn((id: string): Promise<IssueUpdateResult> => {
       processed.push(id);
-      return {
+      return Promise.resolve({
         ok: true,
         issue: { id: `id-${id}`, identifier: id, title: 'T', url: '', state: 'Done' },
-      };
+      });
     });
 
     const ids = Array.from({ length: 7 }, (_, i) => `ENG-${i + 1}`);
@@ -225,8 +230,10 @@ describe('exit code logic', () => {
       .mockResolvedValueOnce(makePayloadMock())
       .mockRejectedValueOnce(new Error('not found'));
 
-    vi.mocked(getClientWithAuthRetry).mockResolvedValue(ok({ updateIssue: updateIssueFn } as any));
-    vi.mocked(resolveUpdateInput).mockReturnValue(okAsync({}) as any);
+    vi.mocked(getClientWithAuthRetry).mockResolvedValue(
+      ok({ updateIssue: updateIssueFn } as unknown as LinearClient)
+    );
+    vi.mocked(resolveUpdateInput).mockReturnValue(okAsync({}));
 
     await batchUpdateIssues({ ids: ['ENG-1', 'ENG-2'], plain: false });
 
@@ -236,8 +243,10 @@ describe('exit code logic', () => {
   it('leaves process.exitCode unchanged when all updates succeed', async () => {
     const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
 
-    vi.mocked(getClientWithAuthRetry).mockResolvedValue(ok({ updateIssue: updateIssueFn } as any));
-    vi.mocked(resolveUpdateInput).mockReturnValue(okAsync({}) as any);
+    vi.mocked(getClientWithAuthRetry).mockResolvedValue(
+      ok({ updateIssue: updateIssueFn } as unknown as LinearClient)
+    );
+    vi.mocked(resolveUpdateInput).mockReturnValue(okAsync({}));
 
     await batchUpdateIssues({ ids: ['ENG-1'], plain: false });
 
@@ -247,8 +256,10 @@ describe('exit code logic', () => {
   it('resolveUpdateInput is called exactly once regardless of ID count', async () => {
     const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
 
-    vi.mocked(getClientWithAuthRetry).mockResolvedValue(ok({ updateIssue: updateIssueFn } as any));
-    vi.mocked(resolveUpdateInput).mockReturnValue(okAsync({ title: 'Shared' }) as any);
+    vi.mocked(getClientWithAuthRetry).mockResolvedValue(
+      ok({ updateIssue: updateIssueFn } as unknown as LinearClient)
+    );
+    vi.mocked(resolveUpdateInput).mockReturnValue(okAsync({ title: 'Shared' }));
 
     await batchUpdateIssues({ ids: ['ENG-1', 'ENG-2', 'ENG-3'], plain: false });
 

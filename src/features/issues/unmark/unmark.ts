@@ -17,9 +17,8 @@ export async function unmarkRelation(opts: UnmarkOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const result = await ResultAsync.fromPromise(
-    client.deleteIssueRelation(opts.relationId),
-    (e) => mapLinearError(e)
+  const result = await ResultAsync.fromPromise(client.deleteIssueRelation(opts.relationId), (e) =>
+    mapLinearError(e)
   );
 
   result.match(

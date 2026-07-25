@@ -1,11 +1,11 @@
 import { ResultAsync } from 'neverthrow';
+import type { IssueHistoryQuery } from '../../../gql/graphql.js';
 import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
 import { coerceCliError, NotFoundError } from '../../../lib/errors.js';
 import { renderPlainList } from '../../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../../lib/output/table.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
-import type { IssueHistoryQuery } from '../../../gql/graphql.js';
 import { ISSUE_HISTORY_QUERY } from './queries.js';
 
 export const DESCRIPTION_CAVEAT =
@@ -106,14 +106,16 @@ export async function listHistory(opts: HistoryOptions): Promise<void> {
       const issue = data.issue;
       if (!issue) throw new NotFoundError('issue', resolvedId);
 
-      return issue.history.nodes.map((node): HistoryRow => ({
-        id: node.id,
-        timestamp: node.createdAt,
-        actor: node.actors?.length
-          ? node.actors.map((a) => a.displayName || a.name).join(', ')
-          : 'system',
-        changes: summarizeChanges(node),
-      }));
+      return issue.history.nodes.map(
+        (node): HistoryRow => ({
+          id: node.id,
+          timestamp: node.createdAt,
+          actor: node.actors?.length
+            ? node.actors.map((a) => a.displayName || a.name).join(', ')
+            : 'system',
+          changes: summarizeChanges(node),
+        })
+      );
     }),
     coerceCliError
   );

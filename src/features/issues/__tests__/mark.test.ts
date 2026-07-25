@@ -82,7 +82,10 @@ describe('markRelation', () => {
     const { markRelation } = await import('../mark/mark.js');
     await markRelation({ relation: 'parent-of', issue: 'ENG-1', target: 'ENG-2' });
 
-    expect(updateIssueFn).toHaveBeenCalledWith('ENG-2', expect.objectContaining({ parentId: 'ENG-1' }));
+    expect(updateIssueFn).toHaveBeenCalledWith(
+      'ENG-2',
+      expect.objectContaining({ parentId: 'ENG-1' })
+    );
   });
 
   it('sub-issue-of: calls updateIssue on issue with parentId=targetId', async () => {
@@ -93,7 +96,10 @@ describe('markRelation', () => {
     const { markRelation } = await import('../mark/mark.js');
     await markRelation({ relation: 'sub-issue-of', issue: 'ENG-1', target: 'ENG-2' });
 
-    expect(updateIssueFn).toHaveBeenCalledWith('ENG-1', expect.objectContaining({ parentId: 'ENG-2' }));
+    expect(updateIssueFn).toHaveBeenCalledWith(
+      'ENG-1',
+      expect.objectContaining({ parentId: 'ENG-2' })
+    );
   });
 
   it('invalid relation: calls exitError with ValidationError, no SDK call', async () => {

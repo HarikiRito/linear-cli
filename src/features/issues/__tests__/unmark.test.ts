@@ -12,7 +12,9 @@ describe('unmarkRelation', () => {
   it('calls deleteIssueRelation with the provided relation ID', async () => {
     const deleteIssueRelationFn = vi.fn().mockResolvedValue({ success: true });
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ deleteIssueRelation: deleteIssueRelationFn })),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(ok({ deleteIssueRelation: deleteIssueRelationFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -27,7 +29,9 @@ describe('unmarkRelation', () => {
     const exitErrorMock = vi.fn();
     const deleteIssueRelationFn = vi.fn().mockRejectedValue(new Error('API error'));
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ deleteIssueRelation: deleteIssueRelationFn })),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(ok({ deleteIssueRelation: deleteIssueRelationFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: exitErrorMock }));

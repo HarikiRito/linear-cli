@@ -19,12 +19,12 @@ describe.skipIf(!RUN_E2E)('teams E2E', () => {
       const records = parsePlainList(r.stdout);
       expect(records.length).toBeGreaterThan(0);
       const t = records[0];
-      expect(typeof t['id']).toBe('string');
-      expect(t['id']).not.toBe('');
-      expect(typeof t['_primaryId']).toBe('string');  // name
-      expect(t['_primaryId']).not.toBe('');
-      expect(typeof t['key']).toBe('string');
-      expect(t['key']).not.toBe('');
+      expect(typeof t.id).toBe('string');
+      expect(t.id).not.toBe('');
+      expect(typeof t._primaryId).toBe('string'); // name
+      expect(t._primaryId).not.toBe('');
+      expect(typeof t.key).toBe('string');
+      expect(t.key).not.toBe('');
     },
     CMD_TIMEOUT
   );
@@ -50,7 +50,7 @@ describe.skipIf(!RUN_E2E)('teams E2E', () => {
       const d1 = parsePlainList(r1.stdout);
       const d2 = parsePlainList(r2.stdout);
       // First team id must be consistent across calls
-      expect(d1[0]['id']).toBe(d2[0]['id']);
+      expect(d1[0].id).toBe(d2[0].id);
     },
     CMD_TIMEOUT
   );

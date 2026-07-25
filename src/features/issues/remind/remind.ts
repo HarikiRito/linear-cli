@@ -43,12 +43,12 @@ export function parseWhen(when: string): Date | null {
   // Date-only: YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(when)) {
     const d = new Date(`${when}T00:00:00.000Z`);
-    return isNaN(d.getTime()) ? null : d;
+    return Number.isNaN(d.getTime()) ? null : d;
   }
 
   // ISO 8601 datetime
   const d = new Date(when);
-  return isNaN(d.getTime()) ? null : d;
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 export interface RemindOptions {

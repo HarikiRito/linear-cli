@@ -61,8 +61,8 @@ describe.skipIf(!RUN_E2E)('users/labels/statuses/cycles read-only E2E', () => {
       const r = await runCLI(['users', 'get', viewer.id, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['_primaryId']).toBe(viewer.name);
-      expect(data['email']).toBe(viewer.email);
+      expect(data._primaryId).toBe(viewer.name);
+      expect(data.email).toBe(viewer.email);
     },
     CMD_TIMEOUT
   );
@@ -105,8 +105,8 @@ describe.skipIf(!RUN_E2E)('users/labels/statuses/cycles read-only E2E', () => {
       expect(records.length).toBeGreaterThan(0);
       // Each status should have required fields
       const s = records[0];
-      expect(typeof s['_primaryId']).toBe('string');  // name
-      expect(typeof s['type']).toBe('string');
+      expect(typeof s._primaryId).toBe('string'); // name
+      expect(typeof s.type).toBe('string');
     },
     CMD_TIMEOUT
   );

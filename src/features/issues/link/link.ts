@@ -36,12 +36,10 @@ export async function linkAttachment(opts: LinkOptions): Promise<void> {
   const variables = opts.title !== undefined ? { title: opts.title } : undefined;
 
   const result = await ResultAsync.fromPromise(
-    client
-      .attachmentLinkURL(resolvedId, opts.url, variables)
-      .then(async (payload) => {
-        const attachment = await payload.attachment;
-        return attachment?.id ?? '(unknown)';
-      }),
+    client.attachmentLinkURL(resolvedId, opts.url, variables).then(async (payload) => {
+      const attachment = await payload.attachment;
+      return attachment?.id ?? '(unknown)';
+    }),
     coerceCliError
   );
 
@@ -61,9 +59,8 @@ export async function unlinkAttachment(opts: UnlinkOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const result = await ResultAsync.fromPromise(
-    client.deleteAttachment(opts.attachmentId),
-    (e) => mapLinearError(e)
+  const result = await ResultAsync.fromPromise(client.deleteAttachment(opts.attachmentId), (e) =>
+    mapLinearError(e)
   );
 
   result.match(

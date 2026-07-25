@@ -42,9 +42,7 @@ export function registerUsers(program: Command): void {
   );
 
   // users get
-  const getCmd = users
-    .command('get <id>')
-    .description('Get a user by UUID or ID');
+  const getCmd = users.command('get <id>').description('Get a user by UUID or ID');
 
   addAuthOptions(addPlainOption(getCmd)).action(
     async (id: string, opts: { apiKey?: string; token?: string; plain?: boolean }) => {

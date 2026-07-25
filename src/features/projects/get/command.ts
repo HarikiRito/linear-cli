@@ -3,9 +3,7 @@ import { addAuthOptions, addPlainOption } from '../../../lib/commandOptions.js';
 import { getProject } from './get.js';
 
 export function registerGetCommand(projects: Command): void {
-  const cmd = projects
-    .command('get <id>')
-    .description('Get project detail by name or UUID');
+  const cmd = projects.command('get <id>').description('Get project detail by name or UUID');
 
   addAuthOptions(addPlainOption(cmd)).action(
     async (id: string, opts: { apiKey?: string; token?: string; plain?: boolean }) => {

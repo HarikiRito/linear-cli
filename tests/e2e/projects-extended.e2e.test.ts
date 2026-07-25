@@ -47,13 +47,13 @@ describe.skipIf(!RUN_E2E)('projects extended E2E', () => {
       ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(typeof data['id']).toBe('string');
-      expect(data['id']).not.toBe('');
-      expect(data['_primaryId']).toBe(projectName);  // name is primaryId
-      expect(typeof data['state']).toBe('string');
-      expect(data['url']).toContain('linear.app');
+      expect(typeof data.id).toBe('string');
+      expect(data.id).not.toBe('');
+      expect(data._primaryId).toBe(projectName); // name is primaryId
+      expect(typeof data.state).toBe('string');
+      expect(data.url).toContain('linear.app');
 
-      projectId = data['id'] ?? '';
+      projectId = data.id ?? '';
       reg.trackProject(projectId);
     },
     CMD_TIMEOUT
@@ -68,9 +68,9 @@ describe.skipIf(!RUN_E2E)('projects extended E2E', () => {
       const r = await runCLI(['projects', 'get', projectId, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['_primaryId']).toBe(projectName);  // name
-      expect(typeof data['state']).toBe('string');
-      expect(data['url']).toContain('linear.app');
+      expect(data._primaryId).toBe(projectName); // name
+      expect(typeof data.state).toBe('string');
+      expect(data.url).toContain('linear.app');
     },
     CMD_TIMEOUT
   );
@@ -85,8 +85,8 @@ describe.skipIf(!RUN_E2E)('projects extended E2E', () => {
       const r = await runCLI(['projects', 'update', projectId, '--name', newName, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['id']).toBe(projectId);
-      expect(data['_primaryId']).toBe(newName);
+      expect(data.id).toBe(projectId);
+      expect(data._primaryId).toBe(newName);
       projectName = newName;
     },
     CMD_TIMEOUT
