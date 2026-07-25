@@ -38,8 +38,8 @@ const STOPWORDS = new Set([
 export function significantTokens(term: string): string[] {
   const tokens = term
     .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 1 && !STOPWORDS.has(t));
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((t) => t.length > 0 && !STOPWORDS.has(t));
   return Array.from(new Set(tokens));
 }
 

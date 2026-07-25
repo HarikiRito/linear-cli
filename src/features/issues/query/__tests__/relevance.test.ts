@@ -21,12 +21,21 @@ describe('significantTokens', () => {
     expect(significantTokens('Batch Review')).toEqual(['batch', 'review']);
   });
 
-  it('drops stopwords and single-character tokens', () => {
+  it('drops stopwords', () => {
     expect(significantTokens('a review of the batch')).toEqual(['review', 'batch']);
   });
 
   it('empty/stopword-only term yields no tokens', () => {
     expect(significantTokens('the of')).toEqual([]);
+  });
+
+  it('keeps significant single-character tokens', () => {
+    expect(significantTokens('C bug')).toEqual(['c', 'bug']);
+  });
+
+  it('tokenizes non-Latin scripts (unicode-aware)', () => {
+    expect(significantTokens('日本語 テスト')).toEqual(['日本語', 'テスト']);
+    expect(significantTokens('Привет мир')).toEqual(['привет', 'мир']);
   });
 });
 
@@ -37,17 +46,17 @@ describe('matchesTerm', () => {
 
   it('matches when tokens are split across title and description', () => {
     expect(
-      matchesTerm(
-        row({ title: 'Review pipeline', description: 'Handles batch submissions' }),
-        ['batch', 'review']
-      )
+      matchesTerm(row({ title: 'Review pipeline', description: 'Handles batch submissions' }), [
+        'batch',
+        'review',
+      ])
     ).toBe(true);
   });
 
   it('does not match when a token is missing from both title and description', () => {
-    expect(matchesTerm(row({ title: 'GitHub webhook ingestion pipeline' }), ['batch', 'review'])).toBe(
-      false
-    );
+    expect(
+      matchesTerm(row({ title: 'GitHub webhook ingestion pipeline' }), ['batch', 'review'])
+    ).toBe(false);
   });
 
   it('is case-insensitive', () => {
@@ -103,5 +112,23 @@ describe('filterByTermRelevance', () => {
   it('unrelated title never matches an unrelated term', () => {
     const result = filterByTermRelevance(rows, 'batch review');
     expect(result.map((r) => r.identifier)).not.toContain('ENG-5');
+  });
+
+  it('a single-character significant token filters out non-matching issues', () => {
+    const rowsWithSingleChar: IssueRow[] = [
+      row({ identifier: 'ENG-6', title: 'C bug in parser' }),
+      row({ identifier: 'ENG-7', title: 'Unrelated bug in JS parser' }),
+    ];
+    const result = filterByTermRelevance(rowsWithSingleChar, 'C bug');
+    expect(result.map((r) => r.identifier)).toEqual(['ENG-6']);
+  });
+
+  it('a non-Latin search term filters results instead of falling back to unfiltered rows', () => {
+    const rowsNonLatin: IssueRow[] = [
+      row({ identifier: 'ENG-8', title: '日本語のバグ修正' }),
+      row({ identifier: 'ENG-9', title: 'Unrelated English issue' }),
+    ];
+    const result = filterByTermRelevance(rowsNonLatin, '日本語');
+    expect(result.map((r) => r.identifier)).toEqual(['ENG-8']);
   });
 });
