@@ -11,7 +11,12 @@ export function registerRelationsCommand(issues: Command): void {
 
   addAuthOptions(addPlainOption(cmd)).action(
     async (issue: string, opts: { apiKey?: string; token?: string; plain?: boolean }) => {
-      await listRelations({ apiKey: opts.apiKey, token: opts.token, id: issue, plain: !!opts.plain });
+      await listRelations({
+        apiKey: opts.apiKey,
+        token: opts.token,
+        id: issue,
+        plain: !!opts.plain,
+      });
     }
   );
 }

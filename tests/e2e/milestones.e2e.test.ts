@@ -46,7 +46,7 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
       throw new Error(`Failed to create project for milestones E2E: ${r.stderr}`);
     }
     const data = parsePlainRecord(r.stdout);
-    projectId = data['id'] ?? '';
+    projectId = data.id ?? '';
     if (!projectId) throw new Error('No project id returned from create');
     reg.trackProject(projectId);
   }, CMD_TIMEOUT * 2);
@@ -69,11 +69,11 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
       ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(typeof data['id']).toBe('string');
-      expect(data['id']).not.toBe('');
-      expect(data['_primaryId']).toBe(milestoneName);  // name is primaryId
+      expect(typeof data.id).toBe('string');
+      expect(data.id).not.toBe('');
+      expect(data._primaryId).toBe(milestoneName); // name is primaryId
 
-      milestoneId = data['id'] ?? '';
+      milestoneId = data.id ?? '';
     },
     CMD_TIMEOUT
   );
@@ -88,7 +88,7 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const records = parsePlainList(r.stdout);
       expect(Array.isArray(records)).toBe(true);
-      const found = records.some((m) => m['_primaryId'] === milestoneName);
+      const found = records.some((m) => m._primaryId === milestoneName);
       expect(found, `milestone ${milestoneName} not found in list`).toBe(true);
     },
     CMD_TIMEOUT
@@ -103,8 +103,8 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
       const r = await runCLI(['milestones', 'get', milestoneId, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['id']).toBe(milestoneId);
-      expect(data['_primaryId']).toBe(milestoneName);
+      expect(data.id).toBe(milestoneId);
+      expect(data._primaryId).toBe(milestoneName);
     },
     CMD_TIMEOUT
   );
@@ -116,18 +116,11 @@ describe.skipIf(!RUN_E2E)('milestones CRUD E2E', () => {
     async () => {
       expect(milestoneId, 'depends on create').not.toBe('');
       const newName = uniqueName('e2e-ms-updated');
-      const r = await runCLI([
-        'milestones',
-        'update',
-        milestoneId,
-        '--name',
-        newName,
-        '--plain',
-      ]);
+      const r = await runCLI(['milestones', 'update', milestoneId, '--name', newName, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['id']).toBe(milestoneId);
-      expect(data['_primaryId']).toBe(newName);
+      expect(data.id).toBe(milestoneId);
+      expect(data._primaryId).toBe(newName);
       milestoneName = newName;
     },
     CMD_TIMEOUT

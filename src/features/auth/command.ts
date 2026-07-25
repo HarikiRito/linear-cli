@@ -31,9 +31,7 @@ export function registerTeamSelectCommand(program: Command): void {
 
   team
     .command('select')
-    .description(
-      'Interactively select a default team and default projects (project scope only)'
-    )
+    .description('Interactively select a default team and default projects (project scope only)')
     .action(async () => {
       await ResultAsync.fromPromise(runTeamSelectFlow(), toError).mapErr((e) => exitError(e));
     });

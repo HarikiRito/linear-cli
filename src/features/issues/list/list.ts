@@ -1,6 +1,10 @@
 import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
 import { exitError } from '../../../lib/runner.js';
-import { buildDefaultProjectFilter, buildFilter, type IssueFilterInput } from '../shared/filters.js';
+import {
+  buildDefaultProjectFilter,
+  buildFilter,
+  type IssueFilterInput,
+} from '../shared/filters.js';
 import { fetchIssues, isVisible, runAndRender } from '../shared/render.js';
 import {
   getDefaultProjectIds,

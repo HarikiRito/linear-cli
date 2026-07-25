@@ -40,11 +40,7 @@ const TEAM_COLUMNS: ColumnConfig<TeamRow> = {
 };
 
 export function renderTeams(result: TeamsResult, plain: boolean): void {
-  renderPaged(
-    { rows: result.teams, pageInfo: result.pageInfo },
-    plain,
-    TEAM_COLUMNS
-  );
+  renderPaged({ rows: result.teams, pageInfo: result.pageInfo }, plain, TEAM_COLUMNS);
 }
 
 export async function runAndRender(

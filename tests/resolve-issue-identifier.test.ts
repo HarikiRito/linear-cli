@@ -5,11 +5,11 @@ describe('resolveIssueIdentifier', () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     vi.resetModules();
-    delete process.env['LINEAR_TEAM_ID'];
+    delete process.env.LINEAR_TEAM_ID;
   });
 
   it('expands bare number to full identifier when default team is set', async () => {
-    process.env['LINEAR_TEAM_ID'] = 'team-uuid-abc';
+    process.env.LINEAR_TEAM_ID = 'team-uuid-abc';
 
     const teamMock = { key: 'ENG' };
     const clientMock = {
@@ -34,7 +34,7 @@ describe('resolveIssueIdentifier', () => {
   });
 
   it('throws ValidationError when no default team and bare number given', async () => {
-    delete process.env['LINEAR_TEAM_ID'];
+    delete process.env.LINEAR_TEAM_ID;
 
     vi.doMock('../src/lib/config-file.js', () => ({
       getGlobalConfigPath: vi.fn().mockReturnValue('/nonexistent'),

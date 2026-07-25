@@ -54,15 +54,15 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
       ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['id']).toBeTruthy();
+      expect(data.id).toBeTruthy();
       // identifier matches generic pattern — no team key hardcoded
-      expect(data['_primaryId']).toMatch(/^[A-Z0-9]+-\d+$/);
-      expect(data['title']).toBe(createTitle);
-      expect(data['url']).toContain('linear.app');
-      expect(typeof data['state']).toBe('string');
+      expect(data._primaryId).toMatch(/^[A-Z0-9]+-\d+$/);
+      expect(data.title).toBe(createTitle);
+      expect(data.url).toContain('linear.app');
+      expect(typeof data.state).toBe('string');
 
-      issueId = data['id'];
-      issueIdentifier = data['_primaryId'];
+      issueId = data.id;
+      issueIdentifier = data._primaryId;
       reg.trackIssue(issueId);
     },
     CMD_TIMEOUT
@@ -87,8 +87,8 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
       ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['id']).toBe(issueId);
-      expect(data['title']).toBe(updatedTitle);
+      expect(data.id).toBe(issueId);
+      expect(data.title).toBe(updatedTitle);
     },
     CMD_TIMEOUT
   );
@@ -99,17 +99,10 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
       expect(issueIdentifier, 'depends on create').not.toBe('');
 
       const newTitle = uniqueName('e2e-by-identifier');
-      const r = await runCLI([
-        'issues',
-        'update',
-        issueIdentifier,
-        '--title',
-        newTitle,
-        '--plain',
-      ]);
+      const r = await runCLI(['issues', 'update', issueIdentifier, '--title', newTitle, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['title']).toBe(newTitle);
+      expect(data.title).toBe(newTitle);
     },
     CMD_TIMEOUT
   );

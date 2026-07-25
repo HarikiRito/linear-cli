@@ -22,7 +22,11 @@ export interface WhoamiOptions {
 }
 
 export async function runWhoami(opts: WhoamiOptions): Promise<void> {
-  const result = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token, allowInteractive: false }).andThen((client) =>
+  const result = await getClientWithAuthRetry({
+    apiKey: opts.apiKey,
+    token: opts.token,
+    allowInteractive: false,
+  }).andThen((client) =>
     ResultAsync.fromPromise(
       (async (): Promise<WhoamiData> => {
         const [viewer, organization] = await Promise.all([client.viewer, client.organization]);
@@ -40,11 +44,13 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
   result.match(
     (data) => {
       if (opts.plain) {
-        console.log(renderPlainRecord('User', data.name, [
-          { key: 'id', value: data.id },
-          { key: 'email', value: data.email },
-          { key: 'workspace', value: data.workspace },
-        ]));
+        console.log(
+          renderPlainRecord('User', data.name, [
+            { key: 'id', value: data.id },
+            { key: 'email', value: data.email },
+            { key: 'workspace', value: data.workspace },
+          ])
+        );
       } else {
         const rows: string[][] = [
           ['Name', data.name],

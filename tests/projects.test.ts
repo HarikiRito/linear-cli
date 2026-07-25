@@ -94,14 +94,7 @@ describe('projects list', () => {
     stdMocks(projectsFn);
     const program = await buildProgram();
 
-    await program.parseAsync([
-      'node',
-      'linear',
-      'projects',
-      'list',
-      '--after',
-      'projCursor',
-    ]);
+    await program.parseAsync(['node', 'linear', 'projects', 'list', '--after', 'projCursor']);
 
     expect(projectsFn).toHaveBeenCalledWith(expect.objectContaining({ after: 'projCursor' }));
   });
@@ -138,8 +131,6 @@ describe('projects list', () => {
 
     expect(projectsFn).toHaveBeenCalledTimes(2);
   });
-
-
 });
 
 // ---------------------------------------------------------------------------

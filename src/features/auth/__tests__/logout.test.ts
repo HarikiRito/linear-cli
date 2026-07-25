@@ -2,14 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  deleteProjectSession,
-  deleteSession,
-  getProjectSessionPath,
-  getSessionPath,
-  writeProjectSession,
-  writeSession,
-} from '../session.js';
+import { deleteProjectSession, getProjectSessionPath, writeProjectSession } from '../session.js';
 
 describe('logout: scope-aware session deletion', () => {
   let tmpDir: string;

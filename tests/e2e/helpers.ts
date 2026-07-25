@@ -64,8 +64,8 @@ export function parsePlainRecord(text: string): Record<string, string> {
   // Header: "Type: primaryId"
   const header = lines[0].match(/^(\w+):\s*(.+)$/);
   if (header) {
-    result['_type'] = header[1];
-    result['_primaryId'] = header[2];
+    result._type = header[1];
+    result._primaryId = header[2];
   }
 
   for (let i = 1; i < lines.length; i++) {
@@ -131,14 +131,14 @@ export async function discoverTeam(): Promise<TeamInfo> {
     throw new Error(`teams list failed (exit ${r.code}): ${r.stderr}`);
   }
   const records = parsePlainList(r.stdout);
-  if (!records.length || !records[0]['_primaryId']) {
+  if (!records.length || !records[0]._primaryId) {
     throw new Error('teams list returned no teams — cannot run E2E tests');
   }
   const t = records[0];
   return {
-    id: t['id'] ?? '',
-    name: t['_primaryId'] ?? '',
-    key: t['key'] ?? '',
+    id: t.id ?? '',
+    name: t._primaryId ?? '',
+    key: t.key ?? '',
   };
 }
 
@@ -152,14 +152,14 @@ export async function getViewer(): Promise<ViewerInfo> {
     throw new Error(`whoami failed (exit ${r.code}): ${r.stderr}`);
   }
   const data = parsePlainRecord(r.stdout);
-  if (!data['id']) {
+  if (!data.id) {
     throw new Error('whoami returned no id — not authenticated?');
   }
   return {
-    id: data['id'],
-    name: data['_primaryId'] ?? '',
-    email: data['email'] ?? '',
-    workspace: data['workspace'] ?? '',
+    id: data.id,
+    name: data._primaryId ?? '',
+    email: data.email ?? '',
+    workspace: data.workspace ?? '',
   };
 }
 

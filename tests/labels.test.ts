@@ -5,25 +5,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeLabelNode(
-  overrides: Partial<{
-    id: string;
-    name: string;
-    color: string;
-    parent: { id: string } | null;
-  }> = {}
-) {
-  return {
-    id: 'label-uuid',
-    name: 'bug',
-    color: '#ff0000',
-    parent: null,
-    ...overrides,
-  };
+interface LabelNode {
+  id: string;
+  name: string;
+  color: string;
+  parent: { id: string } | null;
 }
 
 function makeLabelsResponse(
-  nodes: ReturnType<typeof makeLabelNode>[],
+  nodes: LabelNode[],
   pageInfo = { hasNextPage: false, endCursor: null as string | null }
 ) {
   return { issueLabels: { nodes, pageInfo } };
@@ -70,7 +60,6 @@ describe('labels list', () => {
     process.exitCode = undefined;
   });
 
-
   it('--team passes team filter in request variables', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeLabelsResponse([]));
     const teamsFn = makeTeamsFn();
@@ -109,7 +98,6 @@ describe('labels list', () => {
     expect(exitErrorMock).toHaveBeenCalled();
     expect(requestFn).not.toHaveBeenCalled();
   });
-
 });
 
 // ---------------------------------------------------------------------------
@@ -150,14 +138,7 @@ describe('labels create', () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const program = await buildProgram();
-    await program.parseAsync([
-      'node',
-      'linear',
-      'labels',
-      'create',
-      '--name',
-      'enhancement',
-    ]);
+    await program.parseAsync(['node', 'linear', 'labels', 'create', '--name', 'enhancement']);
 
     expect(createFn).toHaveBeenCalledOnce();
     const callArg = createFn.mock.calls[0][0] as Record<string, unknown>;

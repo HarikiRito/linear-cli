@@ -48,9 +48,7 @@ export function registerDocuments(program: Command): void {
   );
 
   // documents get
-  const getCmd = documents
-    .command('get <id>')
-    .description('Get a single document by ID or slug');
+  const getCmd = documents.command('get <id>').description('Get a single document by ID or slug');
 
   addAuthOptions(addPlainOption(getCmd)).action(
     async (id: string, opts: { apiKey?: string; token?: string; plain?: boolean }) => {

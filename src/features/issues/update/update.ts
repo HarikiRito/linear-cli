@@ -3,10 +3,10 @@ import { type Result, ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import {
-  coerceCliError,
   type CliError,
-  validatePriority,
+  coerceCliError,
   ValidationError,
+  validatePriority,
 } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';

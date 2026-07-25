@@ -1,13 +1,13 @@
 import pc from 'picocolors';
-import { findProjectRoot } from '../../lib/scope.js';
 import { exitError } from '../../lib/runner.js';
+import { findProjectRoot } from '../../lib/scope.js';
 import { deleteProjectSession, deleteSession, readProjectSession } from './session.js';
 
 export function runLogout(): void {
   const projectRoot = findProjectRoot(process.cwd());
   const hasProjectSession = projectRoot !== null && readProjectSession(projectRoot) !== null;
 
-  const result = hasProjectSession ? deleteProjectSession(projectRoot!) : deleteSession();
+  const result = hasProjectSession ? deleteProjectSession(projectRoot) : deleteSession();
   if (result.isErr()) {
     console.error(pc.red(`Logout failed: ${result.error.message}`));
     exitError(result.error);

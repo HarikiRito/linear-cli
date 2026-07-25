@@ -27,5 +27,4 @@ describe('createProgram', () => {
     expect(names).toContain('issues');
     expect(names).toContain('projects');
   });
-
 });

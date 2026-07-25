@@ -12,6 +12,8 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
+// The exact constant from src/features/issues/history/history.ts
+import { DESCRIPTION_CAVEAT } from '../../src/features/issues/history/history.js';
 import {
   CMD_TIMEOUT,
   discoverTeam,
@@ -22,9 +24,6 @@ import {
   runCLI,
   uniqueName,
 } from './helpers.js';
-
-// The exact constant from src/features/issues/history/history.ts
-import { DESCRIPTION_CAVEAT } from '../../src/features/issues/history/history.js';
 
 describe.skipIf(!RUN_E2E)('issue interactions E2E', () => {
   const reg = makeRegistry();
@@ -55,13 +54,11 @@ describe.skipIf(!RUN_E2E)('issue interactions E2E', () => {
       '--plain',
     ]);
     if (r1.code !== 0) {
-      throw new Error(
-        `Setup: create issue1 failed\nstdout: ${r1.stdout}\nstderr: ${r1.stderr}`
-      );
+      throw new Error(`Setup: create issue1 failed\nstdout: ${r1.stdout}\nstderr: ${r1.stderr}`);
     }
     const d1 = parsePlainRecord(r1.stdout);
-    issue1Id = d1['id'] ?? '';
-    issue1Identifier = d1['_primaryId'] ?? '';
+    issue1Id = d1.id ?? '';
+    issue1Identifier = d1._primaryId ?? '';
     reg.trackIssue(issue1Id);
 
     const r2 = await runCLI([
@@ -74,13 +71,11 @@ describe.skipIf(!RUN_E2E)('issue interactions E2E', () => {
       '--plain',
     ]);
     if (r2.code !== 0) {
-      throw new Error(
-        `Setup: create issue2 failed\nstdout: ${r2.stdout}\nstderr: ${r2.stderr}`
-      );
+      throw new Error(`Setup: create issue2 failed\nstdout: ${r2.stdout}\nstderr: ${r2.stderr}`);
     }
     const d2 = parsePlainRecord(r2.stdout);
-    issue2Id = d2['id'] ?? '';
-    issue2Identifier = d2['_primaryId'] ?? '';
+    issue2Id = d2.id ?? '';
+    issue2Identifier = d2._primaryId ?? '';
     reg.trackIssue(issue2Id);
   }, CMD_TIMEOUT * 3);
 
@@ -146,18 +141,16 @@ describe.skipIf(!RUN_E2E)('issue interactions E2E', () => {
       expect(records.length).toBeGreaterThan(0);
 
       // At least one record should reference issue2 in its 'issue' field
-      const hasIssue2Ref = records.some((rec) =>
-        (rec['issue'] ?? '').includes(issue2Identifier)
-      );
+      const hasIssue2Ref = records.some((rec) => (rec.issue ?? '').includes(issue2Identifier));
       expect(hasIssue2Ref, 'expected at least one relation referencing issue2').toBe(true);
 
       // Capture the first real UUID relation ID (skip synthetic '(parent)' / '(child)')
       const realRec = records.find((rec) => {
-        const id = rec['_primaryId'] ?? '';
+        const id = rec._primaryId ?? '';
         return id.length > 0 && id !== '(parent)' && id !== '(child)';
       });
       if (realRec) {
-        capturedRelationId = realRec['_primaryId'] ?? '';
+        capturedRelationId = realRec._primaryId ?? '';
         // Real relation IDs are UUID-shaped strings (non-empty, no parens)
         expect(capturedRelationId).toMatch(/^[0-9a-f-]{20,}$/i);
       }
@@ -198,9 +191,9 @@ describe.skipIf(!RUN_E2E)('issue interactions E2E', () => {
       const relOutput = relR.stdout.trim();
       if (relOutput && relOutput !== 'No relations found.') {
         const records = parsePlainList(relOutput);
-        const parentRec = records.find((rec) => rec['_primaryId'] === '(parent)');
+        const parentRec = records.find((rec) => rec._primaryId === '(parent)');
         if (parentRec) {
-          expect(parentRec['issue'] ?? '').toContain(issue1Identifier);
+          expect(parentRec.issue ?? '').toContain(issue1Identifier);
         }
       }
 
@@ -404,7 +397,7 @@ describe.skipIf(!RUN_E2E)('issue interactions E2E', () => {
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
 
       const data = parsePlainRecord(r.stdout);
-      const newIssueId = data['id'] ?? '';
+      const newIssueId = data.id ?? '';
       expect(newIssueId).toBeTruthy();
       reg.trackIssue(newIssueId);
 
@@ -413,12 +406,12 @@ describe.skipIf(!RUN_E2E)('issue interactions E2E', () => {
       expect(relR.code, `relations stdout: ${relR.stdout}`).toBe(0);
       const relOutput = relR.stdout.trim();
       // --blocks is applied synchronously within create, so relations must exist
-      expect(relOutput, 'expected relations output, not empty/no-relations').not.toBe('No relations found.');
+      expect(relOutput, 'expected relations output, not empty/no-relations').not.toBe(
+        'No relations found.'
+      );
       expect(relOutput).not.toBe('');
       const records = parsePlainList(relOutput);
-      const hasIssue2Ref = records.some((rec) =>
-        (rec['issue'] ?? '').includes(issue2Identifier)
-      );
+      const hasIssue2Ref = records.some((rec) => (rec.issue ?? '').includes(issue2Identifier));
       expect(hasIssue2Ref, 'expected a relation referencing issue2').toBe(true);
     },
     CMD_TIMEOUT * 2
@@ -433,24 +426,11 @@ describe.skipIf(!RUN_E2E)('issue interactions E2E', () => {
       expect(issue1Id).not.toBe('');
 
       // Set parent
-      const setR = await runCLI([
-        'issues',
-        'update',
-        issue2Id,
-        '--parent',
-        issue1Id,
-        '--plain',
-      ]);
+      const setR = await runCLI(['issues', 'update', issue2Id, '--parent', issue1Id, '--plain']);
       expect(setR.code, `set --parent: ${setR.stderr}`).toBe(0);
 
       // Clear parent
-      const clearR = await runCLI([
-        'issues',
-        'update',
-        issue2Id,
-        '--no-parent',
-        '--plain',
-      ]);
+      const clearR = await runCLI(['issues', 'update', issue2Id, '--no-parent', '--plain']);
       expect(clearR.code, `--no-parent stdout: ${clearR.stdout}\nstderr: ${clearR.stderr}`).toBe(0);
     },
     CMD_TIMEOUT * 2
@@ -469,17 +449,10 @@ describe.skipIf(!RUN_E2E)('issue interactions E2E', () => {
       const teamRecords = parsePlainList(teamsR.stdout);
       if (teamRecords.length < 2) return; // only one team — skip
 
-      const secondTeamName = teamRecords[1]['_primaryId'] ?? '';
+      const secondTeamName = teamRecords[1]._primaryId ?? '';
       if (!secondTeamName) return; // could not parse name — skip
 
-      const r = await runCLI([
-        'issues',
-        'update',
-        issue1Id,
-        '--team',
-        secondTeamName,
-        '--plain',
-      ]);
+      const r = await runCLI(['issues', 'update', issue1Id, '--team', secondTeamName, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
     },
     CMD_TIMEOUT * 2

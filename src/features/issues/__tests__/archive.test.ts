@@ -26,9 +26,11 @@ describe('archiveIssue', () => {
   it('SDK error propagates as exit error', async () => {
     const exitErrorMock = vi.fn();
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({
-        archiveIssue: vi.fn().mockRejectedValue(new Error('API error')),
-      })),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(
+        ok({
+          archiveIssue: vi.fn().mockRejectedValue(new Error('API error')),
+        })
+      ),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: exitErrorMock }));

@@ -52,9 +52,7 @@ describe('unfavoriteIssue', () => {
     const exitErrorMock = vi.fn();
     const requestFn = vi.fn().mockResolvedValue({
       favorites: {
-        nodes: [
-          { id: 'fav-uuid-1', type: 'project', issue: null },
-        ],
+        nodes: [{ id: 'fav-uuid-1', type: 'project', issue: null }],
       },
     });
     vi.doMock('../../../lib/client/index.js', () => ({

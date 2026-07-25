@@ -31,7 +31,7 @@ function makeUsersResponse(
   return { users: { nodes, pageInfo } };
 }
 
-function makeUserDetailResponse(overrides: Record<string, unknown> = {}) {
+function _makeUserDetailResponse(overrides: Record<string, unknown> = {}) {
   return {
     user: {
       id: 'user-uuid',
@@ -78,7 +78,6 @@ describe('users list', () => {
     vi.resetModules();
     process.exitCode = undefined;
   });
-
 
   it('--limit passes first variable', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeUsersResponse([]));
@@ -152,7 +151,6 @@ describe('users list', () => {
 
     expect(requestFn).toHaveBeenCalledTimes(2);
   });
-
 });
 
 // ---------------------------------------------------------------------------
@@ -165,7 +163,6 @@ describe('users get', () => {
     vi.resetModules();
     process.exitCode = undefined;
   });
-
 
   it('unknown ID calls exitError', async () => {
     const requestFn = vi.fn().mockResolvedValue({ user: null });

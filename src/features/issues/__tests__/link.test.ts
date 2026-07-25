@@ -12,11 +12,15 @@ describe('linkAttachment', () => {
   it('calls attachmentLinkURL with resolved issue ID and URL', async () => {
     const attachmentMock = { id: 'att-uuid' };
     const payloadMock = {
-      get attachment() { return Promise.resolve(attachmentMock); },
+      get attachment() {
+        return Promise.resolve(attachmentMock);
+      },
     };
     const attachmentLinkURLFn = vi.fn().mockResolvedValue(payloadMock);
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ attachmentLinkURL: attachmentLinkURLFn })),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(ok({ attachmentLinkURL: attachmentLinkURLFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -29,11 +33,15 @@ describe('linkAttachment', () => {
 
   it('passes title option when --title provided', async () => {
     const payloadMock = {
-      get attachment() { return Promise.resolve({ id: 'att-uuid' }); },
+      get attachment() {
+        return Promise.resolve({ id: 'att-uuid' });
+      },
     };
     const attachmentLinkURLFn = vi.fn().mockResolvedValue(payloadMock);
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({ attachmentLinkURL: attachmentLinkURLFn })),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(ok({ attachmentLinkURL: attachmentLinkURLFn })),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -41,11 +49,9 @@ describe('linkAttachment', () => {
     const { linkAttachment } = await import('../link/link.js');
     await linkAttachment({ issue: 'ENG-1', url: 'https://example.com', title: 'My Spec' });
 
-    expect(attachmentLinkURLFn).toHaveBeenCalledWith(
-      'ENG-1',
-      'https://example.com',
-      { title: 'My Spec' }
-    );
+    expect(attachmentLinkURLFn).toHaveBeenCalledWith('ENG-1', 'https://example.com', {
+      title: 'My Spec',
+    });
   });
 });
 

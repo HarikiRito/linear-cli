@@ -49,8 +49,8 @@ describe.skipIf(!RUN_E2E)('issues branch E2E', () => {
       );
     }
     const data = parsePlainRecord(r.stdout);
-    reg.trackIssue(data['id']);
-    issueIdentifier = data['_primaryId'];
+    reg.trackIssue(data.id);
+    issueIdentifier = data._primaryId;
     // Extract the digits after the dash, e.g. "ENG-42" → "42"
     bareNumber = issueIdentifier.split('-')[1];
 

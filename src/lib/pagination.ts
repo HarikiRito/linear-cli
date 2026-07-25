@@ -74,11 +74,10 @@ export interface ColumnConfig<TRow> {
  * Fetch one page via client.client.request(), extract the connection from
  * `data[rootKey]`, convert nodes with `toRow`, and return a PagedResult.
  */
-export function fetchOnePage<TData, TNode, TRow>(
+export function fetchOnePage<TData, TVariables extends Record<string, unknown>, TNode, TRow>(
   requestFn: RequestFn,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  doc: TypedDocumentNode<TData, any>,
-  variables: Record<string, unknown>,
+  doc: TypedDocumentNode<TData, TVariables>,
+  variables: TVariables,
   rootKey: string,
   toRow: (nodes: TNode[]) => TRow[]
 ): ResultAsync<PagedResult<TRow>, ReturnType<typeof mapLinearError>> {
@@ -95,16 +94,19 @@ export function fetchOnePage<TData, TNode, TRow>(
  * Run one or all pages of a paginated GraphQL query.
  * Single GraphQL request per page — no N+1.
  */
-export function fetchPaged<TData, TNode, TRow>(
+export function fetchPaged<TData, TVariables extends Record<string, unknown>, TNode, TRow>(
   requestFn: RequestFn,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  doc: TypedDocumentNode<TData, any>,
+  doc: TypedDocumentNode<TData, TVariables>,
   baseVariables: Record<string, unknown>,
   rootKey: string,
   toRow: (nodes: TNode[]) => TRow[],
   opts: PaginationOptions
 ): ResultAsync<PagedResult<TRow>, ReturnType<typeof mapLinearError>> {
-  const variables = { ...baseVariables, first: opts.limit, after: opts.after ?? undefined };
+  const variables = {
+    ...baseVariables,
+    first: opts.limit,
+    after: opts.after ?? undefined,
+  } as unknown as TVariables;
 
   if (!opts.all) {
     return fetchOnePage(requestFn, doc, variables, rootKey, toRow);
@@ -148,11 +150,12 @@ export function renderPaged<TRow>(
   const { rows, pageInfo } = result;
 
   if (plain && columns.plainType && columns.plainPrimaryId && columns.toPlainFields) {
+    const { plainType, plainPrimaryId, toPlainFields } = columns;
     const records = rows.map((r) => ({
-      primaryId: columns.plainPrimaryId!(r),
-      fields: columns.toPlainFields!(r),
+      primaryId: plainPrimaryId(r),
+      fields: toPlainFields(r),
     }));
-    console.log(renderPlainList(columns.plainType, records));
+    console.log(renderPlainList(plainType, records));
     return;
   }
 

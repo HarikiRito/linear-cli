@@ -19,6 +19,9 @@ export type { PageInfo, PaginationOptions, RequestFn };
 export interface IssueNode {
   identifier: string;
   title: string;
+  // Only present when the source query selects it (e.g. search); optional so
+  // list-style queries that don't fetch it are unaffected.
+  description?: string | null;
   state: { name: string } | null;
   assignee: { displayName: string } | null;
   priority: number;
@@ -29,6 +32,7 @@ export interface IssueNode {
 export interface IssueRow {
   identifier: string;
   title: string;
+  description?: string | null;
   state: string;
   assignee: string;
   priority: number;
@@ -47,7 +51,10 @@ export interface IssueQueryData {
 }
 
 /** True if an issue/child-issue is neither trashed nor archived (soft-deleted). */
-export function isVisible(issue: { trashed?: boolean | null; archivedAt?: string | null }): boolean {
+export function isVisible(issue: {
+  trashed?: boolean | null;
+  archivedAt?: string | null;
+}): boolean {
   return !issue.trashed && !issue.archivedAt;
 }
 
@@ -56,6 +63,7 @@ export function toIssueRows(nodes: IssueNode[]): IssueRow[] {
   return nodes.map((n) => ({
     identifier: n.identifier,
     title: n.title,
+    description: n.description ?? null,
     state: n.state?.name ?? '',
     assignee: n.assignee?.displayName ?? '',
     priority: n.priority,
@@ -90,14 +98,13 @@ const ISSUE_COLUMNS: ColumnConfig<IssueRow> = {
  * Fetch one page via client.client.request(), extract the connection from
  * `data[rootKey]`, and return a flat IssuesResult.
  */
-export function fetchPage<TData>(
+export function fetchPage<TData, TVariables extends Record<string, unknown>>(
   requestFn: RequestFn,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  doc: TypedDocumentNode<TData, any>,
-  variables: Record<string, unknown>,
+  doc: TypedDocumentNode<TData, TVariables>,
+  variables: TVariables,
   rootKey: string
 ): ResultAsync<IssuesResult, ReturnType<typeof mapLinearError>> {
-  return fetchOnePage<TData, IssueNode, IssueRow>(
+  return fetchOnePage<TData, TVariables, IssueNode, IssueRow>(
     requestFn,
     doc,
     variables,
@@ -110,15 +117,14 @@ export function fetchPage<TData>(
  * Run one or all pages of a paginated issues query.
  * Uses client.client.request() — one GraphQL call per page, no per-issue calls.
  */
-export function fetchIssues<TData>(
+export function fetchIssues<TData, TVariables extends Record<string, unknown>>(
   requestFn: RequestFn,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  doc: TypedDocumentNode<TData, any>,
+  doc: TypedDocumentNode<TData, TVariables>,
   baseVariables: Record<string, unknown>,
   rootKey: string,
   opts: PaginationOptions
 ): ResultAsync<IssuesResult, ReturnType<typeof mapLinearError>> {
-  return fetchPaged<TData, IssueNode, IssueRow>(
+  return fetchPaged<TData, TVariables, IssueNode, IssueRow>(
     requestFn,
     doc,
     baseVariables,

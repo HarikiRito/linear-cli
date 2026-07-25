@@ -101,7 +101,7 @@ describe('fetchLatestVersion', () => {
 // ---------------------------------------------------------------------------
 
 describe('notifyUpdate', () => {
-  const ORIGINAL_VERSION = '0.3.0';
+  const ORIGINAL_VERSION = '0.3.1';
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -158,7 +158,7 @@ describe('notifyUpdate', () => {
     await notifyUpdate();
 
     expect(consoleSpy).toHaveBeenCalledOnce();
-    expect(consoleSpy.mock.calls[0][0]).toContain('0.3.0 → 0.4.0');
+    expect(consoleSpy.mock.calls[0][0]).toContain('0.3.1 → 0.4.0');
 
     consoleSpy.mockRestore();
   });

@@ -40,11 +40,7 @@ const PROJECT_COLUMNS: ColumnConfig<ProjectRow> = {
 };
 
 export function renderProjects(result: ProjectsResult, plain: boolean): void {
-  renderPaged(
-    { rows: result.projects, pageInfo: result.pageInfo },
-    plain,
-    PROJECT_COLUMNS
-  );
+  renderPaged({ rows: result.projects, pageInfo: result.pageInfo }, plain, PROJECT_COLUMNS);
 }
 
 /** Shape returned by project create / update mutations. */

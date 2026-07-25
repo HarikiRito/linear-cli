@@ -27,7 +27,7 @@ vi.mock('@linear/sdk', () => {
 // ---------------------------------------------------------------------------
 
 import { LinearClient } from '@linear/sdk';
-import { okAsync, errAsync } from 'neverthrow';
+import { errAsync, okAsync } from 'neverthrow';
 import { resolveCredential } from '../../../features/auth/resolve.js';
 import { getClientWithAuthRetry } from '../index.js';
 
@@ -197,7 +197,8 @@ describe('getClientWithAuthRetry', () => {
 
   it('after a successful refresh subsequent calls use the fresh client', async () => {
     const firstRequest = vi.fn().mockRejectedValueOnce(new Error('401 Unauthorized'));
-    const secondRequest = vi.fn()
+    const secondRequest = vi
+      .fn()
       .mockResolvedValueOnce({ data: 'first-retry' })
       .mockResolvedValueOnce({ data: 'second-call' });
 

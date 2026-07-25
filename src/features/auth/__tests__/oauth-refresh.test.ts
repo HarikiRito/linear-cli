@@ -28,12 +28,11 @@ vi.mock('../../lib/config.js', async (importOriginal) => {
 // ---------------------------------------------------------------------------
 
 import { refreshAccessToken } from '../oauth.js';
-import { writeProjectSession, writeSession } from '../session.js';
-
 // We test resolveSessionWithRefresh indirectly via resolveCredential since
 // resolveSessionWithRefresh is not exported. We mock process.env and session
 // helpers to control which session is read.
 import * as sessionMod from '../session.js';
+import { writeProjectSession, writeSession } from '../session.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,9 +41,9 @@ import * as sessionMod from '../session.js';
 function mockFetch(body: Record<string, unknown>, ok = true): void {
   global.fetch = vi.fn().mockResolvedValue({
     ok,
-    text: async () => JSON.stringify(body),
-    json: async () => body,
-  } as unknown as Response);
+    text: () => Promise.resolve(JSON.stringify(body)),
+    json: () => Promise.resolve(body),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -106,7 +105,7 @@ describe('resolveSessionWithRefresh via resolveCredential — scope-aware persis
   let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
-    originalCwd = process.cwd;
+    originalCwd = process.cwd.bind(process);
     originalEnv = { ...process.env };
     // Clear auth env vars so stored session path is used
     delete process.env.LINEAR_API_KEY;

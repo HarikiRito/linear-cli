@@ -1,12 +1,12 @@
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { parseCsv } from '../../../lib/commandOptions.js';
-import { validatePriority, ValidationError } from '../../../lib/errors.js';
+import { ValidationError, validatePriority } from '../../../lib/errors.js';
 import { renderPlainList } from '../../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../../lib/output/table.js';
 import { exitError } from '../../../lib/runner.js';
 import { readStdin } from '../../../lib/stdin.js';
-import { resolveIssueIdentifier } from '../shared/resolve.js';
 import type { IssueResult } from '../shared/renderIssue.js';
+import { resolveIssueIdentifier } from '../shared/resolve.js';
 import { resolveUpdateInput, type UpdateIssueOptions } from '../update/update.js';
 
 export interface BatchUpdateOptions extends Omit<UpdateIssueOptions, 'id'> {

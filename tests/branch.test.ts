@@ -58,7 +58,6 @@ describe('issues branch', () => {
     expect(stdoutSpy).toHaveBeenCalledWith('eng-123-fix-thing\n');
   });
 
-
   it('--checkout runs git checkout -b', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeBranchResponse());
     stdMocks(requestFn);

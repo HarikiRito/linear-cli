@@ -47,7 +47,7 @@ export function readConfigIfExists(filePath: string): LinearConfig | null {
     throw readResult.error;
   }
   // File exists — parse errors indicate misconfiguration and should surface
-  return parse(readResult.value) as LinearConfig;
+  return parse(readResult.value);
 }
 
 export function readConfig(filePath: string): LinearConfig {

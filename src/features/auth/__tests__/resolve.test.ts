@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // We test resolveCredential by controlling:
 // - process.env vars
@@ -77,7 +77,7 @@ describe('resolveAuth: auth precedence (integration-style)', () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-auth-prec-test-'));
     originalEnv = { ...process.env };
-    originalCwd = process.cwd;
+    originalCwd = process.cwd.bind(process);
     // Delete auth-related env vars before each test
     delete process.env.LINEAR_API_KEY;
     delete process.env.LINEAR_ACCESS_TOKEN;
@@ -106,12 +106,13 @@ describe('resolveAuth: auth precedence (integration-style)', () => {
     // Verify scope discovers the project root
     const root = findProjectRoot(subDir);
     expect(root).toBe(tmpDir);
+    if (root === null) throw new Error('expected findProjectRoot to locate tmpDir');
 
     // Write project auth
     writeProjectSession(tmpDir, { apiKey: 'proj-key' });
 
     // Read back through the discovered root
-    const session = readProjectSession(root!);
+    const session = readProjectSession(root);
     expect(session).toEqual({ apiKey: 'proj-key' });
   });
 
@@ -131,8 +132,9 @@ describe('resolveAuth: auth precedence (integration-style)', () => {
     // We verify which one findProjectRoot returns — not the global path
     const projectRoot = findProjectRoot(tmpDir);
     expect(projectRoot).toBe(tmpDir);
+    if (projectRoot === null) throw new Error('expected findProjectRoot to locate tmpDir');
 
-    const projectSession = readProjectSession(projectRoot!);
+    const projectSession = readProjectSession(projectRoot);
     expect(projectSession).toEqual({ apiKey: 'proj-key' });
   });
 });

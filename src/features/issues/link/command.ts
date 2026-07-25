@@ -14,7 +14,13 @@ export function registerLinkCommand(issues: Command): void {
       url: string,
       opts: { title?: string; apiKey?: string; token?: string }
     ) => {
-      await linkAttachment({ apiKey: opts.apiKey, token: opts.token, issue, url, title: opts.title });
+      await linkAttachment({
+        apiKey: opts.apiKey,
+        token: opts.token,
+        issue,
+        url,
+        title: opts.title,
+      });
     }
   );
 }

@@ -29,7 +29,9 @@ async function toggleSubscribe(
   const resolvedId = idResult.value;
 
   const result = await ResultAsync.fromPromise(
-    action === 'subscribe' ? client.issueSubscribe(resolvedId) : client.issueUnsubscribe(resolvedId),
+    action === 'subscribe'
+      ? client.issueSubscribe(resolvedId)
+      : client.issueUnsubscribe(resolvedId),
     coerceCliError
   );
 

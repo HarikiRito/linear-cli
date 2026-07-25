@@ -8,33 +8,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Project UUID: bypasses resolveProject network call (looksLikeId short-circuits)
 const PROJ_UUID = '11111111-1111-1111-1111-111111111111';
 
-function makeDocumentListNode(
-  overrides: Partial<{
-    id: string;
-    title: string;
-    slugId: string;
-    updatedAt: string;
-    project: { id: string; name: string } | null;
-  }> = {}
-) {
-  return {
-    id: 'doc-uuid',
-    title: 'Test Doc',
-    slugId: 'test-doc-abc',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    project: null,
-    ...overrides,
-  };
+interface DocumentListNode {
+  id: string;
+  title: string;
+  slugId: string;
+  updatedAt: string;
+  project: { id: string; name: string } | null;
 }
 
 function makeDocumentsResponse(
-  nodes: ReturnType<typeof makeDocumentListNode>[],
+  nodes: DocumentListNode[],
   pageInfo = { hasNextPage: false, endCursor: null as string | null }
 ) {
   return { documents: { nodes, pageInfo } };
 }
 
-function makeDocumentDetailResponse(overrides: Record<string, unknown> = {}) {
+function _makeDocumentDetailResponse(overrides: Record<string, unknown> = {}) {
   return {
     document: {
       id: 'doc-uuid',

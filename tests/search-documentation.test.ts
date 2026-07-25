@@ -41,5 +41,4 @@ describe('search-documentation', () => {
     expect(arg.message).toMatch(/not supported/i);
     expect(arg.message).toContain('search-documentation is not supported');
   });
-
 });

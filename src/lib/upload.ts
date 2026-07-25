@@ -143,13 +143,11 @@ export function createAttachmentRecord(
   url: string
 ): ResultAsync<string, CliError> {
   return ResultAsync.fromPromise(
-    client
-      .createAttachment({ issueId, title, url })
-      .then(async (payload) => {
-        const attachment = await payload.attachment;
-        if (!attachment) throw new Error('attachment payload returned no attachment');
-        return attachment.id;
-      }),
+    client.createAttachment({ issueId, title, url }).then(async (payload) => {
+      const attachment = await payload.attachment;
+      if (!attachment) throw new Error('attachment payload returned no attachment');
+      return attachment.id;
+    }),
     coerceCliError
   );
 }

@@ -45,9 +45,9 @@ describe('whoami: real project-session precedence (integration)', () => {
 
   it('reports identity resolved from the project session when both project and global sessions exist', async () => {
     expect(writeSession({ apiKey: 'global-key-should-not-be-used' }).isOk()).toBe(true);
-    expect(
-      writeProjectSession(tmpEnv.projectDir, { apiKey: 'project-key-in-use' }).isOk()
-    ).toBe(true);
+    expect(writeProjectSession(tmpEnv.projectDir, { apiKey: 'project-key-in-use' }).isOk()).toBe(
+      true
+    );
 
     process.cwd = () => tmpEnv.projectDir;
 

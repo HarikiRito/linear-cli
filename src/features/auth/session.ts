@@ -28,16 +28,13 @@ export function getProjectSessionPath(projectRoot: string): string {
 
 function writeSessionToPath(p: string, session: Session): Result<void, Error> {
   const dir = path.dirname(p);
-  return Result.fromThrowable(
-    () => {
-      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-      fs.writeFileSync(p, JSON.stringify(session, null, 2), {
-        encoding: 'utf-8',
-        mode: 0o600,
-      });
-    },
-    toError
-  )();
+  return Result.fromThrowable(() => {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(p, JSON.stringify(session, null, 2), {
+      encoding: 'utf-8',
+      mode: 0o600,
+    });
+  }, toError)();
 }
 
 function readSessionFromPath(p: string): Session | null {

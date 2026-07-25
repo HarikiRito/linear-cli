@@ -181,9 +181,11 @@ describe('addComment with --file', () => {
     const createAttachmentFn = vi.fn().mockResolvedValue(attachmentPayload());
 
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(
-        ok(mockClient({ createComment: createCommentFn, createAttachment: createAttachmentFn }))
-      ),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(
+          ok(mockClient({ createComment: createCommentFn, createAttachment: createAttachmentFn }))
+        ),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -238,9 +240,11 @@ describe('addComment with --file', () => {
     const createAttachmentFn = vi.fn().mockResolvedValue(attachmentPayload('att-uuid'));
 
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(
-        ok(mockClient({ createComment: createCommentFn, createAttachment: createAttachmentFn }))
-      ),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(
+          ok(mockClient({ createComment: createCommentFn, createAttachment: createAttachmentFn }))
+        ),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -303,9 +307,11 @@ describe('addComment with --file', () => {
     const createAttachmentFn = vi.fn().mockRejectedValue(new Error('createAttachment failed'));
 
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(
-        ok(mockClient({ createComment: createCommentFn, createAttachment: createAttachmentFn }))
-      ),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(
+          ok(mockClient({ createComment: createCommentFn, createAttachment: createAttachmentFn }))
+        ),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: exitErrorFn }));
@@ -368,9 +374,11 @@ describe('updateComment with --file', () => {
     const createAttachmentFn = vi.fn().mockResolvedValue(attachmentPayload());
 
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(
-        ok(mockClient({ updateComment: updateCommentFn, createAttachment: createAttachmentFn }))
-      ),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(
+          ok(mockClient({ updateComment: updateCommentFn, createAttachment: createAttachmentFn }))
+        ),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -640,9 +648,11 @@ describe('createIssue with --file', () => {
     const createAttachmentFn = vi.fn().mockResolvedValue(attachmentPayload());
 
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(
-        ok(mockClient({ createIssue: createIssueFn, createAttachment: createAttachmentFn }))
-      ),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(
+          ok(mockClient({ createIssue: createIssueFn, createAttachment: createAttachmentFn }))
+        ),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -723,9 +733,11 @@ describe('createIssue with --file', () => {
     const createAttachmentFn = vi.fn().mockResolvedValue(attachmentPayload('att-uuid'));
 
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(
-        ok(mockClient({ createIssue: createIssueFn, createAttachment: createAttachmentFn }))
-      ),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(
+          ok(mockClient({ createIssue: createIssueFn, createAttachment: createAttachmentFn }))
+        ),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
@@ -772,9 +784,11 @@ describe('createIssue with --file', () => {
     const createAttachmentFn = vi.fn().mockRejectedValue(new Error('createAttachment failed'));
 
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(
-        ok(mockClient({ createIssue: createIssueFn, createAttachment: createAttachmentFn }))
-      ),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(
+          ok(mockClient({ createIssue: createIssueFn, createAttachment: createAttachmentFn }))
+        ),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: exitErrorFn }));
@@ -1049,9 +1063,11 @@ describe('updateIssue with --file', () => {
     const createAttachmentFn = vi.fn().mockRejectedValue(new Error('createAttachment failed'));
 
     vi.doMock('../../../lib/client/index.js', () => ({
-      getClientWithAuthRetry: vi.fn().mockReturnValue(
-        ok(mockClient({ updateIssue: updateIssueFn, createAttachment: createAttachmentFn }))
-      ),
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(
+          ok(mockClient({ updateIssue: updateIssueFn, createAttachment: createAttachmentFn }))
+        ),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: exitErrorFn }));

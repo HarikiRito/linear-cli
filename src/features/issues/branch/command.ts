@@ -9,10 +9,7 @@ export function registerBranchCommand(issues: Command): void {
     .option('--checkout', 'Run git checkout -b <branchName> in the current directory');
 
   addAuthOptions(cmd).action(
-    async (
-      id: string,
-      opts: { apiKey?: string; token?: string; checkout?: boolean }
-    ) => {
+    async (id: string, opts: { apiKey?: string; token?: string; checkout?: boolean }) => {
       await branchIssue({
         apiKey: opts.apiKey,
         token: opts.token,

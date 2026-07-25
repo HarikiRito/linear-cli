@@ -49,7 +49,7 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
       throw new Error(`Failed to create project for documents E2E: ${r.stderr}`);
     }
     const data = parsePlainRecord(r.stdout);
-    projectId = data['id'] ?? '';
+    projectId = data.id ?? '';
     if (!projectId) throw new Error('No project id returned from create');
     reg.trackProject(projectId);
   }, CMD_TIMEOUT * 2);
@@ -85,12 +85,12 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
       ]);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(typeof data['id']).toBe('string');
-      expect(data['id']).not.toBe('');
-      expect(data['_primaryId']).toBe(documentTitle);  // title is primaryId
-      expect(typeof data['slugId']).toBe('string');
+      expect(typeof data.id).toBe('string');
+      expect(data.id).not.toBe('');
+      expect(data._primaryId).toBe(documentTitle); // title is primaryId
+      expect(typeof data.slugId).toBe('string');
 
-      documentId = data['id'] ?? '';
+      documentId = data.id ?? '';
       if (documentId) reg.trackDocument(documentId);
     },
     CMD_TIMEOUT
@@ -118,11 +118,11 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
         ]);
         expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
         const data = parsePlainRecord(r.stdout);
-        expect(data['id']).toBeTruthy();
-        if (data['id']) reg.trackDocument(data['id']);
+        expect(data.id).toBeTruthy();
+        if (data.id) reg.trackDocument(data.id);
         // Content may be normalized by Linear but should contain the text
-        if (data['content']) {
-          expect(data['content']).toContain('E2E Test Content');
+        if (data.content) {
+          expect(data.content).toContain('E2E Test Content');
         }
       } finally {
         await unlink(tmpPath).catch(() => {});
@@ -140,9 +140,9 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
       const r = await runCLI(['documents', 'get', documentId, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['id']).toBe(documentId);
-      expect(data['_primaryId']).toBe(documentTitle);  // title
-      expect(typeof data['slugId']).toBe('string');
+      expect(data.id).toBe(documentId);
+      expect(data._primaryId).toBe(documentTitle); // title
+      expect(typeof data.slugId).toBe('string');
     },
     CMD_TIMEOUT
   );
@@ -157,8 +157,8 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
       const r = await runCLI(['documents', 'update', documentId, '--title', newTitle, '--plain']);
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const data = parsePlainRecord(r.stdout);
-      expect(data['id']).toBe(documentId);
-      expect(data['_primaryId']).toBe(newTitle);  // updated title
+      expect(data.id).toBe(documentId);
+      expect(data._primaryId).toBe(newTitle); // updated title
       documentTitle = newTitle;
     },
     CMD_TIMEOUT
@@ -174,7 +174,7 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
       expect(r.code, `stdout: ${r.stdout}\nstderr: ${r.stderr}`).toBe(0);
       const records = parsePlainList(r.stdout);
       // The document we created should appear (matched by updated title)
-      const found = records.some((d) => d['_primaryId'] === documentTitle);
+      const found = records.some((d) => d._primaryId === documentTitle);
       expect(found).toBe(true);
     },
     CMD_TIMEOUT

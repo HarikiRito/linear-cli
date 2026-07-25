@@ -91,19 +91,17 @@ export function getClientWithAuthRetry(
     // Keep a mutable reference so a successful refresh updates future calls too
     let currentRequest: typeof gqlClient.request = gqlClient.request.bind(gqlClient);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (gqlClient as any).request = async function <T>(...args: unknown[]): Promise<T> {
-      return withAuthRetry(
+    (gqlClient as unknown as Record<'request', unknown>).request = async <T>(
+      ...args: unknown[]
+    ): Promise<T> =>
+      withAuthRetry(
         () => (currentRequest as (...a: unknown[]) => Promise<T>)(...args),
         opts,
         (freshClient) => {
           currentRequest = freshClient.client.request.bind(freshClient.client);
         }
       );
-    };
 
     return ok(linearClient);
   });
 }
-
-
