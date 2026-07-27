@@ -10,7 +10,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 function makeIssueNode(
   id: string,
   title: string,
-  overrides: { trashed?: boolean; archivedAt?: string | null } = {}
+  overrides: {
+    trashed?: boolean;
+    archivedAt?: string | null;
+    labelNames?: string[];
+    blockingIds?: string[];
+    blockedByIds?: string[];
+  } = {}
 ) {
   return {
     identifier: id,
@@ -20,6 +26,19 @@ function makeIssueNode(
     priority: 0,
     trashed: overrides.trashed ?? false,
     archivedAt: overrides.archivedAt ?? null,
+    labels: { nodes: (overrides.labelNames ?? []).map((name) => ({ name })) },
+    relations: {
+      nodes: (overrides.blockingIds ?? []).map((identifier) => ({
+        type: 'blocks',
+        relatedIssue: { identifier },
+      })),
+    },
+    inverseRelations: {
+      nodes: (overrides.blockedByIds ?? []).map((identifier) => ({
+        type: 'blocks',
+        issue: { identifier },
+      })),
+    },
   };
 }
 
@@ -57,7 +76,7 @@ async function buildProgram() {
   const { registerIssues } = await import('../src/features/issues/command.js');
   const { Command } = await import('commander');
   const program = new Command();
-  program.exitOverride();
+  program.option('--plain', 'Output as plain key:value text (agent-friendly)').exitOverride();
   registerIssues(program);
   return program;
 }
@@ -170,6 +189,41 @@ describe('issues list', () => {
 
     expect(request).toHaveBeenCalledOnce();
     expect(printTableCalls.length).toBeGreaterThan(0);
+  });
+
+  it('table output includes labels and a compact blocked-relations indicator', async () => {
+    const request = vi.fn().mockResolvedValue(
+      makeListResponse([
+        makeIssueNode('ENG-1', 'Issue 1', {
+          labelNames: ['bug', 'urgent'],
+          blockingIds: ['ENG-2'],
+          blockedByIds: ['ENG-3', 'ENG-4'],
+        }),
+      ])
+    );
+    let capturedRows: string[][] = [];
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
+    }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((_h: string[], rows: string[][]) => {
+        capturedRows = rows;
+        return '';
+      }),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'list']);
+
+    const flat = capturedRows.flat();
+    expect(flat.some((c) => c.includes('bug') && c.includes('urgent'))).toBe(true);
+    // Table cell is a compact count indicator, not the full identifier list.
+    expect(flat.some((c) => c.includes('blocking:1') && c.includes('blocked-by:2'))).toBe(true);
+    expect(flat.some((c) => c.includes('ENG-2'))).toBe(false);
   });
 
   it('filters by --team server-side', async () => {
@@ -396,6 +450,39 @@ describe('issues list', () => {
     expect(output).toContain('Issue: ENG-2');
     expect(output).toContain('title: Second Issue');
     expect(output).toContain('---');
+
+    consoleSpy.mockRestore();
+  });
+
+  it('--plain includes full labels/blockedBy/blocking identifier lists', async () => {
+    const nodes = [
+      makeIssueNode('ENG-1', 'First Issue', {
+        labelNames: ['bug'],
+        blockingIds: ['ENG-9'],
+        blockedByIds: ['ENG-8'],
+      }),
+    ];
+    const request = vi.fn().mockResolvedValue(makeListResponse(nodes));
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
+    }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue(''),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--plain', '--all-states']);
+
+    const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(output).toContain('labels: bug');
+    expect(output).toContain('blockedBy: ENG-8');
+    expect(output).toContain('blocking: ENG-9');
 
     consoleSpy.mockRestore();
   });
@@ -722,6 +809,72 @@ describe('issues query', () => {
     expect(flat).toContain('Bug');
     expect(flat).toContain('Todo');
     expect(flat).toContain('Alice');
+  });
+
+  it('table output includes labels and a compact blocked-relations indicator', async () => {
+    const request = vi.fn().mockResolvedValue(
+      makeSearchResponse([
+        makeIssueNode('ENG-1', 'Bug', {
+          labelNames: ['bug', 'urgent'],
+          blockingIds: ['ENG-2'],
+          blockedByIds: ['ENG-3'],
+        }),
+      ])
+    );
+    let capturedRows: string[][] = [];
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
+    }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((_h: string[], rows: string[][]) => {
+        capturedRows = rows;
+        return '';
+      }),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug']);
+
+    const flat = capturedRows.flat();
+    expect(flat.some((c) => c.includes('bug') && c.includes('urgent'))).toBe(true);
+    expect(flat.some((c) => c.includes('blocking:1') && c.includes('blocked-by:1'))).toBe(true);
+  });
+
+  it('--plain includes full labels/blockedBy/blocking identifier lists', async () => {
+    const request = vi.fn().mockResolvedValue(
+      makeSearchResponse([
+        makeIssueNode('ENG-1', 'Bug', {
+          labelNames: ['bug'],
+          blockingIds: ['ENG-9'],
+          blockedByIds: ['ENG-8'],
+        }),
+      ])
+    );
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(request),
+    }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue(''),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--plain']);
+
+    const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(output).toContain('labels: bug');
+    expect(output).toContain('blockedBy: ENG-8');
+    expect(output).toContain('blocking: ENG-9');
+
+    consoleSpy.mockRestore();
   });
 
   it('default state filter applied to query search (OR-of-eqIgnoreCase)', async () => {

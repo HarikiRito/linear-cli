@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addPlainOption } from '../../../lib/commandOptions.js';
+import { addAuthOptions, isPlain } from '../../../lib/commandOptions.js';
 import { downloadAttachment } from './download.js';
 import { listAttachments } from './list.js';
 
@@ -16,16 +16,14 @@ export function registerAttachmentsCommand(issues: Command): void {
   const listCmd = addAuthOptions(
     attachments.command('list <issue>').description('List attachments on an issue')
   );
-  addPlainOption(listCmd).action(
-    async (issue: string, opts: { apiKey?: string; token?: string; plain?: boolean }) => {
-      await listAttachments({
-        apiKey: opts.apiKey,
-        token: opts.token,
-        issue,
-        plain: !!opts.plain,
-      });
-    }
-  );
+  listCmd.action(async (issue: string, opts: { apiKey?: string; token?: string }) => {
+    await listAttachments({
+      apiKey: opts.apiKey,
+      token: opts.token,
+      issue,
+      plain: isPlain(listCmd),
+    });
+  });
 
   addAuthOptions(
     attachments

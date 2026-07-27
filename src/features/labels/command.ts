@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addPlainOption } from '../../lib/commandOptions.js';
+import { addAuthOptions, isPlain } from '../../lib/commandOptions.js';
 import { createLabel } from './create.js';
 import { listLabels } from './list.js';
 
@@ -21,7 +21,7 @@ export function registerLabels(program: Command): void {
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)');
 
-  addAuthOptions(addPlainOption(listCmd)).action(
+  addAuthOptions(listCmd).action(
     async (opts: {
       team?: string;
       limit: string;
@@ -29,7 +29,6 @@ export function registerLabels(program: Command): void {
       all?: boolean;
       apiKey?: string;
       token?: string;
-      plain?: boolean;
     }) => {
       await listLabels({
         apiKey: opts.apiKey,
@@ -38,7 +37,7 @@ export function registerLabels(program: Command): void {
         limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
         after: opts.after,
         all: !!opts.all,
-        plain: !!opts.plain,
+        plain: isPlain(listCmd),
       });
     }
   );
@@ -51,7 +50,7 @@ export function registerLabels(program: Command): void {
     .option('--team <key-or-id>', 'Team key or ID (omit for workspace-level label)')
     .option('--description <text>', 'Label description');
 
-  addAuthOptions(addPlainOption(createCmd)).action(
+  addAuthOptions(createCmd).action(
     async (opts: {
       name: string;
       color?: string;
@@ -59,7 +58,6 @@ export function registerLabels(program: Command): void {
       description?: string;
       apiKey?: string;
       token?: string;
-      plain?: boolean;
     }) => {
       await createLabel({
         apiKey: opts.apiKey,
@@ -68,7 +66,7 @@ export function registerLabels(program: Command): void {
         color: opts.color,
         team: opts.team,
         description: opts.description,
-        plain: !!opts.plain,
+        plain: isPlain(createCmd),
       });
     }
   );

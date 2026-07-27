@@ -31,6 +31,24 @@ export const GET_ISSUE_QUERY = graphql(`
           color
         }
       }
+      relations {
+        nodes {
+          id
+          type
+          relatedIssue {
+            identifier
+          }
+        }
+      }
+      inverseRelations {
+        nodes {
+          id
+          type
+          issue {
+            identifier
+          }
+        }
+      }
       project {
         id
         name

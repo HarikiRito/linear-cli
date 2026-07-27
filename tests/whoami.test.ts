@@ -38,7 +38,7 @@ async function buildProgram() {
   const { registerWhoami } = await import('../src/features/auth/whoami.js');
   const { Command } = await import('commander');
   const program = new Command();
-  program.exitOverride();
+  program.option('--plain', 'Output as plain key:value text (agent-friendly)').exitOverride();
   registerWhoami(program);
   return program;
 }

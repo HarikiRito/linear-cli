@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addPlainOption } from '../../../lib/commandOptions.js';
+import { addAuthOptions, isPlain } from '../../../lib/commandOptions.js';
 import { DEFAULT_ISSUE_STATES } from '../../../lib/config.js';
 import { myIssues } from './me.js';
 
@@ -16,14 +16,14 @@ export function registerMeCommand(issues: Command): void {
     )
     .option('--all-states', 'Return issues in ALL states (overrides --state)');
 
-  addAuthOptions(addPlainOption(cmd)).action(async (opts) => {
+  addAuthOptions(cmd).action(async (opts) => {
     await myIssues({
       apiKey: opts.apiKey,
       token: opts.token,
       limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
       after: opts.after,
       all: !!opts.all,
-      plain: !!opts.plain,
+      plain: isPlain(cmd),
       states: opts.state
         ? (opts.state as string)
             .split(',')

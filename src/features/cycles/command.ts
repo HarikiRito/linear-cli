@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addPlainOption } from '../../lib/commandOptions.js';
+import { addAuthOptions, isPlain } from '../../lib/commandOptions.js';
 import { listCycles } from './list.js';
 
 export function registerCycles(program: Command): void {
@@ -20,7 +20,7 @@ export function registerCycles(program: Command): void {
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)');
 
-  addAuthOptions(addPlainOption(listCmd)).action(
+  addAuthOptions(listCmd).action(
     async (opts: {
       team: string;
       limit: string;
@@ -28,7 +28,6 @@ export function registerCycles(program: Command): void {
       all?: boolean;
       apiKey?: string;
       token?: string;
-      plain?: boolean;
     }) => {
       await listCycles({
         apiKey: opts.apiKey,
@@ -37,7 +36,7 @@ export function registerCycles(program: Command): void {
         limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
         after: opts.after,
         all: !!opts.all,
-        plain: !!opts.plain,
+        plain: isPlain(listCmd),
       });
     }
   );

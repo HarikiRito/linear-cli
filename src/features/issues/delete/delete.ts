@@ -2,6 +2,7 @@ import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { confirmDestructive } from '../../../lib/confirm.js';
 import { mapLinearError } from '../../../lib/errors.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { exitError } from '../../../lib/runner.js';
 
 export interface DeleteIssueOptions {
@@ -9,6 +10,7 @@ export interface DeleteIssueOptions {
   token?: string;
   id: string;
   yes: boolean;
+  plain?: boolean;
 }
 
 export async function deleteIssue(opts: DeleteIssueOptions): Promise<void> {
@@ -35,6 +37,10 @@ export async function deleteIssue(opts: DeleteIssueOptions): Promise<void> {
 
   result.match(
     () => {
+      if (opts.plain) {
+        console.log(renderPlainRecord('Issue', opts.id, [{ key: 'status', value: 'deleted' }]));
+        return;
+      }
       console.log(`Issue ${opts.id} deleted.`);
     },
     (e) => exitError(e)

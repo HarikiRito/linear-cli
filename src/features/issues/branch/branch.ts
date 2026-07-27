@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { Result, ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
 import { coerceCliError, NotFoundError, ValidationError } from '../../../lib/errors.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 import { GET_ISSUE_BRANCH_QUERY } from './queries.js';
@@ -11,6 +12,7 @@ export interface BranchIssueOptions {
   token?: string;
   id: string;
   checkout: boolean;
+  plain?: boolean;
 }
 
 export async function branchIssue(opts: BranchIssueOptions): Promise<void> {
@@ -57,6 +59,12 @@ export async function branchIssue(opts: BranchIssueOptions): Promise<void> {
         if (checkoutResult.isErr()) {
           exitError(checkoutResult.error);
         }
+        return;
+      }
+      if (opts.plain) {
+        console.log(
+          renderPlainRecord('Branch', branchName, [{ key: 'issue', value: resolvedId }])
+        );
         return;
       }
       process.stdout.write(`${branchName}\n`);

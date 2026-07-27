@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addPlainOption } from '../../../lib/commandOptions.js';
+import { addAuthOptions, isPlain } from '../../../lib/commandOptions.js';
 import { createIssue } from './create.js';
 
 export function registerCreateCommand(issues: Command): void {
@@ -31,7 +31,7 @@ export function registerCreateCommand(issues: Command): void {
       'Local file to upload; images are embedded inline in the description, other file types are attached to the resource tab'
     );
 
-  addAuthOptions(addPlainOption(cmd)).action(
+  addAuthOptions(cmd).action(
     async (opts: {
       title: string;
       team: string;
@@ -53,7 +53,6 @@ export function registerCreateCommand(issues: Command): void {
       file?: string;
       apiKey?: string;
       token?: string;
-      plain?: boolean;
     }) => {
       const labels = opts.labels
         ? opts.labels
@@ -82,7 +81,7 @@ export function registerCreateCommand(issues: Command): void {
         blockedBy: opts.blockedBy,
         duplicateOf: opts.duplicateOf,
         file: opts.file,
-        plain: !!opts.plain,
+        plain: isPlain(cmd),
       });
     }
   );

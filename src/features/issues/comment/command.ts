@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addPlainOption } from '../../../lib/commandOptions.js';
+import { addAuthOptions, isPlain } from '../../../lib/commandOptions.js';
 import { addComment } from './add.js';
 import { deleteComment } from './delete.js';
 import { listComments } from './list.js';
@@ -21,10 +21,10 @@ export function registerCommentCommand(issues: Command): void {
   )
     .option('--limit <n>', 'Number of comments per page (default: 50)', '50')
     .option('--after <cursor>', 'Fetch the next page starting after this cursor');
-  addPlainOption(listCmd).action(
+  listCmd.action(
     async (
       issue: string,
-      opts: { apiKey?: string; token?: string; limit: string; after?: string; plain?: boolean }
+      opts: { apiKey?: string; token?: string; limit: string; after?: string }
     ) => {
       await listComments({
         apiKey: opts.apiKey,
@@ -32,7 +32,7 @@ export function registerCommentCommand(issues: Command): void {
         issueId: issue,
         limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
         after: opts.after,
-        plain: !!opts.plain,
+        plain: isPlain(listCmd),
       });
     }
   );
@@ -47,17 +47,14 @@ export function registerCommentCommand(issues: Command): void {
         'Local file to upload; images are embedded inline in the comment body, other file types are attached to the resource tab'
       )
   );
-  addPlainOption(addCmd).action(
-    async (
-      issue: string,
-      opts: { body: string; apiKey?: string; token?: string; plain?: boolean; file?: string }
-    ) => {
+  addCmd.action(
+    async (issue: string, opts: { body: string; apiKey?: string; token?: string; file?: string }) => {
       await addComment({
         apiKey: opts.apiKey,
         token: opts.token,
         issueId: issue,
         body: opts.body,
-        plain: !!opts.plain,
+        plain: isPlain(addCmd),
         file: opts.file,
       });
     }
@@ -69,17 +66,14 @@ export function registerCommentCommand(issues: Command): void {
       .description('Reply to a comment')
       .requiredOption('--body <text>', 'Reply body (use - to read from stdin)')
   );
-  addPlainOption(replyCmd).action(
-    async (
-      commentId: string,
-      opts: { body: string; apiKey?: string; token?: string; plain?: boolean }
-    ) => {
+  replyCmd.action(
+    async (commentId: string, opts: { body: string; apiKey?: string; token?: string }) => {
       await replyComment({
         apiKey: opts.apiKey,
         token: opts.token,
         parentId: commentId,
         body: opts.body,
-        plain: !!opts.plain,
+        plain: isPlain(replyCmd),
       });
     }
   );
@@ -94,17 +88,17 @@ export function registerCommentCommand(issues: Command): void {
         'Local file to upload; images are embedded inline in the comment body, other file types are attached to the resource tab'
       )
   );
-  addPlainOption(updateCmd).action(
+  updateCmd.action(
     async (
       commentId: string,
-      opts: { body: string; apiKey?: string; token?: string; plain?: boolean; file?: string }
+      opts: { body: string; apiKey?: string; token?: string; file?: string }
     ) => {
       await updateComment({
         apiKey: opts.apiKey,
         token: opts.token,
         id: commentId,
         body: opts.body,
-        plain: !!opts.plain,
+        plain: isPlain(updateCmd),
         file: opts.file,
       });
     }

@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions } from '../../../lib/commandOptions.js';
+import { addAuthOptions, isPlain } from '../../../lib/commandOptions.js';
 import { branchIssue } from './branch.js';
 
 export function registerBranchCommand(issues: Command): void {
@@ -15,6 +15,7 @@ export function registerBranchCommand(issues: Command): void {
         token: opts.token,
         id,
         checkout: !!opts.checkout,
+        plain: isPlain(cmd),
       });
     }
   );

@@ -15,7 +15,7 @@ export function addAuthOptions(cmd: Command): Command {
     .option('--token <token>', 'Linear access token');
 }
 
-/** Register the --plain output option on a command. */
-export function addPlainOption(cmd: Command): Command {
-  return cmd.option('--plain', 'Output as plain key:value text (agent-friendly)');
+/** Read the global --plain flag (registered once on the root program) from any subcommand. */
+export function isPlain(cmd: Command): boolean {
+  return !!cmd.optsWithGlobals().plain;
 }

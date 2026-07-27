@@ -1,6 +1,7 @@
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
 import { coerceCliError, mapLinearError, NotFoundError } from '../../../lib/errors.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 import { VIEWER_FAVORITES_QUERY } from './queries.js';
@@ -9,6 +10,7 @@ export interface FavoriteOptions {
   apiKey?: string;
   token?: string;
   issue: string;
+  plain?: boolean;
 }
 
 export async function favoriteIssue(opts: FavoriteOptions): Promise<void> {
@@ -33,6 +35,10 @@ export async function favoriteIssue(opts: FavoriteOptions): Promise<void> {
 
   result.match(
     () => {
+      if (opts.plain) {
+        console.log(renderPlainRecord('Favorite', opts.issue, [{ key: 'status', value: 'added' }]));
+        return;
+      }
       console.log(`Issue ${opts.issue} added to favorites.`);
     },
     (e) => exitError(e)
@@ -75,6 +81,12 @@ export async function unfavoriteIssue(opts: FavoriteOptions): Promise<void> {
 
   result.match(
     () => {
+      if (opts.plain) {
+        console.log(
+          renderPlainRecord('Favorite', opts.issue, [{ key: 'status', value: 'removed' }])
+        );
+        return;
+      }
       console.log(`Issue ${opts.issue} removed from favorites.`);
     },
     (e) => exitError(e)

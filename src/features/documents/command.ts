@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addPlainOption } from '../../lib/commandOptions.js';
+import { addAuthOptions, isPlain } from '../../lib/commandOptions.js';
 import { createDocument } from './create.js';
 import { deleteDocument } from './delete.js';
 import { getDocument } from './get.js';
@@ -25,7 +25,7 @@ export function registerDocuments(program: Command): void {
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)');
 
-  addAuthOptions(addPlainOption(listCmd)).action(
+  addAuthOptions(listCmd).action(
     async (opts: {
       project?: string;
       limit: string;
@@ -33,7 +33,6 @@ export function registerDocuments(program: Command): void {
       all?: boolean;
       apiKey?: string;
       token?: string;
-      plain?: boolean;
     }) => {
       await listDocuments({
         apiKey: opts.apiKey,
@@ -42,7 +41,7 @@ export function registerDocuments(program: Command): void {
         limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
         after: opts.after,
         all: !!opts.all,
-        plain: !!opts.plain,
+        plain: isPlain(listCmd),
       });
     }
   );
@@ -50,13 +49,13 @@ export function registerDocuments(program: Command): void {
   // documents get
   const getCmd = documents.command('get <id>').description('Get a single document by ID or slug');
 
-  addAuthOptions(addPlainOption(getCmd)).action(
-    async (id: string, opts: { apiKey?: string; token?: string; plain?: boolean }) => {
+  addAuthOptions(getCmd).action(
+    async (id: string, opts: { apiKey?: string; token?: string }) => {
       await getDocument({
         apiKey: opts.apiKey,
         token: opts.token,
         id,
-        plain: !!opts.plain,
+        plain: isPlain(getCmd),
       });
     }
   );
@@ -70,7 +69,7 @@ export function registerDocuments(program: Command): void {
     .option('--content <text>', 'Document content as markdown (use "-" to read from stdin)')
     .option('--content-file <path>', 'Path to a file containing document content');
 
-  addAuthOptions(addPlainOption(createCmd)).action(
+  addAuthOptions(createCmd).action(
     async (opts: {
       title: string;
       project?: string;
@@ -78,7 +77,6 @@ export function registerDocuments(program: Command): void {
       contentFile?: string;
       apiKey?: string;
       token?: string;
-      plain?: boolean;
     }) => {
       await createDocument({
         apiKey: opts.apiKey,
@@ -87,7 +85,7 @@ export function registerDocuments(program: Command): void {
         project: opts.project,
         content: opts.content,
         contentFile: opts.contentFile,
-        plain: !!opts.plain,
+        plain: isPlain(createCmd),
       });
     }
   );
@@ -100,7 +98,7 @@ export function registerDocuments(program: Command): void {
     .option('--content <text>', 'New document content as markdown (use "-" to read from stdin)')
     .option('--content-file <path>', 'Path to a file containing new document content');
 
-  addAuthOptions(addPlainOption(updateCmd)).action(
+  addAuthOptions(updateCmd).action(
     async (
       id: string,
       opts: {
@@ -109,7 +107,6 @@ export function registerDocuments(program: Command): void {
         contentFile?: string;
         apiKey?: string;
         token?: string;
-        plain?: boolean;
       }
     ) => {
       await updateDocument({
@@ -119,7 +116,7 @@ export function registerDocuments(program: Command): void {
         title: opts.title,
         content: opts.content,
         contentFile: opts.contentFile,
-        plain: !!opts.plain,
+        plain: isPlain(updateCmd),
       });
     }
   );

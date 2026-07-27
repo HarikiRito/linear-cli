@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addPlainOption, parseCsv } from '../../../lib/commandOptions.js';
+import { addAuthOptions, isPlain, parseCsv } from '../../../lib/commandOptions.js';
 import { updateIssue } from './update.js';
 
 export function registerUpdateCommand(issues: Command): void {
@@ -28,7 +28,7 @@ export function registerUpdateCommand(issues: Command): void {
       'Local file to upload; images are embedded inline in the description, other file types are attached to the resource tab'
     );
 
-  addAuthOptions(addPlainOption(cmd)).action(
+  addAuthOptions(cmd).action(
     async (
       id: string,
       opts: {
@@ -48,7 +48,6 @@ export function registerUpdateCommand(issues: Command): void {
         file?: string;
         apiKey?: string;
         token?: string;
-        plain?: boolean;
       }
     ) => {
       const labels = opts.labels ? parseCsv(opts.labels) : undefined;
@@ -71,7 +70,7 @@ export function registerUpdateCommand(issues: Command): void {
         noParent: opts.parent === false,
         dueDate: opts.dueDate,
         file: opts.file,
-        plain: !!opts.plain,
+        plain: isPlain(cmd),
       });
     }
   );

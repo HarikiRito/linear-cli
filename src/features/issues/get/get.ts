@@ -40,6 +40,8 @@ interface IssueDetail {
   parent: { id: string; identifier: string; title: string } | null;
   children: { id: string; identifier: string; title: string }[];
   attachments: AttachmentRow[];
+  blockedBy: string[];
+  blocking: string[];
 }
 
 export async function getIssue(opts: GetIssueOptions): Promise<void> {
@@ -105,6 +107,12 @@ export async function getIssue(opts: GetIssueOptions): Promise<void> {
           title: a.title,
           url: a.url,
         })),
+        blocking: (issue.relations?.nodes ?? [])
+          .filter((r) => r.type === 'blocks')
+          .map((r) => r.relatedIssue?.identifier ?? '?'),
+        blockedBy: (issue.inverseRelations?.nodes ?? [])
+          .filter((r) => r.type === 'blocks')
+          .map((r) => r.issue?.identifier ?? '?'),
       } satisfies IssueDetail;
     }),
     coerceCliError
@@ -130,6 +138,8 @@ function renderIssueDetail(issue: IssueDetail, plain: boolean): void {
       { key: 'dueDate', value: issue.dueDate },
       { key: 'parent', value: issue.parent?.identifier ?? null },
       { key: 'children', value: issue.children.map((c) => c.identifier) },
+      { key: 'blockedBy', value: issue.blockedBy },
+      { key: 'blocking', value: issue.blocking },
       { key: 'description', value: issue.description },
     ];
     console.log(renderPlainRecord('Issue', issue.identifier, fields));
@@ -148,6 +158,8 @@ function renderIssueDetail(issue: IssueDetail, plain: boolean): void {
     ['Branch', issue.branchName],
     ['Parent', issue.parent ? `${issue.parent.identifier}: ${issue.parent.title}` : ''],
     ['Children', issue.children.map((c) => c.identifier).join(', ')],
+    ['Blocked By', issue.blockedBy.join(', ')],
+    ['Blocking', issue.blocking.join(', ')],
     ['URL', issue.url],
     ['Created', issue.createdAt],
   ];

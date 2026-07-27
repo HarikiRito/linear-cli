@@ -20,6 +20,7 @@ export function createProgram(): Command {
     .name('linear')
     .description('Linear CLI — designed for agent/programmatic use')
     .version(version)
+    .option('--plain', 'Output as plain key:value text (agent-friendly)')
     .exitOverride(); // Commander parse errors become thrown exceptions, not process.exit
 
   registerAuthCommands(program);

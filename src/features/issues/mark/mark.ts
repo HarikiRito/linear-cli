@@ -3,6 +3,7 @@ import { LinearDocument } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { coerceCliError, ValidationError } from '../../../lib/errors.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 
@@ -23,6 +24,7 @@ export interface MarkOptions {
   relation: string;
   issue: string;
   target: string;
+  plain?: boolean;
 }
 
 async function doMark(client: LinearClient, opts: MarkOptions): Promise<void> {
@@ -77,6 +79,15 @@ async function doMark(client: LinearClient, opts: MarkOptions): Promise<void> {
       break;
   }
 
+  if (opts.plain) {
+    console.log(
+      renderPlainRecord('Relation', opts.relation, [
+        { key: 'issue', value: opts.issue },
+        { key: 'target', value: opts.target },
+      ])
+    );
+    return;
+  }
   console.log(`Relation '${opts.relation}' set between ${opts.issue} and ${opts.target}.`);
 }
 
