@@ -13,5 +13,26 @@ export const IssueFieldsFragment = graphql(`
     priority
     trashed
     archivedAt
+    labels {
+      nodes {
+        name
+      }
+    }
+    relations {
+      nodes {
+        type
+        relatedIssue {
+          identifier
+        }
+      }
+    }
+    inverseRelations {
+      nodes {
+        type
+        issue {
+          identifier
+        }
+      }
+    }
   }
 `);

@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addPlainOption, parseCsv } from '../../../lib/commandOptions.js';
+import { addAuthOptions, isPlain, parseCsv } from '../../../lib/commandOptions.js';
 import { batchUpdateIssues } from './batch-update.js';
 
 export function registerBatchUpdateCommand(issues: Command): void {
@@ -23,7 +23,7 @@ export function registerBatchUpdateCommand(issues: Command): void {
     .option('--parent <id>', 'Parent issue ID')
     .option('--due-date <YYYY-MM-DD>', 'Due date');
 
-  addAuthOptions(addPlainOption(cmd)).action(
+  addAuthOptions(cmd).action(
     async (
       ids: string[],
       opts: {
@@ -42,7 +42,6 @@ export function registerBatchUpdateCommand(issues: Command): void {
         dueDate?: string;
         apiKey?: string;
         token?: string;
-        plain?: boolean;
       }
     ) => {
       const labels = opts.labels ? parseCsv(opts.labels) : undefined;
@@ -63,7 +62,7 @@ export function registerBatchUpdateCommand(issues: Command): void {
         cycle: opts.cycle,
         parent: opts.parent,
         dueDate: opts.dueDate,
-        plain: !!opts.plain,
+        plain: isPlain(cmd),
       });
     }
   );

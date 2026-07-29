@@ -1,4 +1,5 @@
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { exitError } from '../../../lib/runner.js';
 import { createAttachmentRecord, uploadFile } from '../../../lib/upload.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
@@ -8,6 +9,7 @@ export interface AttachFileOptions {
   token?: string;
   issue: string;
   file: string;
+  plain?: boolean;
 }
 
 export async function attachFile(opts: AttachFileOptions): Promise<void> {
@@ -37,6 +39,15 @@ export async function attachFile(opts: AttachFileOptions): Promise<void> {
 
   result.match(
     (attachmentId) => {
+      if (opts.plain) {
+        console.log(
+          renderPlainRecord('Attachment', attachmentId, [
+            { key: 'issue', value: opts.issue },
+            { key: 'file', value: opts.file },
+          ])
+        );
+        return;
+      }
       console.log(`File attached. Attachment ID: ${attachmentId}`);
     },
     (e) => exitError(e)

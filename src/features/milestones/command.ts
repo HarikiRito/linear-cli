@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addPlainOption } from '../../lib/commandOptions.js';
+import { addAuthOptions, isPlain } from '../../lib/commandOptions.js';
 import { createMilestone } from './create.js';
 import { deleteMilestone } from './delete.js';
 import { getMilestone } from './get.js';
@@ -28,7 +28,7 @@ export function registerMilestones(program: Command): void {
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)');
 
-  addAuthOptions(addPlainOption(listCmd)).action(
+  addAuthOptions(listCmd).action(
     async (opts: {
       project?: string;
       limit: string;
@@ -36,7 +36,6 @@ export function registerMilestones(program: Command): void {
       all?: boolean;
       apiKey?: string;
       token?: string;
-      plain?: boolean;
     }) => {
       await listMilestones({
         apiKey: opts.apiKey,
@@ -45,7 +44,7 @@ export function registerMilestones(program: Command): void {
         limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
         after: opts.after,
         all: !!opts.all,
-        plain: !!opts.plain,
+        plain: isPlain(listCmd),
       });
     }
   );
@@ -53,13 +52,13 @@ export function registerMilestones(program: Command): void {
   // milestones get
   const getCmd = milestones.command('get <id>').description('Get a single milestone by ID');
 
-  addAuthOptions(addPlainOption(getCmd)).action(
-    async (id: string, opts: { apiKey?: string; token?: string; plain?: boolean }) => {
+  addAuthOptions(getCmd).action(
+    async (id: string, opts: { apiKey?: string; token?: string }) => {
       await getMilestone({
         apiKey: opts.apiKey,
         token: opts.token,
         id,
-        plain: !!opts.plain,
+        plain: isPlain(getCmd),
       });
     }
   );
@@ -76,7 +75,7 @@ export function registerMilestones(program: Command): void {
     .option('--target-date <YYYY-MM-DD>', 'Target date for the milestone')
     .option('--description <text>', 'Milestone description');
 
-  addAuthOptions(addPlainOption(createCmd)).action(
+  addAuthOptions(createCmd).action(
     async (opts: {
       project?: string;
       name: string;
@@ -84,7 +83,6 @@ export function registerMilestones(program: Command): void {
       description?: string;
       apiKey?: string;
       token?: string;
-      plain?: boolean;
     }) => {
       await createMilestone({
         apiKey: opts.apiKey,
@@ -93,7 +91,7 @@ export function registerMilestones(program: Command): void {
         name: opts.name,
         targetDate: opts.targetDate,
         description: opts.description,
-        plain: !!opts.plain,
+        plain: isPlain(createCmd),
       });
     }
   );
@@ -106,17 +104,10 @@ export function registerMilestones(program: Command): void {
     .option('--target-date <YYYY-MM-DD>', 'New target date')
     .option('--description <text>', 'New description');
 
-  addAuthOptions(addPlainOption(updateCmd)).action(
+  addAuthOptions(updateCmd).action(
     async (
       id: string,
-      opts: {
-        name?: string;
-        targetDate?: string;
-        description?: string;
-        apiKey?: string;
-        token?: string;
-        plain?: boolean;
-      }
+      opts: { name?: string; targetDate?: string; description?: string; apiKey?: string; token?: string }
     ) => {
       await updateMilestone({
         apiKey: opts.apiKey,
@@ -125,7 +116,7 @@ export function registerMilestones(program: Command): void {
         name: opts.name,
         targetDate: opts.targetDate,
         description: opts.description,
-        plain: !!opts.plain,
+        plain: isPlain(updateCmd),
       });
     }
   );

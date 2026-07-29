@@ -20,6 +20,27 @@ export const SEARCH_ISSUES_QUERY = graphql(`
         description
         state { name }
         assignee { displayName }
+        labels {
+          nodes {
+            name
+          }
+        }
+        relations {
+          nodes {
+            type
+            relatedIssue {
+              identifier
+            }
+          }
+        }
+        inverseRelations {
+          nodes {
+            type
+            issue {
+              identifier
+            }
+          }
+        }
       }
       pageInfo {
         hasNextPage

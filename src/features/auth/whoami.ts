@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import { ResultAsync } from 'neverthrow';
 import { notifyUpdate } from '../../lib/check-version.js';
 import { getClientWithAuthRetry } from '../../lib/client/index.js';
-import { addPlainOption } from '../../lib/commandOptions.js';
+import { isPlain } from '../../lib/commandOptions.js';
 import { mapLinearError } from '../../lib/errors.js';
 import { renderPlainRecord } from '../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../lib/output/table.js';
@@ -81,11 +81,11 @@ export function registerWhoami(program: Command): void {
     .option('--api-key <key>', 'Linear API key')
     .option('--token <token>', 'Linear access token');
 
-  addPlainOption(cmd).action(async (opts) => {
+  cmd.action(async (opts) => {
     await runWhoami({
       apiKey: opts.apiKey,
       token: opts.token,
-      plain: !!opts.plain,
+      plain: isPlain(cmd),
     });
   });
 }

@@ -1,6 +1,7 @@
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { coerceCliError } from '../../../lib/errors.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 
@@ -8,6 +9,7 @@ export interface SubscribeOptions {
   apiKey?: string;
   token?: string;
   issue: string;
+  plain?: boolean;
 }
 
 async function toggleSubscribe(
@@ -36,10 +38,19 @@ async function toggleSubscribe(
   );
 
   result.match(
-    () =>
+    () => {
+      if (opts.plain) {
+        console.log(
+          renderPlainRecord('Subscription', opts.issue, [
+            { key: 'status', value: action === 'subscribe' ? 'subscribed' : 'unsubscribed' },
+          ])
+        );
+        return;
+      }
       console.log(
         action === 'subscribe' ? `Subscribed to ${opts.issue}.` : `Unsubscribed from ${opts.issue}.`
-      ),
+      );
+    },
     (e) => exitError(e)
   );
 }

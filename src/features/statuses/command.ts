@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, addPlainOption } from '../../lib/commandOptions.js';
+import { addAuthOptions, isPlain } from '../../lib/commandOptions.js';
 import { getStatus } from './get.js';
 import { listStatuses } from './list.js';
 
@@ -22,7 +22,7 @@ export function registerStatuses(program: Command): void {
     .option('--after <cursor>', 'Fetch the next page starting after this cursor')
     .option('--all', 'Fetch all pages (one request per page)');
 
-  addAuthOptions(addPlainOption(listCmd)).action(
+  addAuthOptions(listCmd).action(
     async (opts: {
       team: string;
       limit: string;
@@ -30,7 +30,6 @@ export function registerStatuses(program: Command): void {
       all?: boolean;
       apiKey?: string;
       token?: string;
-      plain?: boolean;
     }) => {
       await listStatuses({
         apiKey: opts.apiKey,
@@ -39,7 +38,7 @@ export function registerStatuses(program: Command): void {
         limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
         after: opts.after,
         all: !!opts.all,
-        plain: !!opts.plain,
+        plain: isPlain(listCmd),
       });
     }
   );
@@ -52,22 +51,15 @@ export function registerStatuses(program: Command): void {
     .option('--name <name>', 'Status name to look up')
     .option('--id <id>', 'Status UUID to look up');
 
-  addAuthOptions(addPlainOption(getCmd)).action(
-    async (opts: {
-      team: string;
-      name?: string;
-      id?: string;
-      apiKey?: string;
-      token?: string;
-      plain?: boolean;
-    }) => {
+  addAuthOptions(getCmd).action(
+    async (opts: { team: string; name?: string; id?: string; apiKey?: string; token?: string }) => {
       await getStatus({
         apiKey: opts.apiKey,
         token: opts.token,
         team: opts.team,
         name: opts.name,
         id: opts.id,
-        plain: !!opts.plain,
+        plain: isPlain(getCmd),
       });
     }
   );

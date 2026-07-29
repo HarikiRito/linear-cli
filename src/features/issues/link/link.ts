@@ -1,6 +1,7 @@
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { coerceCliError, mapLinearError } from '../../../lib/errors.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 
@@ -10,12 +11,14 @@ export interface LinkOptions {
   issue: string;
   url: string;
   title?: string;
+  plain?: boolean;
 }
 
 export interface UnlinkOptions {
   apiKey?: string;
   token?: string;
   attachmentId: string;
+  plain?: boolean;
 }
 
 export async function linkAttachment(opts: LinkOptions): Promise<void> {
@@ -45,6 +48,15 @@ export async function linkAttachment(opts: LinkOptions): Promise<void> {
 
   result.match(
     (attachmentId) => {
+      if (opts.plain) {
+        console.log(
+          renderPlainRecord('Attachment', attachmentId, [
+            { key: 'issue', value: opts.issue },
+            { key: 'url', value: opts.url },
+          ])
+        );
+        return;
+      }
       console.log(`URL linked. Attachment ID: ${attachmentId}`);
     },
     (e) => exitError(e)
@@ -65,6 +77,14 @@ export async function unlinkAttachment(opts: UnlinkOptions): Promise<void> {
 
   result.match(
     () => {
+      if (opts.plain) {
+        console.log(
+          renderPlainRecord('Attachment', opts.attachmentId, [
+            { key: 'status', value: 'removed' },
+          ])
+        );
+        return;
+      }
       console.log(`Attachment ${opts.attachmentId} removed.`);
     },
     (e) => exitError(e)

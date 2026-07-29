@@ -12,6 +12,9 @@ function row(overrides: Partial<IssueRow> = {}): IssueRow {
     priority: 0,
     trashed: false,
     archivedAt: null,
+    labels: [],
+    blockedBy: [],
+    blocking: [],
     ...overrides,
   };
 }

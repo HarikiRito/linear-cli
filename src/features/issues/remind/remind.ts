@@ -1,6 +1,7 @@
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { coerceCliError, ValidationError } from '../../../lib/errors.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 
@@ -56,6 +57,7 @@ export interface RemindOptions {
   token?: string;
   issue: string;
   when: string;
+  plain?: boolean;
 }
 
 export async function remindIssue(opts: RemindOptions): Promise<void> {
@@ -90,6 +92,14 @@ export async function remindIssue(opts: RemindOptions): Promise<void> {
 
   result.match(
     () => {
+      if (opts.plain) {
+        console.log(
+          renderPlainRecord('Reminder', opts.issue, [
+            { key: 'remindAt', value: reminderAt.toISOString() },
+          ])
+        );
+        return;
+      }
       console.log(`Reminder set for ${opts.issue} at ${reminderAt.toISOString()}.`);
     },
     (e) => exitError(e)

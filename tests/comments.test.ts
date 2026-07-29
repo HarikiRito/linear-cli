@@ -38,7 +38,7 @@ async function buildProgram() {
   const { registerIssues } = await import('../src/features/issues/command.js');
   const { Command } = await import('commander');
   const program = new Command();
-  program.exitOverride();
+  program.option('--plain', 'Output as plain key:value text (agent-friendly)').exitOverride();
   registerIssues(program);
   return program;
 }

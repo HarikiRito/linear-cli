@@ -1,6 +1,7 @@
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
 import { coerceCliError, NotFoundError } from '../../../lib/errors.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 import { ISSUE_COPY_QUERY } from './queries.js';
@@ -12,6 +13,7 @@ export interface CopyOptions {
   url?: boolean;
   identifier?: boolean;
   branch?: boolean;
+  plain?: boolean;
 }
 
 export async function copyIssue(opts: CopyOptions): Promise<void> {
@@ -43,14 +45,24 @@ export async function copyIssue(opts: CopyOptions): Promise<void> {
   result.match(
     (issue) => {
       if (opts.url || opts.identifier || opts.branch) {
+        // Single-value flags always print unlabeled, for shell substitution — --plain doesn't change this.
         if (opts.url) console.log(issue.url);
         if (opts.identifier) console.log(issue.identifier);
         if (opts.branch) console.log(issue.branchName);
-      } else {
-        console.log(`identifier: ${issue.identifier}`);
-        console.log(`url: ${issue.url}`);
-        console.log(`branch: ${issue.branchName}`);
+        return;
       }
+      if (opts.plain) {
+        console.log(
+          renderPlainRecord('Issue', issue.identifier, [
+            { key: 'url', value: issue.url },
+            { key: 'branch', value: issue.branchName },
+          ])
+        );
+        return;
+      }
+      console.log(`identifier: ${issue.identifier}`);
+      console.log(`url: ${issue.url}`);
+      console.log(`branch: ${issue.branchName}`);
     },
     (e) => exitError(e)
   );

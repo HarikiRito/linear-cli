@@ -52,7 +52,7 @@ async function buildProgram() {
   const { registerIssues } = await import('../src/features/issues/command.js');
   const { Command } = await import('commander');
   const program = new Command();
-  program.exitOverride();
+  program.option('--plain', 'Output as plain key:value text (agent-friendly)').exitOverride();
   registerIssues(program);
   return program;
 }
@@ -279,6 +279,69 @@ describe('issues get', () => {
     expect(output).toContain('ENG-43');
     expect(output).not.toContain('ENG-44');
     expect(output).not.toContain('ENG-45');
+
+    consoleSpy.mockRestore();
+  });
+
+  it('renders labels and blocked-by/blocking relations in table output', async () => {
+    const requestFn = vi.fn().mockResolvedValue(
+      makeIssueResponse({
+        labels: { nodes: [{ id: 'l1', name: 'bug', color: '#ff0000' }] },
+        relations: {
+          nodes: [{ id: 'rel-1', type: 'blocks', relatedIssue: { identifier: 'ENG-50' } }],
+        },
+        inverseRelations: {
+          nodes: [{ id: 'rel-2', type: 'blocks', issue: { identifier: 'ENG-51' } }],
+        },
+      })
+    );
+    let capturedRows: string[][] = [];
+
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(requestFn),
+    }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((_h: string[], rows: string[][]) => {
+        capturedRows = rows;
+        return '';
+      }),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42']);
+
+    const flat = capturedRows.flat();
+    expect(flat).toContain('bug');
+    expect(flat.some((c) => c.includes('ENG-51'))).toBe(true); // Blocked By
+    expect(flat.some((c) => c.includes('ENG-50'))).toBe(true); // Blocking
+  });
+
+  it('renders labels and blocked-by/blocking relations in --plain output', async () => {
+    const requestFn = vi.fn().mockResolvedValue(
+      makeIssueResponse({
+        labels: { nodes: [{ id: 'l1', name: 'bug' }, { id: 'l2', name: 'urgent' }] },
+        relations: {
+          nodes: [{ id: 'rel-1', type: 'blocks', relatedIssue: { identifier: 'ENG-50' } }],
+        },
+        inverseRelations: {
+          nodes: [{ id: 'rel-2', type: 'blocks', issue: { identifier: 'ENG-51' } }],
+        },
+      })
+    );
+    stdMocks(requestFn);
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42', '--plain']);
+
+    const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(output).toContain('labels: bug, urgent');
+    expect(output).toContain('blockedBy: ENG-51');
+    expect(output).toContain('blocking: ENG-50');
 
     consoleSpy.mockRestore();
   });

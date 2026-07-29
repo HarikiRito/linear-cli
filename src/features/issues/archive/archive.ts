@@ -1,6 +1,7 @@
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { coerceCliError } from '../../../lib/errors.js';
+import { renderPlainRecord } from '../../../lib/output/plain.js';
 import { exitError } from '../../../lib/runner.js';
 import { resolveIssueIdentifier } from '../shared/resolve.js';
 
@@ -8,6 +9,7 @@ export interface ArchiveOptions {
   apiKey?: string;
   token?: string;
   issue: string;
+  plain?: boolean;
 }
 
 async function toggleArchive(opts: ArchiveOptions, action: 'archive' | 'unarchive'): Promise<void> {
@@ -31,7 +33,13 @@ async function toggleArchive(opts: ArchiveOptions, action: 'archive' | 'unarchiv
   );
 
   result.match(
-    () => console.log(`Issue ${opts.issue} ${action}d.`),
+    () => {
+      if (opts.plain) {
+        console.log(renderPlainRecord('Issue', opts.issue, [{ key: 'status', value: `${action}d` }]));
+        return;
+      }
+      console.log(`Issue ${opts.issue} ${action}d.`);
+    },
     (e) => exitError(e)
   );
 }

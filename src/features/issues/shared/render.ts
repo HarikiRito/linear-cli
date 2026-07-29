@@ -27,6 +27,9 @@ export interface IssueNode {
   priority: number;
   trashed?: boolean | null;
   archivedAt?: string | null;
+  labels?: { nodes: { name: string }[] } | null;
+  relations?: { nodes: { type: string; relatedIssue?: { identifier: string } | null }[] } | null;
+  inverseRelations?: { nodes: { type: string; issue?: { identifier: string } | null }[] } | null;
 }
 
 export interface IssueRow {
@@ -38,6 +41,9 @@ export interface IssueRow {
   priority: number;
   trashed: boolean;
   archivedAt: string | null;
+  labels: string[];
+  blockedBy: string[];
+  blocking: string[];
 }
 
 export interface IssuesResult {
@@ -69,6 +75,13 @@ export function toIssueRows(nodes: IssueNode[]): IssueRow[] {
     priority: n.priority,
     trashed: n.trashed ?? false,
     archivedAt: n.archivedAt ?? null,
+    labels: (n.labels?.nodes ?? []).map((l) => l.name),
+    blocking: (n.relations?.nodes ?? [])
+      .filter((r) => r.type === 'blocks')
+      .map((r) => r.relatedIssue?.identifier ?? '?'),
+    blockedBy: (n.inverseRelations?.nodes ?? [])
+      .filter((r) => r.type === 'blocks')
+      .map((r) => r.issue?.identifier ?? '?'),
   }));
 }
 
@@ -83,12 +96,37 @@ function issuePlainFields(row: IssueRow): PlainField[] {
     { key: 'state', value: row.state },
     { key: 'priority', value: String(row.priority) },
     { key: 'assignee', value: row.assignee },
+    { key: 'labels', value: row.labels },
+    { key: 'blockedBy', value: row.blockedBy },
+    { key: 'blocking', value: row.blocking },
   ];
 }
 
+/** Compact, width-bounded label cell: first 3 names, "+N" suffix for the rest. */
+function formatLabelsCell(labels: string[]): string {
+  if (labels.length === 0) return '';
+  const shown = labels.slice(0, 3).join(', ');
+  return labels.length > 3 ? `${shown} +${labels.length - 3}` : shown;
+}
+
+/** Compact relation indicator: counts only (full identifiers via --plain or `issue get`/`relations`). */
+function formatBlockedCell(blockedBy: string[], blocking: string[]): string {
+  const parts: string[] = [];
+  if (blockedBy.length > 0) parts.push(`blocked-by:${blockedBy.length}`);
+  if (blocking.length > 0) parts.push(`blocking:${blocking.length}`);
+  return parts.join(' ');
+}
+
 const ISSUE_COLUMNS: ColumnConfig<IssueRow> = {
-  headers: ['ID', 'Title', 'State', 'Assignee'],
-  toRow: (i) => [i.identifier, i.title, i.state, i.assignee],
+  headers: ['ID', 'Title', 'State', 'Assignee', 'Labels', 'Blocked'],
+  toRow: (i) => [
+    i.identifier,
+    i.title,
+    i.state,
+    i.assignee,
+    formatLabelsCell(i.labels),
+    formatBlockedCell(i.blockedBy, i.blocking),
+  ],
   plainType: 'Issue',
   plainPrimaryId: (i) => i.identifier,
   toPlainFields: issuePlainFields,
