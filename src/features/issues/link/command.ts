@@ -31,12 +31,14 @@ export function registerUnlinkCommand(issues: Command): void {
     .command('unlink <attachmentId>')
     .description('Remove an attachment by its ID (obtain the ID from `issues link` output)');
 
-  addAuthOptions(cmd).action(async (attachmentId: string, opts: { apiKey?: string; token?: string }) => {
-    await unlinkAttachment({
-      apiKey: opts.apiKey,
-      token: opts.token,
-      attachmentId,
-      plain: isPlain(cmd),
-    });
-  });
+  addAuthOptions(cmd).action(
+    async (attachmentId: string, opts: { apiKey?: string; token?: string }) => {
+      await unlinkAttachment({
+        apiKey: opts.apiKey,
+        token: opts.token,
+        attachmentId,
+        plain: isPlain(cmd),
+      });
+    }
+  );
 }

@@ -62,9 +62,7 @@ export async function branchIssue(opts: BranchIssueOptions): Promise<void> {
         return;
       }
       if (opts.plain) {
-        console.log(
-          renderPlainRecord('Branch', branchName, [{ key: 'issue', value: resolvedId }])
-        );
+        console.log(renderPlainRecord('Branch', branchName, [{ key: 'issue', value: resolvedId }]));
         return;
       }
       process.stdout.write(`${branchName}\n`);

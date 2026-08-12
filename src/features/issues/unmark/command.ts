@@ -9,12 +9,14 @@ export function registerUnmarkCommand(issues: Command): void {
       'Remove a relation record by its ID (obtain the ID from `issues relations <issue>`)'
     );
 
-  addAuthOptions(cmd).action(async (relationId: string, opts: { apiKey?: string; token?: string }) => {
-    await unmarkRelation({
-      apiKey: opts.apiKey,
-      token: opts.token,
-      relationId,
-      plain: isPlain(cmd),
-    });
-  });
+  addAuthOptions(cmd).action(
+    async (relationId: string, opts: { apiKey?: string; token?: string }) => {
+      await unmarkRelation({
+        apiKey: opts.apiKey,
+        token: opts.token,
+        relationId,
+        plain: isPlain(cmd),
+      });
+    }
+  );
 }
