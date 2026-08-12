@@ -163,6 +163,7 @@ export function startOAuthFlow(): ResultAsync<void, CliError> {
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,
           expiresAt: Date.now() + tokens.expiresIn * 1000,
+          lastRefreshAt: Date.now(),
         });
         if (writeResult.isErr()) {
           throw writeResult.error;

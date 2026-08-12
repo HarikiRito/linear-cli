@@ -51,6 +51,13 @@ vi.mock('../src/lib/gitignore.js', () => ({
   appendAuthToGitignore: vi.fn().mockReturnValue({ isErr: () => false, isOk: () => true }),
 }));
 
+vi.mock('../src/features/keepalive/registry.js', () => ({
+  registerProject: vi.fn().mockReturnValue({ isOk: () => true, isErr: () => false }),
+  unregisterProject: vi.fn(),
+  listProjects: vi.fn(),
+  pruneMissing: vi.fn(),
+}));
+
 import { isCancel, multiselect, select, text } from '@clack/prompts';
 import { LinearClient } from '@linear/sdk';
 import { runLoginFlow } from '../src/features/auth/login.js';
@@ -61,6 +68,7 @@ import {
   writeProjectSession,
   writeSession,
 } from '../src/features/auth/session.js';
+import { registerProject } from '../src/features/keepalive/registry.js';
 import { readConfig, writeConfig } from '../src/lib/config-file.js';
 
 const mockSelect = vi.mocked(select);
@@ -74,6 +82,7 @@ const mockDeleteSession = vi.mocked(deleteSession);
 const mockStartOAuthFlow = vi.mocked(startOAuthFlow);
 const mockWriteConfig = vi.mocked(writeConfig);
 const mockReadConfig = vi.mocked(readConfig);
+const mockRegisterProject = vi.mocked(registerProject);
 const MockLinearClient = vi.mocked(LinearClient);
 
 /** Build a LinearClient mock exposing only `viewer` + `teams`, as used by login. */
@@ -299,6 +308,8 @@ describe('runLoginFlow — OAuth + project-scope login', () => {
     expect(mockDeleteSession).toHaveBeenCalledOnce();
     // Global writeSession must NOT be called
     expect(mockWriteSession).not.toHaveBeenCalled();
+    // Project registered for keepalive rotation
+    expect(mockRegisterProject).toHaveBeenCalledWith(expect.any(String));
 
     // Team fetch happens over an OAuth-authenticated client (built from the access token)
     expect(teamsFn).toHaveBeenCalledOnce();

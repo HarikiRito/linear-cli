@@ -12,6 +12,13 @@ export const LINEAR_TOKEN_URL = 'https://api.linear.app/oauth/token';
 export const CALLBACK_PATH = '/callback';
 export const CANDIDATE_PORTS = [9876, 9877, 9878] as const;
 
+// Keepalive: automatic refresh-token rotation to keep sessions alive.
+export const KEEPALIVE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+export const KEEPALIVE_POLL_CRON = '*/15 * * * *';
+export const KEEPALIVE_TASK_NAME = 'linear-cli-keepalive';
+export const KEEPALIVE_LOCK_FILE = 'auth.lock';
+export const KEEPALIVE_LOG_FILE = 'keepalive.log';
+
 // Hosts Linear itself serves attachment assets from. Only these (and their
 // subdomains) are safe to receive the CLI's live Linear credentials — an
 // attachment's `url` can be an arbitrary external link, so it must never be

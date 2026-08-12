@@ -1,6 +1,7 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { AuthError, type CliError, UnauthenticatedError } from '../../lib/errors.js';
 import { findProjectRoot } from '../../lib/scope.js';
+import { registerProject } from '../keepalive/registry.js';
 import { runLoginFlow } from './login.js';
 import { refreshAccessToken } from './oauth.js';
 import {
@@ -56,6 +57,7 @@ function resolveSessionWithRefresh(
           accessToken: refreshed.accessToken,
           refreshToken: refreshed.refreshToken,
           expiresAt: refreshed.expiresAt,
+          lastRefreshAt: Date.now(),
         };
         const writeResult =
           scope.type === 'project'
@@ -89,7 +91,13 @@ function resolveFromStoredSession(
         projectSession,
         { type: 'project', projectRoot },
         forceRefresh
-      );
+      ).map((cred) => {
+        if (isOAuthSession(projectSession)) {
+          // Idempotent; never blocks credential resolution (keepalive registry).
+          void registerProject(projectRoot);
+        }
+        return cred;
+      });
     }
   }
   // Global scope

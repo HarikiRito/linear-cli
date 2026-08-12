@@ -7,6 +7,7 @@ import { buildLinearClient } from '../../lib/client/index.js';
 import { getGlobalConfigPath, getProjectConfigPath } from '../../lib/config-file.js';
 import { toError } from '../../lib/errors.js';
 import { appendAuthToGitignore } from '../../lib/gitignore.js';
+import { registerProject } from '../keepalive/registry.js';
 import { startOAuthFlow } from './oauth.js';
 import { deleteSession, readSession, writeProjectSession, writeSession } from './session.js';
 import { selectAndPersistTeamAndProjects } from './team-select.js';
@@ -108,6 +109,15 @@ export async function runAuthMethodFlow(
         }
         // Credential now lives only in project scope — remove the stale global copy
         deleteSession();
+      }
+      if (globalSession && 'accessToken' in globalSession) {
+        // Keepalive only applies to OAuth sessions (refresh tokens); ignore errors.
+        void registerProject(projectDir);
+        console.log(
+          pc.cyan(
+            'Tip: run `linear keepalive install` once to keep this session alive automatically.'
+          )
+        );
       }
     }
 

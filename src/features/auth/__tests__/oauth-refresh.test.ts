@@ -23,10 +23,18 @@ vi.mock('../../lib/config.js', async (importOriginal) => {
   };
 });
 
+vi.mock('../../keepalive/registry.js', () => ({
+  registerProject: vi.fn().mockReturnValue({ isOk: () => true, isErr: () => false }),
+  unregisterProject: vi.fn(),
+  listProjects: vi.fn(),
+  pruneMissing: vi.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
+import { registerProject } from '../../keepalive/registry.js';
 import { refreshAccessToken } from '../oauth.js';
 // We test resolveSessionWithRefresh indirectly via resolveCredential since
 // resolveSessionWithRefresh is not exported. We mock process.env and session
@@ -150,9 +158,27 @@ describe('resolveSessionWithRefresh via resolveCredential — scope-aware persis
     expect(writeProjectSession).toHaveBeenCalledOnce();
     expect(writeProjectSession).toHaveBeenCalledWith(
       '/repo',
-      expect.objectContaining({ accessToken: 'new-at', refreshToken: 'new-rt' })
+      expect.objectContaining({
+        accessToken: 'new-at',
+        refreshToken: 'new-rt',
+        lastRefreshAt: expect.any(Number),
+      })
     );
     expect(writeSession).not.toHaveBeenCalled();
+  });
+
+  it('project-scope OAuth resolution registers the project for keepalive', async () => {
+    const expiredSession = { accessToken: 'old-at', refreshToken: 'old-rt', expiresAt: 0 };
+    vi.spyOn(sessionMod, 'readProjectSession').mockReturnValue(expiredSession);
+    vi.spyOn(sessionMod, 'readSession').mockReturnValue(null);
+    mockFetch({ access_token: 'new-at', refresh_token: 'new-rt', expires_in: 3600 });
+
+    await withProjectRoot('/repo', async () => {
+      const result = await resolveCredential({ allowInteractive: false });
+      expect(result.isOk()).toBe(true);
+    });
+
+    expect(registerProject).toHaveBeenCalledWith('/repo');
   });
 
   it('global-scope expired session → writeSession called, writeProjectSession never called', async () => {
