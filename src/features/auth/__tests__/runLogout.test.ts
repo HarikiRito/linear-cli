@@ -1,85 +1,119 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Tests for runLogout() scope branching:
- * - project root found AND project session exists → deletes project session only
- * - project root found but NO project session → deletes global session only
- * - no project root → deletes global session only
+ * runLogout() semantics (workspace-keyed):
+ * - default: unlink cwd's linked workspace; delete its credential only when no
+ *   other registry entry still references it
+ * - --workspace <id>: delete that workspace's credential + unlink its entries
+ * - --all: wipe the credentials store
  */
 
 vi.mock('../../../lib/scope.js', () => ({
   findProjectRoot: vi.fn(),
 }));
 
-vi.mock('../session.js', () => ({
-  deleteProjectSession: vi.fn().mockReturnValue({ isErr: () => false, isOk: () => true }),
-  deleteSession: vi.fn().mockReturnValue({ isErr: () => false, isOk: () => true }),
-  readProjectSession: vi.fn(),
-}));
-
-vi.mock('../../../lib/runner.js', () => ({
-  exitError: vi.fn(),
-}));
-
 vi.mock('../../keepalive/registry.js', () => ({
-  registerProject: vi.fn(),
-  registerGlobal: vi.fn(),
-  unregisterProject: vi.fn().mockReturnValue({ isOk: () => true, isErr: () => false }),
+  getEntry: vi.fn(),
   listProjects: vi.fn(),
-  getGlobalEntryRoot: vi.fn().mockReturnValue('/global/config/dir'),
+  unregisterProject: vi.fn().mockResolvedValue({ isOk: () => true, isErr: () => false }),
+}));
+
+vi.mock('../credentials.js', () => ({
+  deleteWorkspaceCredential: vi.fn().mockResolvedValue(true),
+  writeCredentialsStore: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { findProjectRoot } from '../../../lib/scope.js';
-import { unregisterProject } from '../../keepalive/registry.js';
+import {
+  getEntry,
+  listProjects,
+  type RegisteredProject,
+  unregisterProject,
+} from '../../keepalive/registry.js';
+import { deleteWorkspaceCredential, writeCredentialsStore } from '../credentials.js';
 import { runLogout } from '../logout.js';
-import { deleteProjectSession, deleteSession, readProjectSession } from '../session.js';
 
 const mockFindProjectRoot = vi.mocked(findProjectRoot);
-const mockDeleteProjectSession = vi.mocked(deleteProjectSession);
-const mockDeleteSession = vi.mocked(deleteSession);
-const mockReadProjectSession = vi.mocked(readProjectSession);
+const mockGetEntry = vi.mocked(getEntry);
+const mockListProjects = vi.mocked(listProjects);
 const mockUnregisterProject = vi.mocked(unregisterProject);
+const mockDeleteWorkspaceCredential = vi.mocked(deleteWorkspaceCredential);
+const mockWriteCredentialsStore = vi.mocked(writeCredentialsStore);
 
-describe('runLogout — scope branching', () => {
-  afterEach(() => {
+function entries(
+  ...projects: Array<{ root: string; workspace?: string }>
+): ReturnType<typeof listProjects> {
+  return {
+    isOk: () => true,
+    isErr: () => false,
+    _unsafeUnwrap: () => projects as RegisteredProject[],
+    unwrapOr: () => projects as RegisteredProject[],
+  } as unknown as ReturnType<typeof listProjects>;
+}
+
+describe('runLogout', () => {
+  let consoleLog: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
     vi.clearAllMocks();
+    consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
-  it('calls deleteProjectSession (not deleteSession) when inside a project root with a project session', () => {
-    mockFindProjectRoot.mockReturnValue('/some/project');
-    mockReadProjectSession.mockReturnValue({ apiKey: 'proj-key' });
-
-    runLogout();
-
-    expect(mockDeleteProjectSession).toHaveBeenCalledOnce();
-    expect(mockDeleteProjectSession).toHaveBeenCalledWith('/some/project');
-    expect(mockDeleteSession).not.toHaveBeenCalled();
-    // Keepalive registry entry removed alongside the project session
-    expect(mockUnregisterProject).toHaveBeenCalledWith('/some/project');
+  afterEach(() => {
+    consoleLog.mockRestore();
   });
 
-  it('calls deleteSession (not deleteProjectSession) when project root exists but no project session', () => {
-    mockFindProjectRoot.mockReturnValue('/some/project');
-    mockReadProjectSession.mockReturnValue(null);
-
-    runLogout();
-
-    expect(mockDeleteSession).toHaveBeenCalledOnce();
-    expect(mockDeleteProjectSession).not.toHaveBeenCalled();
-    // Global session deleted → global keepalive registry entry unregistered.
-    expect(mockUnregisterProject).toHaveBeenCalledOnce();
-    expect(mockUnregisterProject).toHaveBeenCalledWith('/global/config/dir');
+  it('--all wipes the credentials store', async () => {
+    await runLogout({ all: true });
+    expect(mockWriteCredentialsStore).toHaveBeenCalledWith({ workspaces: {} });
+    expect(mockDeleteWorkspaceCredential).not.toHaveBeenCalled();
   });
 
-  it('calls deleteSession (not deleteProjectSession) when outside any project root', () => {
+  it('--workspace <id> deletes that credential and unlinks its registry entries', async () => {
+    mockListProjects.mockReturnValue(
+      entries(
+        { root: '/a', workspace: 'ws-1' },
+        { root: '/b', workspace: 'ws-1' },
+        { root: '/c', workspace: 'ws-2' }
+      )
+    );
+
+    await runLogout({ workspace: 'ws-1' });
+
+    expect(mockDeleteWorkspaceCredential).toHaveBeenCalledWith('ws-1');
+    expect(mockUnregisterProject).toHaveBeenCalledTimes(2);
+    expect(mockUnregisterProject).toHaveBeenCalledWith('/a');
+    expect(mockUnregisterProject).toHaveBeenCalledWith('/b');
+  });
+
+  it('default: unlinks cwd and deletes the credential when it becomes orphaned', async () => {
+    mockFindProjectRoot.mockReturnValue('/repo');
+    mockGetEntry.mockReturnValue({ root: '/repo', workspace: 'ws-1' } as RegisteredProject);
+    mockListProjects.mockReturnValue(entries()); // nothing else references ws-1
+
+    await runLogout();
+
+    expect(mockUnregisterProject).toHaveBeenCalledWith('/repo');
+    expect(mockDeleteWorkspaceCredential).toHaveBeenCalledWith('ws-1');
+  });
+
+  it('default: keeps the credential when another linked dir still uses it', async () => {
+    mockFindProjectRoot.mockReturnValue('/repo');
+    mockGetEntry.mockReturnValue({ root: '/repo', workspace: 'ws-1' } as RegisteredProject);
+    mockListProjects.mockReturnValue(entries({ root: '/other', workspace: 'ws-1' }));
+
+    await runLogout();
+
+    expect(mockUnregisterProject).toHaveBeenCalledWith('/repo');
+    expect(mockDeleteWorkspaceCredential).not.toHaveBeenCalled();
+  });
+
+  it('default: no-op when cwd is not linked', async () => {
     mockFindProjectRoot.mockReturnValue(null);
 
-    runLogout();
+    await runLogout();
 
-    expect(mockDeleteSession).toHaveBeenCalledOnce();
-    expect(mockDeleteProjectSession).not.toHaveBeenCalled();
-    // Global session deleted → global keepalive registry entry unregistered.
-    expect(mockUnregisterProject).toHaveBeenCalledOnce();
-    expect(mockUnregisterProject).toHaveBeenCalledWith('/global/config/dir');
+    expect(mockUnregisterProject).not.toHaveBeenCalled();
+    expect(mockDeleteWorkspaceCredential).not.toHaveBeenCalled();
   });
 });

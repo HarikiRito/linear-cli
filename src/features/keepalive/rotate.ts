@@ -1,34 +1,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { err, ok, Result } from 'neverthrow';
+import { ok, Result, ResultAsync } from 'neverthrow';
 import {
+  getWorkspaceLockPath,
   KEEPALIVE_BACKOFF_MS,
   KEEPALIVE_INTERVAL_MS,
-  KEEPALIVE_LOCK_FILE,
 } from '../../lib/config.js';
 import { toError } from '../../lib/errors.js';
-import { getGlobalConfigDir, getProjectLinearDir } from '../../lib/scope.js';
+import {
+  listWorkspaceIds,
+  readWorkspaceCredential,
+  writeWorkspaceCredential,
+} from '../auth/credentials.js';
 import { refreshAccessToken } from '../auth/oauth.js';
-import {
-  getProjectSessionPath,
-  getSessionPath,
-  isOAuthSession,
-  type OAuthSession,
-  readProjectSession,
-  readSession,
-  type Session,
-  writeProjectSession,
-  writeSession,
-} from '../auth/session.js';
-import {
-  getEntry,
-  getGlobalEntryRoot,
-  listProjects,
-  type RegisteredProject,
-  unregisterProject,
-  updateEntry,
-} from './registry.js';
+import { isOAuthSession, type OAuthSession } from '../auth/session.js';
 import { getLogPath } from './scheduler/index.js';
+import {
+  clearWorkspaceBackoff,
+  deleteWorkspaceState,
+  readWorkspaceState,
+  updateWorkspaceState,
+} from './state.js';
 
 export interface RotationSummary {
   checked: number;
@@ -56,6 +48,23 @@ function appendLog(line: string): void {
   }, toError)();
 }
 
+/**
+ * Fold a best-effort keepalive-state write into the summary; never rejects.
+ * Returns true on success; on failure counts it in `summary.failed` and logs.
+ */
+async function foldStateWrite(
+  op: () => Promise<void>,
+  summary: RotationSummary,
+  workspaceId: string,
+  label: string
+): Promise<boolean> {
+  const result = await ResultAsync.fromPromise(op(), toError);
+  if (result.isOk()) return true;
+  summary.failed++;
+  appendLog(`error ${workspaceId}: ${label}: ${result.error.message}`);
+  return false;
+}
+
 /** True if the holder is gone (dead PID) or the lock has aged past LOCK_STALE_MS. */
 function isStaleLock(lockPath: string): boolean {
   const content = Result.fromThrowable(
@@ -67,36 +76,37 @@ function isStaleLock(lockPath: string): boolean {
   const ts = Number(tsStr);
   if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(ts)) return true; // malformed
   if (Date.now() - ts > LOCK_STALE_MS) return true;
-  try {
-    process.kill(pid, 0);
-    return false; // holder alive
-  } catch {
-    return true; // holder dead
-  }
+  return Result.fromThrowable(
+    () => process.kill(pid, 0),
+    () => undefined // holder dead (ESRCH)
+  )().isErr();
 }
 
 function acquireLock(lockPath: string): boolean {
   const openLock = (): boolean => {
-    try {
-      const fd = fs.openSync(lockPath, 'wx');
+    const opened = Result.fromThrowable(
+      () => fs.openSync(lockPath, 'wx'),
+      (e) => e as NodeJS.ErrnoException
+    )();
+    if (opened.isOk()) {
+      const fd = opened.value;
       try {
         fs.writeSync(fd, `${process.pid}:${Date.now()}`);
       } finally {
         fs.closeSync(fd);
       }
       return true;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') return false;
-      // Locked — maybe by a dead/stale holder, retry once after clearing.
-      if (isStaleLock(lockPath)) {
-        void Result.fromThrowable(
-          () => fs.unlinkSync(lockPath),
-          () => undefined
-        )();
-        return openLock();
-      }
-      return false;
     }
+    if (opened.error.code !== 'EEXIST') return false;
+    // Locked — maybe by a dead/stale holder, retry once after clearing.
+    if (isStaleLock(lockPath)) {
+      void Result.fromThrowable(
+        () => fs.unlinkSync(lockPath),
+        () => undefined
+      )();
+      return openLock();
+    }
+    return false;
   };
   return openLock();
 }
@@ -115,84 +125,42 @@ function releaseLock(lockPath: string): void {
   )();
 }
 
-// --- entry-aware helpers: project entries use <root>/.linear, global uses ~/.config/.linear ---
-
-function entrySessionPath(entry: RegisteredProject): string {
-  return entry.scope === 'global' ? getSessionPath() : getProjectSessionPath(entry.root);
-}
-
-function entryLockPath(entry: RegisteredProject): string {
-  const dir = entry.scope === 'global' ? getGlobalConfigDir() : getProjectLinearDir(entry.root);
-  return path.join(dir, KEEPALIVE_LOCK_FILE);
-}
-
-function entryReadSession(entry: RegisteredProject): Session | null {
-  return entry.scope === 'global' ? readSession() : readProjectSession(entry.root);
-}
-
-function entryWriteSession(entry: RegisteredProject, session: OAuthSession): Result<void, Error> {
-  return entry.scope === 'global'
-    ? writeSession(session)
-    : writeProjectSession(entry.root, session);
-}
-
-function entryUnregister(entry: RegisteredProject): Result<void, Error> {
-  return unregisterProject(entry.scope === 'global' ? getGlobalEntryRoot() : entry.root);
-}
-
-function entryUpdateBackoff(
-  entry: RegisteredProject,
-  patch: Partial<RegisteredProject>
-): Result<void, Error> {
-  return updateEntry(entry.scope === 'global' ? getGlobalEntryRoot() : entry.root, patch);
-}
-
-function entryGetBackoff(entry: RegisteredProject): { tier?: number; nextAttemptAt?: number } {
-  const e = getEntry(entry.scope === 'global' ? getGlobalEntryRoot() : entry.root);
-  return { tier: e?.invalidGrantTier, nextAttemptAt: e?.invalidGrantNextAttemptAt };
-}
-
 /**
- * Best-effort clear of invalid_grant backoff. Used when a skip path still
- * indicates a healthy session (e.g. another process rotated it while we
- * waited on the lock) — the backoff no longer applies.
+ * Rotate one workspace's OAuth refresh token if due. Never throws; every
+ * outcome is folded into `summary`. Rotation only touches the credential store
+ * and keepalive state — it never mutates directory linkage (registry).
  */
-function clearBackoffIfSet(entry: RegisteredProject, tier: number | undefined): void {
-  if (tier === undefined) return;
-  void entryUpdateBackoff(entry, {
-    invalidGrantTier: undefined,
-    invalidGrantNextAttemptAt: undefined,
-  });
-}
-
-/**
- * Rotate one registered session's OAuth refresh token if due. Never throws;
- * all per-entry outcomes are folded into `summary`.
- */
-export async function rotateEntry(
-  entry: RegisteredProject,
-  _opts: KeepaliveCycleOptions,
-  summary: RotationSummary
-): Promise<void> {
-  const authPath = entrySessionPath(entry);
-  if (!fs.existsSync(authPath)) {
-    // Session gone — drop from registry.
-    void entryUnregister(entry);
+async function rotateWorkspace(workspaceId: string, summary: RotationSummary): Promise<void> {
+  const session = await readWorkspaceCredential(workspaceId);
+  if (!session) {
+    // Credential gone (raced) — drop any lingering backoff state.
+    if (
+      !(await foldStateWrite(
+        () => deleteWorkspaceState(workspaceId),
+        summary,
+        workspaceId,
+        'prune state'
+      ))
+    ) {
+      return;
+    }
     summary.pruned++;
-    appendLog(`prune ${entry.scope ?? 'project'}:${entry.root}: no auth.json`);
+    appendLog(`prune ${workspaceId}: no credential`);
+    return;
+  }
+
+  if (!isOAuthSession(session)) {
+    summary.skipped++; // API key — nothing to rotate
     return;
   }
 
   // invalid_grant backoff: skip silently until the backoff window expires.
-  const backoff = entryGetBackoff(entry);
-  if (backoff.nextAttemptAt !== undefined && backoff.nextAttemptAt > Date.now()) {
+  const backoff = await readWorkspaceState(workspaceId);
+  if (
+    backoff.invalidGrantNextAttemptAt !== undefined &&
+    backoff.invalidGrantNextAttemptAt > Date.now()
+  ) {
     summary.skipped++;
-    return;
-  }
-
-  const session = entryReadSession(entry);
-  if (!session || !isOAuthSession(session)) {
-    summary.skipped++; // API key / unreadable — nothing to rotate
     return;
   }
 
@@ -202,7 +170,16 @@ export async function rotateEntry(
     return;
   }
 
-  const lockPath = entryLockPath(entry);
+  const lockPath = getWorkspaceLockPath(workspaceId);
+  const mkdirResult = Result.fromThrowable(
+    () => fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 }),
+    toError
+  )();
+  if (mkdirResult.isErr()) {
+    summary.failed++;
+    appendLog(`error ${workspaceId}: lock dir: ${mkdirResult.error.message}`);
+    return;
+  }
   if (!acquireLock(lockPath)) {
     summary.skipped++; // another run holds the lock
     return;
@@ -210,13 +187,28 @@ export async function rotateEntry(
 
   try {
     // Re-read after locking (TOCTOU) and re-check the interval.
-    const fresh = entryReadSession(entry);
+    const fresh = await readWorkspaceCredential(workspaceId);
     if (!fresh || !isOAuthSession(fresh)) {
-      clearBackoffIfSet(entry, backoff.tier);
+      if (backoff.invalidGrantTier !== undefined) {
+        await foldStateWrite(
+          () => clearWorkspaceBackoff(workspaceId),
+          summary,
+          workspaceId,
+          'clear backoff'
+        );
+      }
       return;
     }
     if (Date.now() - (fresh.lastRefreshAt ?? 0) < KEEPALIVE_INTERVAL_MS) {
-      clearBackoffIfSet(entry, backoff.tier); // rotated elsewhere — backoff moot
+      if (backoff.invalidGrantTier !== undefined) {
+        // rotated elsewhere — backoff moot
+        await foldStateWrite(
+          () => clearWorkspaceBackoff(workspaceId),
+          summary,
+          workspaceId,
+          'clear backoff'
+        );
+      }
       summary.skipped++;
       return;
     }
@@ -229,36 +221,47 @@ export async function rotateEntry(
         expiresAt: refreshResult.value.expiresAt,
         lastRefreshAt: Date.now(),
       };
-      const writeResult = entryWriteSession(entry, updated);
+      const writeResult = await ResultAsync.fromPromise(
+        writeWorkspaceCredential(workspaceId, updated),
+        toError
+      );
       if (writeResult.isErr()) {
         summary.failed++;
-        appendLog(`error ${entry.root}: persist failed: ${writeResult.error.message}`);
+        appendLog(`error ${workspaceId}: persist failed: ${writeResult.error.message}`);
       } else {
         summary.rotated++;
         // Refresh worked — clear any accumulated invalid_grant backoff.
-        if (backoff.tier !== undefined) {
-          void entryUpdateBackoff(entry, {
-            invalidGrantTier: undefined,
-            invalidGrantNextAttemptAt: undefined,
-          });
-        }
-        appendLog(`rotated ${entry.root}`);
+        await foldStateWrite(
+          () => clearWorkspaceBackoff(workspaceId),
+          summary,
+          workspaceId,
+          'clear backoff'
+        );
+        appendLog(`rotated ${workspaceId}`);
       }
     } else {
       summary.failed++;
       const message = refreshResult.error.message;
-      appendLog(`error ${entry.root}: refresh failed: ${message}`);
+      appendLog(`error ${workspaceId}: refresh failed: ${message}`);
       if (message.includes('invalid_grant')) {
-        const tier = (backoff.tier ?? 0) + 1;
+        const tier = (backoff.invalidGrantTier ?? 0) + 1;
         const delay = KEEPALIVE_BACKOFF_MS[Math.min(tier - 1, KEEPALIVE_BACKOFF_MS.length - 1)];
         const nextAttemptAt = Date.now() + delay;
-        void entryUpdateBackoff(entry, {
-          invalidGrantTier: tier,
-          invalidGrantNextAttemptAt: nextAttemptAt,
-        });
-        appendLog(
-          `invalid_grant ${entry.root}: backing off for ${Math.round(delay / 60_000)}min (tier ${tier}) — needs interactive re-auth`
+        const recorded = await foldStateWrite(
+          () =>
+            updateWorkspaceState(workspaceId, {
+              invalidGrantTier: tier,
+              invalidGrantNextAttemptAt: nextAttemptAt,
+            }),
+          summary,
+          workspaceId,
+          'backoff state'
         );
+        if (recorded) {
+          appendLog(
+            `invalid_grant ${workspaceId}: backing off for ${Math.round(delay / 60_000)}min (tier ${tier}) — needs interactive re-auth`
+          );
+        }
       }
     }
   } finally {
@@ -266,16 +269,14 @@ export async function rotateEntry(
   }
 }
 
-/** Run one keepalive pass over every registered entry. */
+/** Run one keepalive pass over every workspace in the credentials store. */
 export async function runKeepaliveCycle(
-  opts: KeepaliveCycleOptions = {}
+  _opts: KeepaliveCycleOptions = {}
 ): Promise<Result<RotationSummary, Error>> {
   const summary: RotationSummary = { checked: 0, rotated: 0, skipped: 0, failed: 0, pruned: 0 };
-  const listResult = listProjects();
-  if (listResult.isErr()) return err(listResult.error);
-  for (const project of listResult.value) {
+  for (const workspaceId of await listWorkspaceIds()) {
     summary.checked++;
-    await rotateEntry(project, opts, summary);
+    await rotateWorkspace(workspaceId, summary);
   }
   return ok(summary);
 }

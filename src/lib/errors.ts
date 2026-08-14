@@ -1,8 +1,9 @@
 export class UnauthenticatedError extends Error {
   readonly kind = 'UnauthenticatedError' as const;
-  constructor() {
+  constructor(message?: string) {
     super(
-      'No credentials found. Pass --api-key or --token, set LINEAR_API_KEY or LINEAR_ACCESS_TOKEN, or run `linear login`.'
+      message ??
+        'No credentials found. Pass --api-key or --token, set LINEAR_API_KEY or LINEAR_ACCESS_TOKEN, or run `linear login`.'
     );
     this.name = 'UnauthenticatedError';
   }

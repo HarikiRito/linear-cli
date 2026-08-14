@@ -4,10 +4,12 @@ import { Result } from 'neverthrow';
 import pc from 'picocolors';
 import { KEEPALIVE_INTERVAL_MS } from '../../lib/config.js';
 import { exitError } from '../../lib/runner.js';
-import { isOAuthSession, readProjectSession, readSession } from '../auth/session.js';
+import { listWorkspaceIds, readWorkspaceCredential } from '../auth/credentials.js';
+import { isOAuthSession } from '../auth/session.js';
 import { listProjects } from './registry.js';
 import { runKeepaliveCycle } from './rotate.js';
 import { getScheduler } from './scheduler/index.js';
+import { readWorkspaceState } from './state.js';
 
 function resolveCliPath(): string {
   return Result.fromThrowable(
@@ -32,7 +34,7 @@ export function registerKeepaliveCommands(program: Command): void {
       }
       console.log(pc.green('Cron installed.'));
       console.log(
-        'Sessions for all registered projects will be kept alive. Run `linear keepalive status` to view.'
+        'Sessions for all authenticated workspaces will be kept alive. Run `linear keepalive status` to view.'
       );
     });
 
@@ -50,16 +52,11 @@ export function registerKeepaliveCommands(program: Command): void {
 
   keepalive
     .command('status')
-    .description('Show scheduler + registered projects.')
-    .action(() => {
+    .description('Show scheduler, per-workspace rotation state, and linked directories.')
+    .action(async () => {
       const statusResult = getScheduler().status();
-      const listResult = listProjects();
       if (statusResult.isErr()) {
         exitError(statusResult.error);
-        return;
-      }
-      if (listResult.isErr()) {
-        exitError(listResult.error);
         return;
       }
       const s = statusResult.value;
@@ -68,21 +65,57 @@ export function registerKeepaliveCommands(program: Command): void {
       );
       if (s.installed && s.detail) console.log(`  ${s.detail}`);
 
-      const projects = listResult.value;
-      if (projects.length === 0) {
-        console.log('Registered projects: none');
+      // Per-workspace rotation state — offline-safe: ids only, no network calls.
+      const workspaceIds = await listWorkspaceIds();
+      if (workspaceIds.length === 0) {
+        console.log('Workspaces: none');
+      } else {
+        console.log('Workspaces:');
+        for (const id of workspaceIds) {
+          const session = await readWorkspaceCredential(id);
+          if (!session) {
+            console.log(`  ${id}  no credential`);
+            continue;
+          }
+          if (!isOAuthSession(session)) {
+            console.log(`  ${id}  api-key session (not rotated)`);
+            continue;
+          }
+          const last = session.lastRefreshAt ?? 0;
+          const lastLabel = last ? new Date(last).toISOString() : 'never';
+          const state = await readWorkspaceState(id);
+          const backingOff =
+            state.invalidGrantNextAttemptAt !== undefined &&
+            state.invalidGrantNextAttemptAt > Date.now();
+          const due = Date.now() - last >= KEEPALIVE_INTERVAL_MS;
+          const stateLabel = backingOff
+            ? pc.red(
+                `backoff tier ${state.invalidGrantTier ?? '?'} until ${new Date(
+                  state.invalidGrantNextAttemptAt as number
+                ).toISOString()}`
+              )
+            : due
+              ? pc.yellow('due')
+              : pc.green('ok');
+          console.log(`  ${id}  lastRefresh: ${lastLabel}  ${stateLabel}`);
+        }
+        console.log('  (ids only — no stored workspace names; link a directory to bind one)');
+      }
+
+      // Linked directories (registry).
+      const listResult = listProjects();
+      if (listResult.isErr()) {
+        exitError(listResult.error);
         return;
       }
-      console.log('Registered projects:');
-      for (const p of projects) {
-        const session = p.scope === 'global' ? readSession() : readProjectSession(p.root);
-        const last = session && isOAuthSession(session) ? (session.lastRefreshAt ?? 0) : 0;
-        const due = Date.now() - last >= KEEPALIVE_INTERVAL_MS;
-        const lastLabel = last ? new Date(last).toISOString() : 'never';
-        const scopeLabel = p.scope === 'global' ? '[global]' : '[project]';
-        console.log(
-          `  ${scopeLabel} ${p.root}  lastRefresh: ${lastLabel}  ${due ? pc.yellow('due') : pc.green('ok')}`
-        );
+      const projects = listResult.value;
+      if (projects.length === 0) {
+        console.log('Linked directories: none');
+      } else {
+        console.log('Linked directories:');
+        for (const p of projects) {
+          console.log(`  ${p.root}  → ${p.workspace}${p.team ? ` (${p.team.key})` : ''}`);
+        }
       }
     });
 

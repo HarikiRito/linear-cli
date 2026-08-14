@@ -16,9 +16,14 @@ export function registerAuthCommands(program: Command): void {
 
   program
     .command('logout')
-    .description('Remove stored credentials')
-    .action(() => {
-      runLogout();
+    .description('Remove stored credentials or unlink this directory')
+    .option('--workspace <id>', 'Remove credentials for a specific workspace')
+    .option('--all', 'Wipe all workspace credentials')
+    .action(async (opts: { workspace?: string; all?: boolean }) => {
+      await ResultAsync.fromPromise(
+        runLogout({ workspace: opts.workspace, all: opts.all }),
+        toError
+      ).mapErr((e) => exitError(e));
     });
 }
 
@@ -31,7 +36,7 @@ export function registerTeamSelectCommand(program: Command): void {
 
   team
     .command('select')
-    .description('Interactively select a default team and default projects (project scope only)')
+    .description('Interactively select a default team and default projects')
     .action(async () => {
       await ResultAsync.fromPromise(runTeamSelectFlow(), toError).mapErr((e) => exitError(e));
     });

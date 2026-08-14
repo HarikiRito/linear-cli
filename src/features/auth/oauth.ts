@@ -10,7 +10,7 @@ import {
   LINEAR_TOKEN_URL,
 } from '../../lib/config.js';
 import { AuthError, type CliError, NetworkError, toError } from '../../lib/errors.js';
-import { writeSession } from './session.js';
+import type { OAuthSession } from './session.js';
 
 export function generateCodeVerifier(): string {
   // 96 random bytes → 128 base64url chars (within the required 43–128 char range)
@@ -81,7 +81,7 @@ async function exchangeCodeRaw(
   };
 }
 
-export function startOAuthFlow(): ResultAsync<void, CliError> {
+export function startOAuthFlow(): ResultAsync<OAuthSession, CliError> {
   const clientId = getClientId();
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
@@ -90,7 +90,7 @@ export function startOAuthFlow(): ResultAsync<void, CliError> {
   // Timeout handle lives outside the inner Promise so both paths can clear it
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
-  const flowPromise: Promise<void> = bindFirstAvailablePort(CANDIDATE_PORTS).then(
+  const flowPromise: Promise<OAuthSession> = bindFirstAvailablePort(CANDIDATE_PORTS).then(
     ([server, port]) => {
       const redirectUri = `http://localhost:${port}${CALLBACK_PATH}`;
 
@@ -159,15 +159,13 @@ export function startOAuthFlow(): ResultAsync<void, CliError> {
 
       return codePromise.then(async (code) => {
         const tokens = await exchangeCodeRaw(code, redirectUri, clientId, codeVerifier);
-        const writeResult = writeSession({
+        // Return the session — callers persist it to the workspace credential.
+        return {
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,
           expiresAt: Date.now() + tokens.expiresIn * 1000,
           lastRefreshAt: Date.now(),
-        });
-        if (writeResult.isErr()) {
-          throw writeResult.error;
-        }
+        } satisfies OAuthSession;
       });
     }
   );

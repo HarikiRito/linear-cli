@@ -9,86 +9,40 @@ function projectsToml(ids: string[]): string {
   return ids.map((id) => `[[projects]]\nid = "${id}"\nname = "${id}-name"\n`).join('\n');
 }
 
-describe('getDefaultProjectIds: real two-file precedence (project vs global)', () => {
+function writeGlobalConfig(homeDir: string, content: string): void {
+  const globalLinearDir = path.join(homeDir, '.config', '.linear');
+  fs.mkdirSync(globalLinearDir, { recursive: true });
+  fs.writeFileSync(path.join(globalLinearDir, 'config.toml'), content, 'utf-8');
+}
+
+describe('getDefaultProjectIds: global config precedence', () => {
   const tmpEnv = useTmpProjectAndHome({
     projectPrefix: 'linear-project-ids-project-',
     homePrefix: 'linear-project-ids-home-',
     deleteEnvVars: ['LINEAR_TEAM_ID', 'LINEAR_WORKSPACE'],
   });
 
-  it('project config.toml projects wins when BOTH real project and global config.toml set different values', async () => {
-    const globalLinearDir = path.join(tmpEnv.homeDir, '.config', '.linear');
-    fs.mkdirSync(globalLinearDir, { recursive: true });
-    fs.writeFileSync(path.join(globalLinearDir, 'config.toml'), projectsToml(['g1']), 'utf-8');
-
-    const projectLinearDir = path.join(tmpEnv.projectDir, '.linear');
-    fs.mkdirSync(projectLinearDir, { recursive: true });
-    fs.writeFileSync(path.join(projectLinearDir, 'config.toml'), projectsToml(['p1']), 'utf-8');
-
-    process.cwd = () => tmpEnv.projectDir;
+  it('returns ids from the global config.toml projects table', async () => {
+    writeGlobalConfig(tmpEnv.homeDir, projectsToml(['g1', 'g2']));
 
     const { getDefaultProjectIds } = await import('../resolve.js');
-    expect(getDefaultProjectIds()).toEqual(['p1']);
+    expect(getDefaultProjectIds()).toEqual(['g1', 'g2']);
   });
 
-  it('falls back to the real global config.toml projects when project config has none set', async () => {
-    const globalLinearDir = path.join(tmpEnv.homeDir, '.config', '.linear');
-    fs.mkdirSync(globalLinearDir, { recursive: true });
-    fs.writeFileSync(path.join(globalLinearDir, 'config.toml'), projectsToml(['g1']), 'utf-8');
-
-    process.cwd = () => tmpEnv.projectDir;
-
-    const { getDefaultProjectIds } = await import('../resolve.js');
-    expect(getDefaultProjectIds()).toEqual(['g1']);
-  });
-
-  it('falls back to global config.toml projects when project config.toml exists but has an empty projects array', async () => {
-    const globalLinearDir = path.join(tmpEnv.homeDir, '.config', '.linear');
-    fs.mkdirSync(globalLinearDir, { recursive: true });
-    fs.writeFileSync(path.join(globalLinearDir, 'config.toml'), projectsToml(['g1']), 'utf-8');
-
-    const projectLinearDir = path.join(tmpEnv.projectDir, '.linear');
-    fs.mkdirSync(projectLinearDir, { recursive: true });
-    fs.writeFileSync(path.join(projectLinearDir, 'config.toml'), 'projects = []\n', 'utf-8');
-
-    process.cwd = () => tmpEnv.projectDir;
-
-    const { getDefaultProjectIds } = await import('../resolve.js');
-    expect(getDefaultProjectIds()).toEqual(['g1']);
-  });
-
-  it('returns undefined when neither project nor global config has projects set', async () => {
-    process.cwd = () => tmpEnv.projectDir;
-
+  it('returns undefined when the global config has no projects set', async () => {
     const { getDefaultProjectIds } = await import('../resolve.js');
     expect(getDefaultProjectIds()).toBeUndefined();
   });
 
-  it('returns undefined when both project and global config have an empty projects array', async () => {
-    const globalLinearDir = path.join(tmpEnv.homeDir, '.config', '.linear');
-    fs.mkdirSync(globalLinearDir, { recursive: true });
-    fs.writeFileSync(path.join(globalLinearDir, 'config.toml'), 'projects = []\n', 'utf-8');
-
-    const projectLinearDir = path.join(tmpEnv.projectDir, '.linear');
-    fs.mkdirSync(projectLinearDir, { recursive: true });
-    fs.writeFileSync(path.join(projectLinearDir, 'config.toml'), 'projects = []\n', 'utf-8');
-
-    process.cwd = () => tmpEnv.projectDir;
+  it('returns undefined when the global config has an empty projects array', async () => {
+    writeGlobalConfig(tmpEnv.homeDir, 'projects = []\n');
 
     const { getDefaultProjectIds } = await import('../resolve.js');
     expect(getDefaultProjectIds()).toBeUndefined();
   });
 
   it('reads multiple projects and extracts bare ids in order', async () => {
-    const projectLinearDir = path.join(tmpEnv.projectDir, '.linear');
-    fs.mkdirSync(projectLinearDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(projectLinearDir, 'config.toml'),
-      projectsToml(['p1', 'p2']),
-      'utf-8'
-    );
-
-    process.cwd = () => tmpEnv.projectDir;
+    writeGlobalConfig(tmpEnv.homeDir, projectsToml(['p1', 'p2']));
 
     const { getDefaultProjectIds } = await import('../resolve.js');
     expect(getDefaultProjectIds()).toEqual(['p1', 'p2']);

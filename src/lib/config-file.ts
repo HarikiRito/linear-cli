@@ -3,7 +3,7 @@ import path from 'node:path';
 import { Result } from 'neverthrow';
 import { parse, stringify } from 'smol-toml';
 import { toError } from './errors.js';
-import { getGlobalConfigDir, getProjectLinearDir } from './scope.js';
+import { getGlobalConfigDir } from './scope.js';
 
 export interface DefaultTeam {
   id: string;
@@ -16,17 +16,24 @@ export interface DefaultProject {
 }
 
 export interface LinearConfig {
+  /**
+   * @deprecated Retained for backward-compatible reads of legacy config.toml
+   * files — no longer used by production code. Teams are link-only now: the
+   * cwd-linked registry entry's `team` (or the LINEAR_TEAM_ID env override).
+   * May still be written by the legacy `team select` global path.
+   */
   team?: DefaultTeam;
+  /**
+   * @deprecated Retained for backward-compatible reads of legacy config.toml
+   * files — no longer used by production code. Workspace selection is
+   * link-only (registry) with an explicit LINEAR_WORKSPACE env override.
+   */
   workspace?: string;
   projects?: DefaultProject[];
 }
 
 export function getGlobalConfigPath(): string {
   return path.join(getGlobalConfigDir(), 'config.toml');
-}
-
-export function getProjectConfigPath(projectRoot: string): string {
-  return path.join(getProjectLinearDir(projectRoot), 'config.toml');
 }
 
 /**

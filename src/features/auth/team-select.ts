@@ -1,22 +1,23 @@
 import { isCancel, multiselect, select } from '@clack/prompts';
 import type { LinearClient } from '@linear/sdk';
-import { ResultAsync } from 'neverthrow';
+import { Result, ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
 import {
   type DefaultProject,
   type DefaultTeam,
+  getGlobalConfigPath,
   type LinearConfig,
   readConfig,
   writeConfig,
 } from '../../lib/config-file.js';
 import { toError } from '../../lib/errors.js';
+import { updateEntry } from '../keepalive/registry.js';
 
 /**
  * Fetch the authenticated user's teams and let them pick a default team.
  * Applies to both API-key and OAuth paths, and both Global and Project save
  * scopes, as well as the standalone `team select` command. When exactly one
- * team exists it is pre-selected as the initial value — the user still
- * confirms via Enter, the prompt is not skipped.
+ * team exists it is auto-selected without prompting — nothing to choose.
  *
  * Returns both `id` and `key` (not just the bare id) so callers can persist
  * a human-readable config alongside the id. Returns undefined if the fetch
@@ -42,13 +43,18 @@ export async function selectDefaultTeam(client: LinearClient): Promise<DefaultTe
     return undefined;
   }
 
+  // Exactly one team — nothing to choose, auto-pick it.
+  if (teams.length === 1) {
+    const only = teams[0];
+    console.log(pc.dim(`Using team ${only.name} (${only.key}) — only team in workspace.`));
+    return { id: only.id, key: only.key };
+  }
+
   const options = teams.map((t) => ({ value: t.id, label: `${t.name} (${t.key})` }));
-  const initialValue = teams.length === 1 ? teams[0].id : undefined;
 
   const picked = await select({
     message: 'Default team for this project:',
     options,
-    initialValue,
   });
 
   if (isCancel(picked)) {
@@ -68,6 +74,8 @@ export async function selectDefaultTeam(client: LinearClient): Promise<DefaultTe
  * Returns undefined if the fetch fails, no projects exist for the team, the
  * user selects nothing, or the user cancels — callers should treat that as
  * "no default projects selected" (non-fatal), mirroring selectDefaultTeam.
+ * When the team has exactly one project it is auto-selected without prompting —
+ * nothing to choose.
  *
  * Returns `{id, name}[]` (not just bare ids) so callers can persist a
  * human-readable config alongside each id.
@@ -95,6 +103,13 @@ export async function selectDefaultProjects(
     return undefined;
   }
 
+  // Exactly one project — nothing to choose, auto-pick it.
+  if (projects.length === 1) {
+    const only = projects[0];
+    console.log(pc.dim(`Using project ${only.name} — only project in team.`));
+    return [{ id: only.id, name: only.name }];
+  }
+
   const options = projects.map((p) => ({ value: p.id, label: p.name }));
 
   const picked = await multiselect({
@@ -119,27 +134,60 @@ export async function selectDefaultProjects(
 }
 
 /**
- * Shared "team-select → project-select → write to config" sequence, used by
- * both `runLoginFlow()` and the standalone `linear team select` command so
- * neither duplicates the selection+write logic.
+ * Shared "team-select → project-select → persist" sequence used by the
+ * standalone `linear team select` command (and `runLoginFlow()` previously —
+ * login now links unconditionally and persists via its own pick + link calls).
  *
- * Only touches config.toml when a team was actually resolved — never writes
- * on failure/cancel, so a pre-existing `team`/`projects` in the config is
- * left untouched rather than silently wiped by an empty write. When a team
- * IS resolved, the write merges onto the existing config so unrelated keys
- * (e.g. `workspace`) survive; `projects` is only included when the picker
- * actually resolved a non-empty selection, so an unresolved/cancelled/
- * zero-selection picker never clobbers a pre-existing `projects`.
+ * Persist target:
+ * - registry (`{type:'registry', root}`) — the linked directory's team goes
+ *   to its registry entry; projects always land in the global config.
+ * - global — team + projects both go to the global config.toml.
  *
- * `preloadedConfig`, when provided, is used as the existing config instead of
- * re-reading `configPath` — for callers (e.g. `runTeamSelectFlow`) that
- * already read the file themselves (typically to verify it exists) and would
- * otherwise trigger a second, redundant read of the same file.
+ * Only touches config when a team was actually resolved — never writes on
+ * failure/cancel, so a pre-existing `team`/`projects` in the config survives.
+ * The write merges onto the existing config so unrelated keys (e.g.
+ * `workspace`) survive; `projects` is only included when the picker resolved
+ * a non-empty selection.
  */
+export type TeamPersistTarget = { type: 'registry'; root: string } | { type: 'global' };
+
+/**
+ * Merge default team/projects onto the global config.toml. `team` is included
+ * only when explicitly provided (for linked directories the team lives on the
+ * registry entry instead); `projects` is included only when non-empty. The
+ * write merges onto the existing config so unrelated keys (e.g. `workspace`)
+ * survive, and warns rather than failing on read/write errors.
+ */
+export function mergeGlobalConfig(merge: {
+  team?: DefaultTeam;
+  projects?: DefaultProject[];
+}): void {
+  const readResult = Result.fromThrowable(() => readConfig(getGlobalConfigPath()), toError)();
+  let existingConfig: LinearConfig = {};
+  if (readResult.isErr()) {
+    console.error(
+      pc.yellow(
+        `Warning: could not read existing config.toml, it will be overwritten: ${readResult.error.message}`
+      )
+    );
+  } else {
+    existingConfig = readResult.value;
+  }
+
+  const config: LinearConfig = {
+    ...existingConfig,
+    ...(merge.team ? { team: merge.team } : {}),
+    ...(merge.projects && merge.projects.length > 0 ? { projects: merge.projects } : {}),
+  };
+  const configResult = writeConfig(getGlobalConfigPath(), config);
+  if (configResult.isErr()) {
+    console.error(pc.yellow(`Warning: could not write config.toml: ${configResult.error.message}`));
+  }
+}
+
 export async function selectAndPersistTeamAndProjects(
   client: LinearClient,
-  configPath: string,
-  preloadedConfig?: LinearConfig
+  target: TeamPersistTarget
 ): Promise<void> {
   const team = await selectDefaultTeam(client);
 
@@ -148,26 +196,15 @@ export async function selectAndPersistTeamAndProjects(
 
   if (!team) return;
 
-  let existingConfig: LinearConfig = preloadedConfig ?? {};
-  if (preloadedConfig === undefined) {
-    try {
-      existingConfig = readConfig(configPath);
-    } catch (e) {
+  if (target.type === 'registry') {
+    // Linked dir: team override lives on the registry entry.
+    const updateResult = await updateEntry(target.root, { team });
+    if (updateResult.isErr()) {
       console.error(
-        pc.yellow(
-          `Warning: could not read existing config.toml, it will be overwritten: ${toError(e).message}`
-        )
+        pc.yellow(`Warning: could not update registry entry: ${updateResult.error.message}`)
       );
     }
   }
 
-  const config: LinearConfig = {
-    ...existingConfig,
-    team,
-    ...(projects && projects.length > 0 ? { projects } : {}),
-  };
-  const configResult = writeConfig(configPath, config);
-  if (configResult.isErr()) {
-    console.error(pc.yellow(`Warning: could not write config.toml: ${configResult.error.message}`));
-  }
+  mergeGlobalConfig(target.type === 'global' ? { team, projects } : { projects });
 }

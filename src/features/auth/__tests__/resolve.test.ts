@@ -1,341 +1,166 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-// We test resolveCredential by controlling:
-// - process.env vars
-// - process.cwd() (for project scope discovery)
-// - the actual auth.json files on disk in temp directories
-
-// We DON'T import resolveCredential directly because it has complex async/interactive
-// behaviour. Instead we test the building blocks: session read/write and scope.
-
+import { describe, expect, it } from 'vitest';
 import { useTmpProjectAndHome } from '../../../../tests/helpers/tmp-env.js';
-import { findProjectRoot } from '../../../lib/scope.js';
+import { UnauthenticatedError } from '../../../lib/errors.js';
+import { linkProject } from '../../keepalive/registry.js';
+import { readWorkspaceCredential, writeWorkspaceCredential } from '../credentials.js';
 import { resolveCredential } from '../resolve.js';
-import {
-  isApiKeySession,
-  isOAuthSession,
-  readProjectSession,
-  writeProjectSession,
-  writeSession,
-} from '../session.js';
-
-describe('resolveAuth building blocks', () => {
-  let tmpDir: string;
-  let originalEnv: NodeJS.ProcessEnv;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-resolve-test-'));
-    originalEnv = { ...process.env };
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-    // Restore env
-    for (const key of Object.keys(process.env)) {
-      if (!(key in originalEnv)) {
-        delete process.env[key];
-      }
-    }
-    Object.assign(process.env, originalEnv);
-  });
-
-  describe('project session helpers', () => {
-    it('writeProjectSession and readProjectSession round-trip', () => {
-      const session = { apiKey: 'proj-key' };
-      const writeResult = writeProjectSession(tmpDir, session);
-      expect(writeResult.isOk()).toBe(true);
-
-      const read = readProjectSession(tmpDir);
-      expect(read).toEqual(session);
-    });
-
-    it('readProjectSession returns null when file does not exist', () => {
-      const read = readProjectSession(tmpDir);
-      expect(read).toBeNull();
-    });
-  });
-
-  describe('session type guards', () => {
-    it('isApiKeySession returns true for apiKey session', () => {
-      expect(isApiKeySession({ apiKey: 'k' })).toBe(true);
-    });
-
-    it('isOAuthSession returns true for oauth session', () => {
-      expect(isOAuthSession({ accessToken: 'at', refreshToken: 'rt', expiresAt: 0 })).toBe(true);
-    });
-  });
-});
-
-describe('resolveAuth: auth precedence (integration-style)', () => {
-  let tmpDir: string;
-  let originalEnv: NodeJS.ProcessEnv;
-  let originalCwd: () => string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-auth-prec-test-'));
-    originalEnv = { ...process.env };
-    originalCwd = process.cwd.bind(process);
-    // Delete auth-related env vars before each test
-    delete process.env.LINEAR_API_KEY;
-    delete process.env.LINEAR_ACCESS_TOKEN;
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-    process.cwd = originalCwd;
-    for (const key of Object.keys(process.env)) {
-      if (!(key in originalEnv)) delete process.env[key];
-    }
-    Object.assign(process.env, originalEnv);
-  });
-
-  it('resolveAuth: project .linear/auth.json is found by scope discovery when cwd is inside project', () => {
-    // Set up project tree: tmpDir/.linear/auth.json
-    const linearDir = path.join(tmpDir, '.linear');
-    fs.mkdirSync(linearDir);
-
-    const subDir = path.join(tmpDir, 'src', 'feature');
-    fs.mkdirSync(subDir, { recursive: true });
-
-    // Mock cwd to be the nested dir
-    process.cwd = () => subDir;
-
-    // Verify scope discovers the project root
-    const root = findProjectRoot(subDir);
-    expect(root).toBe(tmpDir);
-    if (root === null) throw new Error('expected findProjectRoot to locate tmpDir');
-
-    // Write project auth
-    writeProjectSession(tmpDir, { apiKey: 'proj-key' });
-
-    // Read back through the discovered root
-    const session = readProjectSession(root);
-    expect(session).toEqual({ apiKey: 'proj-key' });
-  });
-
-  it('resolveAuth: scope returns null when outside any project', () => {
-    // tmpDir has no .linear/
-    const root = findProjectRoot(tmpDir);
-    expect(root).toBeNull();
-  });
-
-  it('resolveAuth: project auth takes precedence over global when both exist', () => {
-    // Setup project
-    const linearDir = path.join(tmpDir, '.linear');
-    fs.mkdirSync(linearDir);
-    writeProjectSession(tmpDir, { apiKey: 'proj-key' });
-
-    // Setup global (write to a temp "global" location for this test)
-    // We verify which one findProjectRoot returns — not the global path
-    const projectRoot = findProjectRoot(tmpDir);
-    expect(projectRoot).toBe(tmpDir);
-    if (projectRoot === null) throw new Error('expected findProjectRoot to locate tmpDir');
-
-    const projectSession = readProjectSession(projectRoot);
-    expect(projectSession).toEqual({ apiKey: 'proj-key' });
-  });
-});
-
-describe('resolveTeam config resolution', () => {
-  const tmpEnv = useTmpProjectAndHome({
-    projectPrefix: 'linear-team-test-',
-    homePrefix: 'linear-team-test-home-',
-    deleteEnvVars: ['LINEAR_TEAM_ID', 'LINEAR_WORKSPACE'],
-  });
-
-  it('resolveTeam: LINEAR_TEAM_ID env overrides project config team table', async () => {
-    // Setup project config
-    const linearDir = path.join(tmpEnv.projectDir, '.linear');
-    fs.mkdirSync(linearDir);
-    fs.writeFileSync(
-      path.join(linearDir, 'config.toml'),
-      '[team]\nid = "proj-team"\nkey = "PROJ"\n',
-      'utf-8'
-    );
-    process.cwd = () => tmpEnv.projectDir;
-    process.env.LINEAR_TEAM_ID = 'env-team';
-
-    const { getDefaultTeamId } = await import('../../../features/issues/shared/resolve.js');
-    const teamId = getDefaultTeamId();
-    expect(teamId).toBe('env-team');
-  });
-
-  it('resolveTeam: project config team table used before global config team table', async () => {
-    // Setup project with team table
-    const linearDir = path.join(tmpEnv.projectDir, '.linear');
-    fs.mkdirSync(linearDir);
-    fs.writeFileSync(
-      path.join(linearDir, 'config.toml'),
-      '[team]\nid = "proj-team"\nkey = "PROJ"\n',
-      'utf-8'
-    );
-    process.cwd = () => tmpEnv.projectDir;
-
-    const { getDefaultTeamId } = await import('../../../features/issues/shared/resolve.js');
-    const teamId = getDefaultTeamId();
-    expect(teamId).toBe('proj-team');
-  });
-
-  it('resolveTeam: returns null when no config or env', async () => {
-    // No .linear dir, no env vars, cwd = tmpEnv.projectDir
-    process.cwd = () => tmpEnv.projectDir;
-
-    const { getDefaultTeamId } = await import('../../../features/issues/shared/resolve.js');
-    const teamId = getDefaultTeamId();
-    expect(teamId).toBeNull();
-  });
-});
+import { isApiKeySession, isOAuthSession } from '../session.js';
 
 /**
- * Real two-file precedence tests — exercises resolveCredential() and
- * getDefaultTeamId() end-to-end against REAL project `.linear/auth.json` (or
- * `config.toml`) AND REAL global `~/.config/.linear/...` files simultaneously
- * present on disk, with no mocking of the session/config read layer. This is
- * the "race" scenario the plan calls out as unexercised by the existing tests
- * above, which only ever write one side (project OR global) at a time.
+ * resolveCredential precedence (integration-style, real files on disk):
+ * flags > env > registry (cwd-linked workspace) > LINEAR_WORKSPACE env
+ * (explicit override) > unauthenticated (context-aware hint). Unlinked
+ * directories never auto-resolve to a stored workspace.
  */
-describe('resolveCredential: real two-file precedence (project vs global)', () => {
-  const tmpEnv = useTmpProjectAndHome({
-    projectPrefix: 'linear-real-project-',
-    homePrefix: 'linear-real-home-',
-    deleteEnvVars: ['LINEAR_API_KEY', 'LINEAR_ACCESS_TOKEN'],
+describe('session type guards', () => {
+  it('isApiKeySession returns true for apiKey session', () => {
+    expect(isApiKeySession({ apiKey: 'k' })).toBe(true);
   });
 
-  it('project session wins when BOTH a real project auth.json and a real global auth.json exist', async () => {
-    // Write the global session for real, under $HOME/.config/.linear/auth.json
-    const globalWrite = writeSession({ apiKey: 'global-real-key' });
-    expect(globalWrite.isOk()).toBe(true);
+  it('isOAuthSession returns true for oauth session', () => {
+    expect(isOAuthSession({ accessToken: 'at', refreshToken: 'rt', expiresAt: 0 })).toBe(true);
+  });
+});
 
-    // Write a real project session under <tmpEnv.projectDir>/.linear/auth.json
-    const projectWrite = writeProjectSession(tmpEnv.projectDir, { apiKey: 'project-real-key' });
-    expect(projectWrite.isOk()).toBe(true);
+describe('resolveCredential: precedence chain (real files)', () => {
+  const tmpEnv = useTmpProjectAndHome({
+    projectPrefix: 'linear-resolve-precedence-',
+    homePrefix: 'linear-resolve-home-',
+    deleteEnvVars: ['LINEAR_API_KEY', 'LINEAR_ACCESS_TOKEN', 'LINEAR_WORKSPACE'],
+  });
 
-    // cwd is inside the project directory, so findProjectRoot discovers .linear/
-    process.cwd = () => tmpEnv.projectDir;
+  /** Create a nested dir on disk and point cwd at it. */
+  function cdIntoNested(): string {
+    const nested = path.join(tmpEnv.projectDir, 'src', 'deep');
+    fs.mkdirSync(nested, { recursive: true });
+    process.cwd = () => nested;
+    return nested;
+  }
+
+  it('apiKey flag wins over env var', async () => {
+    process.env.LINEAR_API_KEY = 'env-key';
+    const result = await resolveCredential({ apiKey: 'flag-key', allowInteractive: false });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'flag-key' });
+  });
+
+  it('token flag wins over env var', async () => {
+    process.env.LINEAR_ACCESS_TOKEN = 'env-token';
+    const result = await resolveCredential({ token: 'flag-token', allowInteractive: false });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'accessToken', value: 'flag-token' });
+  });
+
+  it('LINEAR_API_KEY env var used when no flag', async () => {
+    process.env.LINEAR_API_KEY = 'env-key';
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'env-key' });
+  });
+
+  it('LINEAR_ACCESS_TOKEN env var used when no flag', async () => {
+    process.env.LINEAR_ACCESS_TOKEN = 'env-token';
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'accessToken', value: 'env-token' });
+  });
+
+  it('cwd-linked workspace credential is used when cwd is inside the linked dir', async () => {
+    await writeWorkspaceCredential('ws-1', { apiKey: 'linked-key' });
+    await linkProject(tmpEnv.projectDir, 'ws-1');
+    cdIntoNested();
 
     const result = await resolveCredential({ allowInteractive: false });
     expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'project-real-key' });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'linked-key' });
   });
 
-  it('falls back to the real global session when no project session exists', async () => {
-    const globalWrite = writeSession({ apiKey: 'global-only-real-key' });
-    expect(globalWrite.isOk()).toBe(true);
-
-    // cwd has no .linear/ ancestor at all
-    process.cwd = () => tmpEnv.projectDir;
+  it('linked workspace wins over LINEAR_WORKSPACE env and other stored workspaces', async () => {
+    await writeWorkspaceCredential('ws-linked', { apiKey: 'linked-key' });
+    await writeWorkspaceCredential('ws-other', { apiKey: 'other-key' });
+    await linkProject(tmpEnv.projectDir, 'ws-linked');
+    cdIntoNested();
+    process.env.LINEAR_WORKSPACE = 'ws-other';
 
     const result = await resolveCredential({ allowInteractive: false });
-    expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'global-only-real-key' });
-  });
-});
-
-describe('getDefaultTeamId: real two-file precedence (project vs global)', () => {
-  const tmpEnv = useTmpProjectAndHome({
-    projectPrefix: 'linear-real-team-project-',
-    homePrefix: 'linear-real-team-home-',
-    deleteEnvVars: ['LINEAR_TEAM_ID', 'LINEAR_WORKSPACE'],
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'linked-key' });
   });
 
-  it('project config.toml team table wins when BOTH real project and global config.toml set different values', async () => {
-    // Real global config.toml at $HOME/.config/.linear/config.toml
-    const globalLinearDir = path.join(tmpEnv.homeDir, '.config', '.linear');
-    fs.mkdirSync(globalLinearDir, { recursive: true });
+  it('linked dir whose credential is missing falls through to LINEAR_WORKSPACE env', async () => {
+    await writeWorkspaceCredential('ws-b', { apiKey: 'b-key' });
+    await linkProject(tmpEnv.projectDir, 'ws-a'); // no credential for ws-a
+    cdIntoNested();
+    process.env.LINEAR_WORKSPACE = 'ws-b';
+
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'b-key' });
+  });
+
+  it('LINEAR_WORKSPACE env picks a specific stored workspace', async () => {
+    await writeWorkspaceCredential('ws-a', { apiKey: 'a-key' });
+    await writeWorkspaceCredential('ws-b', { apiKey: 'b-key' });
+    process.env.LINEAR_WORKSPACE = 'ws-b';
+
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'b-key' });
+  });
+
+  it('explicit LINEAR_WORKSPACE with no matching credential fails rather than falling back', async () => {
+    await writeWorkspaceCredential('bar', { apiKey: 'bar-key' });
+    process.env.LINEAR_WORKSPACE = 'foo';
+
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result.isErr()).toBe(true);
+    // Must NOT silently use bar's token.
+    expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnauthenticatedError);
+  });
+
+  it('unlinked dir with stored credentials resolves to UnauthenticatedError, not the single workspace', async () => {
+    await writeWorkspaceCredential('ws-solo', { apiKey: 'solo-key' });
+
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result.isErr()).toBe(true);
+    const err = result._unsafeUnwrapErr();
+    expect(err).toBeInstanceOf(UnauthenticatedError);
+    expect(err.message).toContain('linear workspace select');
+    expect(err.message).toContain("isn't linked to a workspace");
+  });
+
+  it('unlinked dir with zero credentials resolves to UnauthenticatedError with login hint', async () => {
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result.isErr()).toBe(true);
+    const err = result._unsafeUnwrapErr();
+    expect(err).toBeInstanceOf(UnauthenticatedError);
+    expect(err.message).toBe('Not authenticated. Run `linear login` to authenticate.');
+  });
+
+  it('malformed global config.toml does not block resolution (config no longer read)', async () => {
+    await writeWorkspaceCredential('ws-a', { apiKey: 'a-key' });
+    await linkProject(tmpEnv.projectDir, 'ws-a');
+    cdIntoNested();
+    fs.mkdirSync(path.join(tmpEnv.homeDir, '.config', '.linear'), { recursive: true });
     fs.writeFileSync(
-      path.join(globalLinearDir, 'config.toml'),
-      '[team]\nid = "global-team"\nkey = "GLOB"\n',
+      path.join(tmpEnv.homeDir, '.config', '.linear', 'config.toml'),
+      'workspace = "unclosed',
       'utf-8'
     );
 
-    // Real project config.toml
-    const projectLinearDir = path.join(tmpEnv.projectDir, '.linear');
-    fs.mkdirSync(projectLinearDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(projectLinearDir, 'config.toml'),
-      '[team]\nid = "project-team"\nkey = "PROJ"\n',
-      'utf-8'
-    );
-
-    process.cwd = () => tmpEnv.projectDir;
-
-    const { getDefaultTeamId } = await import('../../../features/issues/shared/resolve.js');
-    expect(getDefaultTeamId()).toBe('project-team');
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'a-key' });
   });
 
-  it('falls back to the real global config.toml team table when no project config exists', async () => {
-    const globalLinearDir = path.join(tmpEnv.homeDir, '.config', '.linear');
-    fs.mkdirSync(globalLinearDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(globalLinearDir, 'config.toml'),
-      '[team]\nid = "global-only-team"\nkey = "GLOB"\n',
-      'utf-8'
-    );
-
-    process.cwd = () => tmpEnv.projectDir;
-
-    const { getDefaultTeamId } = await import('../../../features/issues/shared/resolve.js');
-    expect(getDefaultTeamId()).toBe('global-only-team');
-  });
-});
-
-/**
- * getDefaultWorkspace() is the only real-world caller of the scalar
- * resolveConfigValue() precedence helper (env var → project config →
- * global config → null). Exercises it against REAL project and global
- * `config.toml` files simultaneously present on disk, mirroring the
- * "getDefaultTeamId: real two-file precedence" tests above, to confirm
- * project-scope still wins for scalar keys like `workspace` after
- * resolveConfigValue() was adapted to share readMergedConfigs() with the
- * newer structured `team`/`projects` resolution helpers.
- */
-describe('getDefaultWorkspace: real two-file precedence (project vs global)', () => {
-  const tmpEnv = useTmpProjectAndHome({
-    projectPrefix: 'linear-real-workspace-project-',
-    homePrefix: 'linear-real-workspace-home-',
-    deleteEnvVars: ['LINEAR_TEAM_ID', 'LINEAR_WORKSPACE'],
+  it('returns UnauthenticatedError when nothing is stored (non-TTY)', async () => {
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnauthenticatedError);
   });
 
-  it('project config.toml workspace value wins when BOTH real project and global config.toml set different values', async () => {
-    // Real global config.toml at $HOME/.config/.linear/config.toml
-    const globalLinearDir = path.join(tmpEnv.homeDir, '.config', '.linear');
-    fs.mkdirSync(globalLinearDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(globalLinearDir, 'config.toml'),
-      'workspace = "global-workspace"\n',
-      'utf-8'
-    );
-
-    // Real project config.toml
-    const projectLinearDir = path.join(tmpEnv.projectDir, '.linear');
-    fs.mkdirSync(projectLinearDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(projectLinearDir, 'config.toml'),
-      'workspace = "project-workspace"\n',
-      'utf-8'
-    );
-
-    process.cwd = () => tmpEnv.projectDir;
-
-    const { getDefaultWorkspace } = await import('../../../features/issues/shared/resolve.js');
-    expect(getDefaultWorkspace()).toBe('project-workspace');
+  it('UnauthenticatedError message mentions how to authenticate', async () => {
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().message).toContain('linear login');
   });
 
-  it('falls back to the real global config.toml workspace value when no project config exists', async () => {
-    const globalLinearDir = path.join(tmpEnv.homeDir, '.config', '.linear');
-    fs.mkdirSync(globalLinearDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(globalLinearDir, 'config.toml'),
-      'workspace = "global-only-workspace"\n',
-      'utf-8'
-    );
-
-    process.cwd = () => tmpEnv.projectDir;
-
-    const { getDefaultWorkspace } = await import('../../../features/issues/shared/resolve.js');
-    expect(getDefaultWorkspace()).toBe('global-only-workspace');
+  it('apiKey credential round-trips through the workspace store', async () => {
+    await writeWorkspaceCredential('ws-rt', { apiKey: 'rt-key' });
+    expect(await readWorkspaceCredential('ws-rt')).toEqual({ apiKey: 'rt-key' });
   });
 });

@@ -4,14 +4,15 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as scopeMod from '../../../lib/scope.js';
 import {
+  getEntry,
   getRegistryPath,
+  linkProject,
   listProjects,
-  registerGlobal,
-  registerProject,
   unregisterProject,
+  updateEntry,
 } from '../registry.js';
 
-describe('project registry', () => {
+describe('project registry (linkage only)', () => {
   let tmpHome: string;
   let projA: string;
   let projB: string;
@@ -30,38 +31,37 @@ describe('project registry', () => {
     fs.rmSync(projB, { recursive: true, force: true });
   });
 
-  it('registerProject writes projects.json with 0o600 file and 0o700 dir', () => {
-    const result = registerProject(projA);
-    expect(result.isOk()).toBe(true);
+  it('linkProject writes projects.json with 0o600 file and 0o700 dir', async () => {
+    await linkProject(projA, 'ws-1');
 
     const registry = JSON.parse(fs.readFileSync(getRegistryPath(), 'utf-8')) as {
-      projects: Array<{ root: string; addedAt: number }>;
+      projects: Array<{ root: string; workspace: string; addedAt: number }>;
     };
     expect(registry.projects).toHaveLength(1);
     expect(registry.projects[0].root).toBe(fs.realpathSync(projA));
+    expect(registry.projects[0].workspace).toBe('ws-1');
     expect(registry.projects[0].addedAt).toBeGreaterThan(0);
     expect(fs.statSync(getRegistryPath()).mode & 0o777).toBe(0o600);
     expect(fs.statSync(path.dirname(getRegistryPath())).mode & 0o777).toBe(0o700);
   });
 
-  it('registerProject dedups the same root', () => {
-    registerProject(projA);
-    const second = registerProject(projA);
-    expect(second.isOk()).toBe(true);
+  it('linkProject dedups the same root', async () => {
+    await linkProject(projA, 'ws-1');
+    await linkProject(projA, 'ws-2');
     expect(listProjects()._unsafeUnwrap()).toHaveLength(1);
   });
 
-  it('registerProject dedups roots that resolve to the same realpath', () => {
-    registerProject(projA);
+  it('linkProject dedups roots that resolve to the same realpath', async () => {
+    await linkProject(projA, 'ws-1');
     const alias = path.join(projA, '..', path.basename(projA));
-    registerProject(alias);
+    await linkProject(alias, 'ws-2');
     expect(listProjects()._unsafeUnwrap()).toHaveLength(1);
   });
 
-  it('unregisterProject removes the matching entry', () => {
-    registerProject(projA);
-    registerProject(projB);
-    const result = unregisterProject(projA);
+  it('unregisterProject removes the matching entry', async () => {
+    await linkProject(projA, 'ws-1');
+    await linkProject(projB, 'ws-2');
+    const result = await unregisterProject(projA);
     expect(result.isOk()).toBe(true);
 
     const projects = listProjects()._unsafeUnwrap();
@@ -69,17 +69,18 @@ describe('project registry', () => {
     expect(projects[0].root).toBe(fs.realpathSync(projB));
   });
 
-  it('unregisterProject is idempotent for unknown roots', () => {
-    const result = unregisterProject(projA);
+  it('unregisterProject is idempotent for unknown roots', async () => {
+    const result = await unregisterProject(projA);
     expect(result.isOk()).toBe(true);
     expect(listProjects()._unsafeUnwrap()).toEqual([]);
   });
 
-  it('listProjects reads entries back from disk', () => {
-    registerProject(projA);
+  it('listProjects reads entries back from disk', async () => {
+    await linkProject(projA, 'ws-1');
     const projects = listProjects()._unsafeUnwrap();
     expect(projects).toHaveLength(1);
     expect(projects[0].root).toBe(fs.realpathSync(projA));
+    expect(projects[0].workspace).toBe('ws-1');
     expect(projects[0].addedAt).toEqual(expect.any(Number));
   });
 
@@ -89,13 +90,98 @@ describe('project registry', () => {
     expect(listProjects()._unsafeUnwrap()).toEqual([]);
   });
 
-  it('registerGlobal writes a global entry and dedups', () => {
-    expect(registerGlobal().isOk()).toBe(true);
-    expect(registerGlobal().isOk()).toBe(true);
+  it('filters out stale entries without a workspace field on read (file untouched)', () => {
+    // Old-model global-sentinel artifacts: `{root, scope}` with no workspace.
+    const registryPath = getRegistryPath();
+    fs.mkdirSync(path.dirname(registryPath), { recursive: true });
+    fs.writeFileSync(
+      registryPath,
+      JSON.stringify({
+        projects: [
+          { root: '~/.config/.linear', scope: 'global', addedAt: 123 },
+          { root: fs.realpathSync(projA), workspace: 'ws-1', addedAt: 456 },
+          null,
+          'garbage',
+        ],
+      }),
+      'utf-8'
+    );
 
     const projects = listProjects()._unsafeUnwrap();
     expect(projects).toHaveLength(1);
-    expect(projects[0].scope).toBe('global');
-    expect(projects[0].root).toBe(tmpHome);
+    expect(projects[0].root).toBe(fs.realpathSync(projA));
+    expect(projects[0].workspace).toBe('ws-1');
+    expect(projects[0]).not.toHaveProperty('scope');
+
+    // Read-only: the stale entry is filtered in memory, never rewritten.
+    expect(fs.readFileSync(registryPath, 'utf-8')).toContain('"scope":"global"');
+  });
+
+  it('getEntry ignores stale no-workspace entries', () => {
+    const registryPath = getRegistryPath();
+    fs.mkdirSync(path.dirname(registryPath), { recursive: true });
+    fs.writeFileSync(
+      registryPath,
+      JSON.stringify({
+        projects: [{ root: projA, scope: 'global', addedAt: 123 }],
+      }),
+      'utf-8'
+    );
+
+    expect(getEntry(projA)).toBeUndefined();
+  });
+
+  it('linkProject creates a new entry with workspace and team', async () => {
+    const entry = await linkProject(projA, 'ws-1', { id: 'team-1', key: 'T1' });
+
+    expect(entry.root).toBe(fs.realpathSync(projA));
+    expect(entry.workspace).toBe('ws-1');
+    expect(entry.team).toEqual({ id: 'team-1', key: 'T1' });
+    expect(entry.addedAt).toBeGreaterThan(0);
+
+    const projects = listProjects()._unsafeUnwrap();
+    expect(projects).toHaveLength(1);
+    expect(projects[0].workspace).toBe('ws-1');
+    expect(projects[0].team).toEqual({ id: 'team-1', key: 'T1' });
+  });
+
+  it('linkProject without team omits the field', async () => {
+    const entry = await linkProject(projA, 'ws-1');
+    expect(entry.workspace).toBe('ws-1');
+    expect(entry.team).toBeUndefined();
+  });
+
+  it('linkProject on existing realpath updates workspace/team in place (no dup)', async () => {
+    await linkProject(projA, 'ws-1', { id: 'team-1', key: 'T1' });
+    const addedAt = listProjects()._unsafeUnwrap()[0].addedAt;
+
+    // Same dir via a path alias that resolves to the same realpath.
+    const alias = path.join(projA, '..', path.basename(projA));
+    const updated = await linkProject(alias, 'ws-2', { id: 'team-2', key: 'T2' });
+
+    expect(updated.workspace).toBe('ws-2');
+    expect(updated.team).toEqual({ id: 'team-2', key: 'T2' });
+    expect(updated.addedAt).toBe(addedAt); // addedAt untouched on update
+
+    const projects = listProjects()._unsafeUnwrap();
+    expect(projects).toHaveLength(1);
+    expect(projects[0].workspace).toBe('ws-2');
+    expect(projects[0].team).toEqual({ id: 'team-2', key: 'T2' });
+  });
+
+  it('linkProject replaces the team override on re-link', async () => {
+    await linkProject(projA, 'ws-1', { id: 'team-1', key: 'T1' });
+    const updated = await linkProject(projA, 'ws-1', { id: 'team-2', key: 'T2' });
+    expect(updated.team).toEqual({ id: 'team-2', key: 'T2' });
+  });
+
+  it('updateEntry patches a field (e.g. team override) by root', async () => {
+    await linkProject(projA, 'ws-1');
+    const result = await updateEntry(projA, { team: { id: 'team-1', key: 'T1' } });
+    expect(result.isOk()).toBe(true);
+
+    const entry = getEntry(projA);
+    expect(entry?.team).toEqual({ id: 'team-1', key: 'T1' });
+    expect(entry?.workspace).toBe('ws-1');
   });
 });

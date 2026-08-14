@@ -3,7 +3,7 @@ name: linear-cli
 description: "Manage Linear issues, projects, and teams via the linear CLI. Use when: the user shares a Linear URL (e.g. https://linear.app/<team>/issue/ENG-123), explicitly mentions Linear, or requests to view, create, update, or work with a Linear issue, project, team, cycle, or document."
 ---
 
-**Instructions:** When the user shares a Linear ticket URL or asks to work with Linear, use the `linear` CLI. If a command reports you are not authenticated, tell the user to run `linear login` themselves. Use `--help` on any command for full option details.
+**Instructions:** When the user shares a Linear ticket URL or asks to work with Linear, use the `linear` CLI. If a command reports you are not authenticated, tell the user to run `linear login` themselves — credentials are workspace-keyed (`~/.config/.linear/credentials.json`), and a directory is bound to a workspace via `linear workspace select`. Use `--help` on any command for full option details.
 
 **Read-only by default:** Only perform MUTATIONS (create, update, delete, comment) when the user EXPLICITLY requests it. Default to read-only.
 
@@ -52,3 +52,11 @@ All read commands (list, get, me, query, comment list) accept `--plain`.
 ## Other commands
 
 Run `linear --help` and `linear <area> --help` to discover commands for: projects, cycles, documents, teams, labels, milestones, statuses, users, whoami.
+
+## Auth & linking
+
+- `linear login` — user authenticates a workspace (OAuth2 or API key) and may link the current directory + pick a default team.
+- `linear workspace select` — user links the current directory to an already-authenticated workspace (picks team). Run this when a command resolves the wrong workspace.
+- `linear logout` — default: unlinks cwd and drops its credential if orphaned; `--workspace <id>` targets one workspace; `--all` wipes all credentials.
+- `linear whoami` — resolved user + workspace + bound team for cwd.
+- `linear keepalive install|status|uninstall|run` — keep OAuth sessions alive via a global scheduler (one-time install, rotates all authenticated workspaces).

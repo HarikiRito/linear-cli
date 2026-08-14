@@ -4,7 +4,6 @@ import { getRequestFn } from '../../../lib/client/index.js';
 import {
   type DefaultTeam,
   getGlobalConfigPath,
-  getProjectConfigPath,
   type LinearConfig,
   readConfig,
 } from '../../../lib/config-file.js';
@@ -17,6 +16,7 @@ import {
   ValidationError,
 } from '../../../lib/errors.js';
 import { findProjectRoot } from '../../../lib/scope.js';
+import { getEntry } from '../../keepalive/registry.js';
 import { PROJECT_MILESTONES_QUERY } from './queries.js';
 
 /**
@@ -120,39 +120,32 @@ export function resolveTeam(input: string, client: LinearClient): ResultAsync<st
 type ScalarConfigKey = 'workspace';
 
 interface MergedConfigs {
-  projectConfig: LinearConfig;
+  /** Team bound to the cwd-linked directory (registry entry), if any. */
+  linkedTeam: DefaultTeam | null;
   globalConfig: LinearConfig;
 }
 
 /**
- * Per-process memoization cache for readMergedConfigs(), keyed by the
- * resolved project-config-path + global-config-path pair. Both
- * resolveConfigValue() and getDefaultProjectIds() can be invoked multiple
- * times within a single CLI invocation (e.g. a command resolving both a
- * default team AND default project ids); without this cache each call would
- * independently re-walk the directory tree for a project root and re-read +
- * re-parse both TOML files from disk. Keying by path (rather than caching
- * unconditionally) keeps this safe if cwd/HOME ever change mid-process.
+ * Resolve the cwd-linked registry entry (if any) once and read the global
+ * config.toml once, returning both. Shared by resolveConfigValue() (scalar
+ * keys) and getDefaultProjectIds() (array key) so neither duplicates the
+ * project-root walk or the file reads. Per-process memoization avoids
+ * re-walking the directory tree / re-reading + re-parsing TOML when these
+ * helpers are invoked multiple times within a single CLI invocation.
  */
 const mergedConfigsCache = new Map<string, MergedConfigs>();
 
-/**
- * Resolve the project root (if any) once, read the project-scope and
- * global-scope config files once, and return both parsed configs. Shared by
- * resolveConfigValue() (scalar keys) and getDefaultProjectIds() (array key)
- * so neither duplicates the project-root walk or the file reads.
- */
 function readMergedConfigs(): MergedConfigs {
   const projectRoot = findProjectRoot(process.cwd());
-  const projectConfigPath = projectRoot ? getProjectConfigPath(projectRoot) : null;
+  const entry = projectRoot ? getEntry(projectRoot) : undefined;
   const globalConfigPath = getGlobalConfigPath();
 
-  const cacheKey = `${projectConfigPath ?? ''} ${globalConfigPath}`;
+  const cacheKey = `${entry?.root ?? ''} ${globalConfigPath}`;
   const cached = mergedConfigsCache.get(cacheKey);
   if (cached) return cached;
 
   const configs: MergedConfigs = {
-    projectConfig: projectConfigPath ? readConfig(projectConfigPath) : {},
+    linkedTeam: entry?.team ?? null,
     globalConfig: readConfig(globalConfigPath),
   };
   mergedConfigsCache.set(cacheKey, configs);
@@ -161,37 +154,31 @@ function readMergedConfigs(): MergedConfigs {
 
 /**
  * Resolve a scalar config value from precedence chain:
- * env var → project config → global config → null
+ * env var → global config → null
  */
 function resolveConfigValue(envVar: string, key: ScalarConfigKey): string | null {
   const envVal = process.env[envVar];
   if (envVal) return envVal;
-  const { projectConfig, globalConfig } = readMergedConfigs();
-  if (projectConfig[key]) return projectConfig[key];
-  if (globalConfig[key]) return globalConfig[key];
-  return null;
+  return readMergedConfigs().globalConfig[key] ?? null;
 }
 
 /**
- * Resolve the full default `team` table from precedence chain (no env var,
- * no API lookup): project config `team` → global config `team` → null.
- * Sibling to resolveConfigValue(), which only handles scalar (string) keys —
- * `team` is a nested `{id, key}` table so it needs its own precedence walk.
- * Exported for direct testing of the nested-table precedence behavior.
+ * Resolve the full default `team` table (no env var, no API lookup): the
+ * cwd-linked registry entry `team` only — global config `team` is no longer
+ * read (link-only model). Sibling to resolveConfigValue(), which only handles
+ * scalar (string) keys — `team` is a nested `{id, key}` table so it needs its
+ * own precedence walk. Exported for direct testing of the precedence behavior.
  */
 export function resolveDefaultTeam(): DefaultTeam | null {
-  const { projectConfig, globalConfig } = readMergedConfigs();
-  if (projectConfig.team) return projectConfig.team;
-  if (globalConfig.team) return globalConfig.team;
-  return null;
+  return readMergedConfigs().linkedTeam;
 }
 
 /**
  * Resolve team ID from precedence chain (no API lookup):
- * env LINEAR_TEAM_ID → project config team.id → global config team.id → null
+ * env LINEAR_TEAM_ID → linked registry entry team.id → null
  *
- * The env var, when set, bypasses the `team` config table entirely (same
- * precedence as before this field became a nested table).
+ * The env var, when set, bypasses the `team` table entirely (same precedence
+ * as before this field became a nested table).
  */
 export function getDefaultTeamId(): string | null {
   const envVal = process.env.LINEAR_TEAM_ID;
@@ -202,30 +189,22 @@ export function getDefaultTeamId(): string | null {
 
 /**
  * Resolve workspace from precedence chain:
- * env LINEAR_WORKSPACE → project config workspace → global config workspace → null
+ * env LINEAR_WORKSPACE → global config workspace → null
  */
 export function getDefaultWorkspace(): string | null {
   return resolveConfigValue('LINEAR_WORKSPACE', 'workspace');
 }
 
 /**
- * Resolve default project IDs from precedence chain (no env var, no API lookup):
- * project config projects → global config projects → undefined.
- *
- * Unlike resolveConfigValue, this is array-specific rather than scalar (no env
- * var override — that was an intentional design decision), but it shares the
- * same project-root walk + file reads via readMergedConfigs(). An empty array
- * at either scope is treated as unset (falls through to the next scope, or to
- * undefined) rather than as an explicit empty selection. `projects` entries
- * are `{id, name}` tables — only the bare `id` is extracted here so this
- * keeps returning the same `string[] | undefined` shape callers relied on
- * before `project_ids` became a structured array of tables.
+ * Resolve default project IDs (no env var, no API lookup): global config
+ * `projects` → undefined. An empty array is treated as unset (falls through
+ * to undefined) rather than as an explicit empty selection. `projects`
+ * entries are `{id, name}` tables — only the bare `id` is extracted here so
+ * this keeps returning the same `string[] | undefined` shape callers relied
+ * on before `project_ids` became a structured array of tables.
  */
 export function getDefaultProjectIds(): string[] | undefined {
-  const { projectConfig, globalConfig } = readMergedConfigs();
-  if (projectConfig.projects && projectConfig.projects.length > 0) {
-    return projectConfig.projects.map((p) => p.id);
-  }
+  const { globalConfig } = readMergedConfigs();
   if (globalConfig.projects && globalConfig.projects.length > 0) {
     return globalConfig.projects.map((p) => p.id);
   }

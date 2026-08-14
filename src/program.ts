@@ -13,6 +13,7 @@ import { registerSearchDocumentation } from './features/search-documentation/com
 import { registerStatuses } from './features/statuses/command.js';
 import { registerTeams } from './features/teams/command.js';
 import { registerUsers } from './features/users/command.js';
+import { registerWorkspaceCommand } from './features/workspace/command.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -27,6 +28,7 @@ export function createProgram(): Command {
   registerAuthCommands(program);
   registerTeamSelectCommand(program);
   registerWhoami(program);
+  registerWorkspaceCommand(program);
   registerKeepaliveCommands(program);
   registerIssues(program);
   registerTeams(program);

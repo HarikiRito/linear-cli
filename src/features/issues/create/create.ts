@@ -169,26 +169,42 @@ async function createPostRelations(
   }
 
   for (const rel of relations) {
-    try {
-      const targetResult = await resolveIssueIdentifier(rel.relatedIssue, client);
-      if (targetResult.isErr()) {
-        console.error(
-          `Warning: could not resolve issue '${rel.relatedIssue}' for relation: ${targetResult.error.message}`
-        );
-        continue;
-      }
-      const targetId = targetResult.value;
+    const attempt = await ResultAsync.fromPromise(
+      (async (): Promise<{ message: string } | { warning: string }> => {
+        const targetResult = await resolveIssueIdentifier(rel.relatedIssue, client);
+        if (targetResult.isErr()) {
+          return {
+            warning: `could not resolve issue '${rel.relatedIssue}' for relation: ${targetResult.error.message}`,
+          };
+        }
+        const targetId = targetResult.value;
 
-      const [issueId, relatedIssueId] = rel.swap ? [targetId, newIssueId] : [newIssueId, targetId];
-      await client.createIssueRelation({ issueId, relatedIssueId, type: rel.type });
-      const direction = rel.swap
-        ? `${rel.relatedIssue} → ${newIssueIdentifier}`
-        : `${newIssueIdentifier} → ${rel.relatedIssue}`;
-      console.log(`Relation created: ${direction}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`Warning: failed to create relation to '${rel.relatedIssue}': ${msg}`);
+        const [issueId, relatedIssueId] = rel.swap
+          ? [targetId, newIssueId]
+          : [newIssueId, targetId];
+        await client.createIssueRelation({ issueId, relatedIssueId, type: rel.type });
+        const direction = rel.swap
+          ? `${rel.relatedIssue} → ${newIssueIdentifier}`
+          : `${newIssueIdentifier} → ${rel.relatedIssue}`;
+        return { message: `Relation created: ${direction}` };
+      })(),
+      (err) => ({
+        warning: `failed to create relation to '${rel.relatedIssue}': ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      })
+    );
+
+    if (attempt.isErr()) {
+      console.error(`Warning: ${attempt.error.warning}`);
+      continue;
     }
+    const outcome = attempt.value;
+    if ('warning' in outcome) {
+      console.error(`Warning: ${outcome.warning}`);
+      continue;
+    }
+    console.log(outcome.message);
   }
 }
 

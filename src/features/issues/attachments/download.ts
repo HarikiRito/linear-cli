@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { ResultAsync } from 'neverthrow';
+import { Result, ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
 import { isTrustedAttachmentHost } from '../../../lib/config.js';
 import { coerceCliError, NotFoundError } from '../../../lib/errors.js';
@@ -101,12 +101,10 @@ export async function downloadAttachment(opts: DownloadAttachmentOptions): Promi
   // Attachment URLs are attacker-influenceable (arbitrary external links), so
   // only send the CLI's live credentials to hosts Linear itself controls.
   // Anything else is fetched unauthenticated rather than leaking the token.
-  let hostname: string | undefined;
-  try {
-    hostname = new URL(url).hostname;
-  } catch {
-    hostname = undefined;
-  }
+  const hostname = Result.fromThrowable(
+    () => new URL(url).hostname,
+    () => undefined
+  )().unwrapOr(undefined);
   const headers: Record<string, string> = {};
   if (hostname && isTrustedAttachmentHost(hostname)) {
     headers.Authorization = authorization;

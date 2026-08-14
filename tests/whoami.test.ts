@@ -137,10 +137,15 @@ describe('whoami command', () => {
     consoleSpy.mockRestore();
   });
 
-  it('unauthenticated: console.error contains "Not authenticated" and exitCode === 1', async () => {
+  it('unauthenticated: prints the UnauthenticatedError message and exitCode === 1', async () => {
+    // whoami surfaces the error's own message (context-aware hint built by
+    // resolve.ts) instead of a hardcoded string.
+    const hint = new UnauthenticatedError(
+      "This directory isn't linked to a workspace. Run `linear workspace select` to link it."
+    );
     vi.doMock('../src/lib/client/index.js', () => ({
-      getClient: vi.fn().mockReturnValue(err(new UnauthenticatedError())),
-      getClientWithAuthRetry: vi.fn().mockReturnValue(err(new UnauthenticatedError())),
+      getClient: vi.fn().mockReturnValue(err(hint)),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(err(hint)),
       getRequestFn: vi.fn(),
     }));
     vi.doMock('../src/lib/output/table.js', () => ({
@@ -150,15 +155,20 @@ describe('whoami command', () => {
     vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     const program = await buildProgram();
     await program.parseAsync(['node', 'linear', 'whoami', '--api-key', 'test-key']);
 
     const allMessages = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
-    expect(allMessages).toContain('Not authenticated');
+    expect(allMessages).toContain("isn't linked to a workspace");
+    expect(allMessages).toContain('linear workspace select');
     expect(process.exitCode).toBe(1);
+    // No identity may be printed when unauthenticated.
+    expect(logSpy).not.toHaveBeenCalled();
 
     consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   it('fetches viewer and organization via SDK getters', async () => {

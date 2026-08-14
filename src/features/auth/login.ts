@@ -1,33 +1,36 @@
 import { intro, isCancel, outro, select, spinner, text } from '@clack/prompts';
 import type { LinearClient } from '@linear/sdk';
-import { ResultAsync } from 'neverthrow';
+import { Result, ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
 import { notifyUpdate } from '../../lib/check-version.js';
 import { buildLinearClient } from '../../lib/client/index.js';
-import { getGlobalConfigPath, getProjectConfigPath } from '../../lib/config-file.js';
+import type { DefaultTeam } from '../../lib/config-file.js';
 import { toError } from '../../lib/errors.js';
-import { appendAuthToGitignore } from '../../lib/gitignore.js';
-import { registerGlobal, registerProject } from '../keepalive/registry.js';
+import { linkProject } from '../keepalive/registry.js';
+import { isKeepaliveInstalled } from '../keepalive/scheduler/index.js';
+import { writeWorkspaceCredential } from './credentials.js';
 import { startOAuthFlow } from './oauth.js';
-import { deleteSession, readSession, writeProjectSession, writeSession } from './session.js';
-import { selectAndPersistTeamAndProjects } from './team-select.js';
+import { isOAuthSession, type Session } from './session.js';
+import { mergeGlobalConfig, selectDefaultProjects, selectDefaultTeam } from './team-select.js';
+
+export interface AuthenticatedWorkspace {
+  workspaceId: string;
+  name: string;
+  urlKey: string;
+  session: Session;
+  client: LinearClient;
+}
 
 /**
  * Prompt for an authentication method (OAuth2 or API key), run it to
- * completion, and persist the resulting session to the given scope. Shared
- * by `runLoginFlow()` (where `scope` comes from an earlier prompt) and the
- * standalone `linear team select` command's no-valid-session fallback (where
- * `scope` is hardcoded to 'project' and the scope prompt is skipped
- * entirely). Returns a LinearClient built from the newly-authenticated
- * session, or undefined if the method prompt was cancelled — callers that
- * need a hard failure (as `runLoginFlow()` does on invalid credentials) rely
- * on this function's internal process.exit() calls rather than a return
- * value.
+ * completion, and return the authenticated workspace identity WITHOUT
+ * persisting anything — callers write the credential via
+ * `writeWorkspaceCredential(workspaceId, session)`. Shared by `runLoginFlow()`
+ * and `linear workspace select`'s "authenticate a new workspace" path. Exits
+ * the process on cancel or invalid credentials (callers treat a return as
+ * success).
  */
-export async function runAuthMethodFlow(
-  scope: 'global' | 'project',
-  projectDir: string
-): Promise<LinearClient | undefined> {
+export async function authenticateWorkspace(): Promise<AuthenticatedWorkspace> {
   const method = await select<'oauth' | 'apikey'>({
     message: 'How would you like to authenticate?',
     options: [
@@ -39,8 +42,6 @@ export async function runAuthMethodFlow(
   if (isCancel(method)) {
     process.exit(0);
   }
-
-  let client: LinearClient | undefined;
 
   if (method === 'apikey') {
     const key = await text({
@@ -57,14 +58,15 @@ export async function runAuthMethodFlow(
     s.start('Validating API key...');
 
     const keyStr = key.trim();
+    let client: LinearClient | undefined;
     // Constructing LinearClient can itself throw synchronously on a malformed
     // key — keep it inside the async boundary so that surfaces as a normal
     // validation failure rather than an uncaught exception.
-    let candidateClient: LinearClient | undefined;
     const validateResult = await ResultAsync.fromPromise(
       (async () => {
-        candidateClient = buildLinearClient({ type: 'apiKey', value: keyStr });
-        await candidateClient.viewer;
+        client = buildLinearClient({ type: 'apiKey', value: keyStr });
+        const org = await client.organization;
+        return org;
       })(),
       toError
     );
@@ -74,117 +76,83 @@ export async function runAuthMethodFlow(
       process.exit(1);
     }
 
-    const result =
-      scope === 'project'
-        ? writeProjectSession(projectDir, { apiKey: keyStr })
-        : writeSession({ apiKey: keyStr });
-    if (result.isErr()) {
-      s.stop(pc.red(`Failed to save credentials: ${result.error.message}`));
-      process.exit(1);
+    const org = validateResult.value;
+    s.stop(pc.green('API key validated!'));
+    return {
+      workspaceId: org.id,
+      name: org.name,
+      urlKey: org.urlKey,
+      session: { apiKey: keyStr },
+      client: client as LinearClient,
+    };
+  }
+
+  // OAuth — startOAuthFlow returns the session without writing anything.
+  const s = spinner();
+  s.start('Starting OAuth2 flow — check your browser...');
+
+  const flowResult = await startOAuthFlow();
+  if (flowResult.isErr()) {
+    s.stop(pc.red(`OAuth2 failed: ${flowResult.error.message}`));
+    process.exit(1);
+  }
+  const session = flowResult.value;
+  const client = buildLinearClient({ type: 'accessToken', value: session.accessToken });
+
+  const orgResult = await ResultAsync.fromPromise(client.organization, toError);
+  if (orgResult.isErr()) {
+    s.stop(pc.red(`OAuth2 failed: ${orgResult.error.message}`));
+    process.exit(1);
+  }
+  const org = orgResult.value;
+  s.stop(pc.green('OAuth2 authentication successful!'));
+  return { workspaceId: org.id, name: org.name, urlKey: org.urlKey, session, client };
+}
+
+export async function runLoginFlow(): Promise<void> {
+  intro(pc.bold('Linear CLI Login'));
+
+  const { workspaceId, name, session, client } = await authenticateWorkspace();
+  await writeWorkspaceCredential(workspaceId, session);
+
+  const cwd = process.cwd();
+
+  // Team + default-project pickers are interactive — only run on a TTY.
+  let team: DefaultTeam | undefined;
+  if (process.stdout.isTTY && process.stdin.isTTY) {
+    team = await selectDefaultTeam(client);
+    const projects = team ? await selectDefaultProjects(client, team.id) : undefined;
+    if (projects && projects.length > 0) {
+      mergeGlobalConfig({ projects });
     }
+  }
 
-    client = candidateClient;
-    s.stop(pc.green('API key validated and saved!'));
-  } else if (method === 'oauth') {
-    const s = spinner();
-    s.start('Starting OAuth2 flow — check your browser...');
+  // The credential already determines the workspace — auto-link cwd without
+  // asking. The picked team lands on the registry entry in one shot.
+  const linkResult = await ResultAsync.fromPromise(linkProject(cwd, workspaceId, team), toError);
+  if (linkResult.isErr()) {
+    console.error(pc.yellow(`Warning: could not link this directory: ${linkResult.error.message}`));
+  }
 
-    // startOAuthFlow always writes to global session
-    const result = await startOAuthFlow();
-    if (result.isErr()) {
-      s.stop(pc.red(`OAuth2 failed: ${result.error.message}`));
-      process.exit(1);
-    }
+  console.log(pc.green(`Linked this directory to workspace ${name}.`));
 
-    // startOAuthFlow always writes here first — read it back to build a client
-    // for the team-select step below, and to relocate it for project scope.
-    const globalSession = readSession();
-
-    if (scope === 'project') {
-      if (globalSession) {
-        const writeResult = writeProjectSession(projectDir, globalSession);
-        if (writeResult.isErr()) {
-          s.stop(pc.red(`Failed to save project credentials: ${writeResult.error.message}`));
-          process.exit(1);
-        }
-        // Credential now lives only in project scope — remove the stale global copy
-        deleteSession();
-      }
-      if (globalSession && 'accessToken' in globalSession) {
-        // Keepalive only applies to OAuth sessions (refresh tokens); ignore errors.
-        void registerProject(projectDir);
-        console.log(
-          pc.cyan(
-            'Tip: run `linear keepalive install` once to keep this session alive automatically.'
-          )
-        );
-      }
-    }
-
-    if (scope === 'global' && globalSession && 'accessToken' in globalSession) {
-      // Keepalive only applies to OAuth sessions (refresh tokens); ignore errors.
-      void registerGlobal();
+  // Only nudge OAuth sessions when keepalive isn't already set up — and never
+  // let the install check break login (unknown ⇒ show the tip).
+  if (isOAuthSession(session)) {
+    const keepaliveInstalled = Result.fromThrowable(
+      isKeepaliveInstalled,
+      () => undefined
+    )().unwrapOr(false);
+    if (!keepaliveInstalled) {
       console.log(
         pc.cyan(
           'Tip: run `linear keepalive install` once to keep this session alive automatically.'
         )
       );
     }
-
-    if (globalSession && 'accessToken' in globalSession) {
-      client = buildLinearClient({ type: 'accessToken', value: globalSession.accessToken });
-    }
-
-    s.stop(pc.green('OAuth2 authentication successful!'));
   }
 
-  return client;
-}
-
-export async function runLoginFlow(): Promise<void> {
-  intro(pc.bold('Linear CLI Login'));
-
-  const scope = await select<'global' | 'project'>({
-    message: 'Save credentials to:',
-    options: [
-      { value: 'global', label: 'Global (~/.config/.linear/)', hint: 'default' },
-      { value: 'project', label: 'Project (./.linear/)' },
-    ],
-    initialValue: 'global',
-  });
-
-  if (isCancel(scope)) {
-    process.exit(0);
-  }
-
-  const projectDir = process.cwd();
-
-  // Client used to fetch teams after a successful auth — set by whichever
-  // method branch inside runAuthMethodFlow succeeds.
-  const client = await runAuthMethodFlow(scope, projectDir);
-
-  // Fetch/select a default team, then default project(s) scoped to that
-  // team, then persist both to config.toml — applies to both Global and
-  // Project scope, and both API-key and OAuth paths. Only attempted when a
-  // client was actually resolved.
-  if (client) {
-    const configPath =
-      scope === 'project' ? getProjectConfigPath(projectDir) : getGlobalConfigPath();
-    await selectAndPersistTeamAndProjects(client, configPath);
-  }
-
-  if (scope === 'project') {
-    const gitignoreResult = appendAuthToGitignore(projectDir);
-    if (gitignoreResult.isErr()) {
-      console.error(
-        pc.yellow(`Warning: could not update .gitignore: ${gitignoreResult.error.message}`)
-      );
-    }
-
-    outro(pc.green('Project credentials and config saved.'));
-  } else {
-    outro('You are now logged in.');
-  }
+  outro(pc.green('Login complete.'));
 
   // Fire-and-forget: don't block CLI exit on this best-effort notice.
   void notifyUpdate();

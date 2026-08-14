@@ -299,12 +299,12 @@ describe('issues list', () => {
     expect(json).toContain('"and"');
   });
 
-  it('resolves team automatically from a real project config.toml when --team is omitted (end-to-end)', async () => {
-    // Real project .linear/config.toml — no mocking of the resolve/config-file layer.
-    // Verifies the intended purpose of config.toml: commands that omit --team should
-    // pick up the project-scoped team.id via getDefaultTeamId()'s resolution chain.
-    const tmpProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-list-team-cfg-'));
-    const linearDir = path.join(tmpProjectDir, '.linear');
+  it('does not read team from global config.toml when --team is omitted (unlinked → unfiltered)', async () => {
+    // Global config `[team]` is no longer read — team resolution is link-only
+    // (registry entry / LINEAR_TEAM_ID). An unlinked run must NOT pick up a
+    // stale global-config team.
+    const tmpHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-list-team-cfg-home-'));
+    const linearDir = path.join(tmpHomeDir, '.config', '.linear');
     fs.mkdirSync(linearDir, { recursive: true });
     fs.writeFileSync(
       path.join(linearDir, 'config.toml'),
@@ -313,21 +313,27 @@ describe('issues list', () => {
     );
 
     const originalCwd = process.cwd.bind(process);
-    process.cwd = () => tmpProjectDir;
+    const originalHome = process.env.HOME;
+    process.env.HOME = tmpHomeDir;
 
     try {
       const request = vi.fn().mockResolvedValue(makeListResponse([]));
       stdMocks(request);
       const program = await buildProgram();
 
-      // No --team flag passed — must resolve from the real config.toml above.
+      // No --team flag passed — must NOT resolve from the real config.toml above.
       await program.parseAsync(['node', 'linear', 'issues', 'list']);
 
       const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
-      expect(JSON.stringify(vars)).toContain('"PROJCFG"');
+      expect(JSON.stringify(vars)).not.toContain('"PROJCFG"');
     } finally {
       process.cwd = originalCwd;
-      fs.rmSync(tmpProjectDir, { recursive: true, force: true });
+      if (originalHome !== undefined) {
+        process.env.HOME = originalHome;
+      } else {
+        delete process.env.HOME;
+      }
+      fs.rmSync(tmpHomeDir, { recursive: true, force: true });
     }
   });
 
