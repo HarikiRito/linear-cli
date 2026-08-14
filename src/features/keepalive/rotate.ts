@@ -1,24 +1,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { err, ok, Result, ResultAsync } from 'neverthrow';
+import { ok, Result, ResultAsync } from 'neverthrow';
 import {
+  getWorkspaceLockPath,
   KEEPALIVE_BACKOFF_MS,
   KEEPALIVE_INTERVAL_MS,
-  KEEPALIVE_LOCK_FILE,
 } from '../../lib/config.js';
 import { toError } from '../../lib/errors.js';
-import { getGlobalConfigDir } from '../../lib/scope.js';
-import { readWorkspaceCredential, writeWorkspaceCredential } from '../auth/credentials.js';
-import { refreshAccessToken } from '../auth/oauth.js';
-import { isOAuthSession, type OAuthSession, type Session } from '../auth/session.js';
 import {
-  getEntry,
-  listProjects,
-  type RegisteredProject,
-  unregisterProject,
-  updateEntry,
-} from './registry.js';
+  listWorkspaceIds,
+  readWorkspaceCredential,
+  writeWorkspaceCredential,
+} from '../auth/credentials.js';
+import { refreshAccessToken } from '../auth/oauth.js';
+import { isOAuthSession, type OAuthSession } from '../auth/session.js';
 import { getLogPath } from './scheduler/index.js';
+import {
+  clearWorkspaceBackoff,
+  deleteWorkspaceState,
+  readWorkspaceState,
+  updateWorkspaceState,
+} from './state.js';
 
 export interface RotationSummary {
   checked: number;
@@ -105,110 +107,33 @@ function releaseLock(lockPath: string): void {
   )();
 }
 
-// --- entry-aware helpers: credentials live in the workspace-keyed store ---
-// Transitional bridge (commit 3 rewrites keepalive fully): linked entries read
-// their workspace credential; legacy entries without a workspace fall back to
-// the old global ~/.config/.linear/auth.json.
-
-function legacySessionPath(): string {
-  return path.join(getGlobalConfigDir(), 'auth.json');
-}
-
-function legacyReadSession(): Session | null {
-  return Result.fromThrowable(
-    () => JSON.parse(fs.readFileSync(legacySessionPath(), 'utf-8')) as Session,
-    () => undefined
-  )().unwrapOr(null);
-}
-
-function legacyWriteSession(session: OAuthSession): Result<void, Error> {
-  return Result.fromThrowable(() => {
-    const p = legacySessionPath();
-    fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
-    fs.writeFileSync(p, JSON.stringify(session, null, 2), { encoding: 'utf-8', mode: 0o600 });
-  }, toError)();
-}
-
-async function entryReadSession(entry: RegisteredProject): Promise<Session | null> {
-  if (entry.workspace) return readWorkspaceCredential(entry.workspace);
-  return legacyReadSession();
-}
-
-async function entryWriteSession(
-  entry: RegisteredProject,
-  session: OAuthSession
-): Promise<Result<void, Error>> {
-  if (entry.workspace) {
-    const result = await ResultAsync.fromPromise(
-      writeWorkspaceCredential(entry.workspace, session),
-      toError
-    );
-    return result.isOk() ? ok(undefined) : err(result.error);
-  }
-  return legacyWriteSession(session);
-}
-
-/** Single shared lock in the global config dir (no per-project .linear/). */
-function entryLockPath(): string {
-  return path.join(getGlobalConfigDir(), KEEPALIVE_LOCK_FILE);
-}
-
-function entryUnregister(entry: RegisteredProject): Result<void, Error> {
-  return unregisterProject(entry.root);
-}
-
-function entryUpdateBackoff(
-  entry: RegisteredProject,
-  patch: Partial<RegisteredProject>
-): Result<void, Error> {
-  return updateEntry(entry.root, patch);
-}
-
-function entryGetBackoff(entry: RegisteredProject): { tier?: number; nextAttemptAt?: number } {
-  const e = getEntry(entry.root);
-  return { tier: e?.invalidGrantTier, nextAttemptAt: e?.invalidGrantNextAttemptAt };
-}
-
 /**
- * Best-effort clear of invalid_grant backoff. Used when a skip path still
- * indicates a healthy session (e.g. another process rotated it while we
- * waited on the lock) — the backoff no longer applies.
+ * Rotate one workspace's OAuth refresh token if due. Never throws; every
+ * outcome is folded into `summary`. Rotation only touches the credential store
+ * and keepalive state — it never mutates directory linkage (registry).
  */
-function clearBackoffIfSet(entry: RegisteredProject, tier: number | undefined): void {
-  if (tier === undefined) return;
-  void entryUpdateBackoff(entry, {
-    invalidGrantTier: undefined,
-    invalidGrantNextAttemptAt: undefined,
-  });
-}
-
-/**
- * Rotate one registered session's OAuth refresh token if due. Never throws;
- * all per-entry outcomes are folded into `summary`.
- */
-export async function rotateEntry(
-  entry: RegisteredProject,
-  _opts: KeepaliveCycleOptions,
-  summary: RotationSummary
-): Promise<void> {
-  const session = await entryReadSession(entry);
+async function rotateWorkspace(workspaceId: string, summary: RotationSummary): Promise<void> {
+  const session = await readWorkspaceCredential(workspaceId);
   if (!session) {
-    // Credential gone — drop from registry.
-    void entryUnregister(entry);
+    // Credential gone (raced) — drop any lingering backoff state.
+    await deleteWorkspaceState(workspaceId);
     summary.pruned++;
-    appendLog(`prune ${entry.root}: no credential`);
-    return;
-  }
-
-  // invalid_grant backoff: skip silently until the backoff window expires.
-  const backoff = entryGetBackoff(entry);
-  if (backoff.nextAttemptAt !== undefined && backoff.nextAttemptAt > Date.now()) {
-    summary.skipped++;
+    appendLog(`prune ${workspaceId}: no credential`);
     return;
   }
 
   if (!isOAuthSession(session)) {
-    summary.skipped++; // API key / unreadable — nothing to rotate
+    summary.skipped++; // API key — nothing to rotate
+    return;
+  }
+
+  // invalid_grant backoff: skip silently until the backoff window expires.
+  const backoff = await readWorkspaceState(workspaceId);
+  if (
+    backoff.invalidGrantNextAttemptAt !== undefined &&
+    backoff.invalidGrantNextAttemptAt > Date.now()
+  ) {
+    summary.skipped++;
     return;
   }
 
@@ -218,7 +143,8 @@ export async function rotateEntry(
     return;
   }
 
-  const lockPath = entryLockPath();
+  const lockPath = getWorkspaceLockPath(workspaceId);
+  fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
   if (!acquireLock(lockPath)) {
     summary.skipped++; // another run holds the lock
     return;
@@ -226,13 +152,13 @@ export async function rotateEntry(
 
   try {
     // Re-read after locking (TOCTOU) and re-check the interval.
-    const fresh = await entryReadSession(entry);
+    const fresh = await readWorkspaceCredential(workspaceId);
     if (!fresh || !isOAuthSession(fresh)) {
-      clearBackoffIfSet(entry, backoff.tier);
+      if (backoff.invalidGrantTier !== undefined) await clearWorkspaceBackoff(workspaceId);
       return;
     }
     if (Date.now() - (fresh.lastRefreshAt ?? 0) < KEEPALIVE_INTERVAL_MS) {
-      clearBackoffIfSet(entry, backoff.tier); // rotated elsewhere — backoff moot
+      if (backoff.invalidGrantTier !== undefined) await clearWorkspaceBackoff(workspaceId); // rotated elsewhere — backoff moot
       summary.skipped++;
       return;
     }
@@ -245,35 +171,33 @@ export async function rotateEntry(
         expiresAt: refreshResult.value.expiresAt,
         lastRefreshAt: Date.now(),
       };
-      const writeResult = await entryWriteSession(entry, updated);
+      const writeResult = await ResultAsync.fromPromise(
+        writeWorkspaceCredential(workspaceId, updated),
+        toError
+      );
       if (writeResult.isErr()) {
         summary.failed++;
-        appendLog(`error ${entry.root}: persist failed: ${writeResult.error.message}`);
+        appendLog(`error ${workspaceId}: persist failed: ${writeResult.error.message}`);
       } else {
         summary.rotated++;
         // Refresh worked — clear any accumulated invalid_grant backoff.
-        if (backoff.tier !== undefined) {
-          void entryUpdateBackoff(entry, {
-            invalidGrantTier: undefined,
-            invalidGrantNextAttemptAt: undefined,
-          });
-        }
-        appendLog(`rotated ${entry.root}`);
+        await clearWorkspaceBackoff(workspaceId);
+        appendLog(`rotated ${workspaceId}`);
       }
     } else {
       summary.failed++;
       const message = refreshResult.error.message;
-      appendLog(`error ${entry.root}: refresh failed: ${message}`);
+      appendLog(`error ${workspaceId}: refresh failed: ${message}`);
       if (message.includes('invalid_grant')) {
-        const tier = (backoff.tier ?? 0) + 1;
+        const tier = (backoff.invalidGrantTier ?? 0) + 1;
         const delay = KEEPALIVE_BACKOFF_MS[Math.min(tier - 1, KEEPALIVE_BACKOFF_MS.length - 1)];
         const nextAttemptAt = Date.now() + delay;
-        void entryUpdateBackoff(entry, {
+        await updateWorkspaceState(workspaceId, {
           invalidGrantTier: tier,
           invalidGrantNextAttemptAt: nextAttemptAt,
         });
         appendLog(
-          `invalid_grant ${entry.root}: backing off for ${Math.round(delay / 60_000)}min (tier ${tier}) — needs interactive re-auth`
+          `invalid_grant ${workspaceId}: backing off for ${Math.round(delay / 60_000)}min (tier ${tier}) — needs interactive re-auth`
         );
       }
     }
@@ -282,16 +206,14 @@ export async function rotateEntry(
   }
 }
 
-/** Run one keepalive pass over every registered entry. */
+/** Run one keepalive pass over every workspace in the credentials store. */
 export async function runKeepaliveCycle(
-  opts: KeepaliveCycleOptions = {}
+  _opts: KeepaliveCycleOptions = {}
 ): Promise<Result<RotationSummary, Error>> {
   const summary: RotationSummary = { checked: 0, rotated: 0, skipped: 0, failed: 0, pruned: 0 };
-  const listResult = listProjects();
-  if (listResult.isErr()) return err(listResult.error);
-  for (const project of listResult.value) {
+  for (const workspaceId of await listWorkspaceIds()) {
     summary.checked++;
-    await rotateEntry(project, opts, summary);
+    await rotateWorkspace(workspaceId, summary);
   }
   return ok(summary);
 }

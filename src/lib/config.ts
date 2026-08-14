@@ -1,3 +1,6 @@
+import path from 'node:path';
+import { getGlobalConfigDir } from './scope.js';
+
 // Embedded OAuth client ID for the Linear CLI application.
 // This is a public client (PKCE flow — no secret required).
 // Can be overridden via LINEAR_CLIENT_ID for development/testing.
@@ -18,8 +21,18 @@ export const KEEPALIVE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const KEEPALIVE_BACKOFF_MS = [15 * 60_000, 60 * 60_000, 4 * 60 * 60_000, 24 * 60 * 60_000];
 export const KEEPALIVE_POLL_CRON = '*/15 * * * *';
 export const KEEPALIVE_TASK_NAME = 'linear-cli-keepalive';
-export const KEEPALIVE_LOCK_FILE = 'auth.lock';
+/** Subdir under the global config dir holding one lock file per workspace. */
+export const KEEPALIVE_LOCK_DIRNAME = 'keepalive';
 export const KEEPALIVE_LOG_FILE = 'keepalive.log';
+
+export function getKeepaliveLockDir(): string {
+  return path.join(getGlobalConfigDir(), KEEPALIVE_LOCK_DIRNAME);
+}
+
+/** Per-workspace rotation lock: <config>/keepalive/<workspaceId>.lock */
+export function getWorkspaceLockPath(workspaceId: string): string {
+  return path.join(getKeepaliveLockDir(), `${workspaceId}.lock`);
+}
 
 // Hosts Linear itself serves attachment assets from. Only these (and their
 // subdomains) are safe to receive the CLI's live Linear credentials — an

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { useTmpProjectAndHome } from '../../../tests/helpers/tmp-env.js';
-import { linkProject, registerProject } from '../../features/keepalive/registry.js';
+import { linkProject } from '../../features/keepalive/registry.js';
 import { findProjectRoot } from '../scope.js';
 
 /**
@@ -43,15 +43,6 @@ describe('scope: findProjectRoot (registry match)', () => {
     await linkProject(tmpEnv.projectDir, 'ws-1');
 
     const result = findProjectRoot(child);
-    expect(result).toBe(fs.realpathSync(tmpEnv.projectDir));
-  });
-
-  it('matches entries registered without a workspace (unlinked registration)', () => {
-    const nested = path.join(tmpEnv.projectDir, 'src');
-    fs.mkdirSync(nested);
-    registerProject(tmpEnv.projectDir);
-
-    const result = findProjectRoot(nested);
     expect(result).toBe(fs.realpathSync(tmpEnv.projectDir));
   });
 });

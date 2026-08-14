@@ -4,19 +4,13 @@ import { ok, Result } from 'neverthrow';
 import { toError } from '../../lib/errors.js';
 import { getGlobalConfigDir } from '../../lib/scope.js';
 
+/** Linkage-only entry: a directory bound to a workspace (backoff lives in keepalive-state.json). */
 export interface RegisteredProject {
   root: string;
-  addedAt: number;
-  /** Backoff tier for invalid_grant (1-based; undefined = healthy). */
-  invalidGrantTier?: number;
-  /** ms-epoch before which rotation should be skipped due to invalid_grant backoff. */
-  invalidGrantNextAttemptAt?: number;
-  /** 'project' | 'global' scope; defaults to 'project' for back-compat. */
-  scope?: 'project' | 'global';
-  /** Workspace id this linked dir is bound to (workspace-keyed auth). */
-  workspace?: string;
+  workspace: string;
   /** Team override for this linked dir. */
   team?: { id: string; key: string };
+  addedAt: number;
 }
 
 interface RegistryFile {
@@ -53,17 +47,6 @@ function writeRegistry(registry: RegistryFile): Result<void, Error> {
   }, toError)();
 }
 
-/** Idempotent: add root (deduped by realpath) to the keepalive registry. */
-export function registerProject(root: string): Result<void, Error> {
-  const canonical = realpathOrSelf(root);
-  const registry = readRegistry();
-  if (registry.projects.some((p) => realpathOrSelf(p.root) === canonical)) {
-    return ok(undefined);
-  }
-  registry.projects.push({ root: canonical, addedAt: Date.now() });
-  return writeRegistry(registry);
-}
-
 /** Idempotent: remove root (compared via realpath) from the registry. */
 export function unregisterProject(root: string): Result<void, Error> {
   const canonical = realpathOrSelf(root);
@@ -90,23 +73,6 @@ export function updateEntry(root: string, patch: Partial<RegisteredProject>): Re
   const idx = registry.projects.findIndex((p) => realpathOrSelf(p.root) === canonical);
   if (idx === -1) return ok(undefined);
   registry.projects[idx] = { ...registry.projects[idx], ...patch };
-  return writeRegistry(registry);
-}
-
-/** Sentinel "root" used for the global session entry. */
-export function getGlobalEntryRoot(): string {
-  return getGlobalConfigDir();
-}
-
-/** Idempotent: register the global session for keepalive rotation. */
-export function registerGlobal(): Result<void, Error> {
-  const root = getGlobalEntryRoot();
-  const registry = readRegistry();
-  const exists = registry.projects.some(
-    (p) => p.scope === 'global' || (!p.scope && realpathOrSelf(p.root) === root)
-  );
-  if (exists) return ok(undefined);
-  registry.projects.push({ root, addedAt: Date.now(), scope: 'global' });
   return writeRegistry(registry);
 }
 
