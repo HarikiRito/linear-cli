@@ -13,6 +13,10 @@ export interface RegisteredProject {
   invalidGrantNextAttemptAt?: number;
   /** 'project' | 'global' scope; defaults to 'project' for back-compat. */
   scope?: 'project' | 'global';
+  /** Workspace id this linked dir is bound to (workspace-keyed auth). */
+  workspace?: string;
+  /** Team override for this linked dir. */
+  team?: { id: string; key: string };
 }
 
 interface RegistryFile {
@@ -104,4 +108,50 @@ export function registerGlobal(): Result<void, Error> {
   if (exists) return ok(undefined);
   registry.projects.push({ root, addedAt: Date.now(), scope: 'global' });
   return writeRegistry(registry);
+}
+
+/**
+ * Link a directory to a workspace id (with optional team override). Realpath-
+ * deduped: an existing entry for the same root is updated in place (workspace,
+ * team replaced; addedAt untouched unless missing).
+ */
+export async function linkProject(
+  root: string,
+  workspaceId: string,
+  team?: { id: string; key: string }
+): Promise<RegisteredProject> {
+  const canonical = realpathOrSelf(root);
+  const registry = readRegistry();
+  const idx = registry.projects.findIndex((p) => realpathOrSelf(p.root) === canonical);
+  if (idx !== -1) {
+    const existing = registry.projects[idx];
+    const updated: RegisteredProject = {
+      ...existing,
+      workspace: workspaceId,
+      ...(team !== undefined && { team }),
+      addedAt: existing.addedAt ?? Date.now(),
+    };
+    registry.projects[idx] = updated;
+    await writeRegistryFile(registry);
+    return updated;
+  }
+  const entry: RegisteredProject = {
+    root: canonical,
+    workspace: workspaceId,
+    ...(team !== undefined && { team }),
+    addedAt: Date.now(),
+  };
+  registry.projects.push(entry);
+  await writeRegistryFile(registry);
+  return entry;
+}
+
+/** Async persist used by linkProject (same path/modes as writeRegistry). */
+async function writeRegistryFile(registry: RegistryFile): Promise<void> {
+  const p = getRegistryPath();
+  await fs.promises.mkdir(path.dirname(p), { recursive: true, mode: 0o700 });
+  await fs.promises.writeFile(p, JSON.stringify(registry, null, 2), {
+    encoding: 'utf-8',
+    mode: 0o600,
+  });
 }

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as scopeMod from '../../../lib/scope.js';
 import {
   getRegistryPath,
+  linkProject,
   listProjects,
   registerGlobal,
   registerProject,
@@ -97,5 +98,57 @@ describe('project registry', () => {
     expect(projects).toHaveLength(1);
     expect(projects[0].scope).toBe('global');
     expect(projects[0].root).toBe(tmpHome);
+  });
+
+  it('linkProject creates a new entry with workspace and team', async () => {
+    const entry = await linkProject(projA, 'ws-1', { id: 'team-1', key: 'T1' });
+
+    expect(entry.root).toBe(fs.realpathSync(projA));
+    expect(entry.workspace).toBe('ws-1');
+    expect(entry.team).toEqual({ id: 'team-1', key: 'T1' });
+    expect(entry.addedAt).toBeGreaterThan(0);
+
+    const projects = listProjects()._unsafeUnwrap();
+    expect(projects).toHaveLength(1);
+    expect(projects[0].workspace).toBe('ws-1');
+    expect(projects[0].team).toEqual({ id: 'team-1', key: 'T1' });
+  });
+
+  it('linkProject without team omits the field', async () => {
+    const entry = await linkProject(projA, 'ws-1');
+    expect(entry.workspace).toBe('ws-1');
+    expect(entry.team).toBeUndefined();
+  });
+
+  it('linkProject on existing realpath updates workspace/team in place (no dup)', async () => {
+    await linkProject(projA, 'ws-1', { id: 'team-1', key: 'T1' });
+    const addedAt = listProjects()._unsafeUnwrap()[0].addedAt;
+
+    // Same dir via a path alias that resolves to the same realpath.
+    const alias = path.join(projA, '..', path.basename(projA));
+    const updated = await linkProject(alias, 'ws-2', { id: 'team-2', key: 'T2' });
+
+    expect(updated.workspace).toBe('ws-2');
+    expect(updated.team).toEqual({ id: 'team-2', key: 'T2' });
+    expect(updated.addedAt).toBe(addedAt); // addedAt untouched on update
+
+    const projects = listProjects()._unsafeUnwrap();
+    expect(projects).toHaveLength(1);
+    expect(projects[0].workspace).toBe('ws-2');
+    expect(projects[0].team).toEqual({ id: 'team-2', key: 'T2' });
+  });
+
+  it('linkProject replaces the team override on re-link', async () => {
+    await linkProject(projA, 'ws-1', { id: 'team-1', key: 'T1' });
+    const updated = await linkProject(projA, 'ws-1', { id: 'team-2', key: 'T2' });
+    expect(updated.team).toEqual({ id: 'team-2', key: 'T2' });
+  });
+
+  it('entries without workspace/team still load (backward compat)', () => {
+    registerProject(projA);
+    const projects = listProjects()._unsafeUnwrap();
+    expect(projects).toHaveLength(1);
+    expect(projects[0].workspace).toBeUndefined();
+    expect(projects[0].team).toBeUndefined();
   });
 });
