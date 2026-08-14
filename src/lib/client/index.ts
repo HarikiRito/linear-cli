@@ -1,6 +1,6 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { LinearClient } from '@linear/sdk';
-import { ok, type ResultAsync } from 'neverthrow';
+import { ok, ResultAsync } from 'neverthrow';
 import {
   type ResolvedCredential,
   type ResolveOptions,
@@ -41,24 +41,24 @@ async function withAuthRetry<T>(
   opts: ResolveOptions,
   onFreshClient: (freshClient: LinearClient) => void
 ): Promise<T> {
-  try {
-    return await attempt();
-  } catch (err) {
-    if (!isRawAuthError(err)) throw mapLinearError(err);
+  // Inspect the RAW thrown error before mapping: mapLinearError's catch-all
+  // maps any unrecognised error to AuthError, so we must check the original
+  // message first to avoid refreshing on e.g. 500s.
+  const first = await ResultAsync.fromPromise(attempt(), (e) => e);
+  if (first.isOk()) return first.value;
+  const rawError = first.error;
+  if (!isRawAuthError(rawError)) throw mapLinearError(rawError);
 
-    // Genuine auth failure — force refresh writing back to the originating scope
-    const freshResult = await resolveCredential({ ...opts, forceRefresh: true });
-    if (freshResult.isErr()) throw freshResult.error;
+  // Genuine auth failure — force refresh writing back to the originating scope
+  const freshResult = await resolveCredential({ ...opts, forceRefresh: true });
+  if (freshResult.isErr()) throw freshResult.error;
 
-    onFreshClient(buildLinearClient(freshResult.value));
+  onFreshClient(buildLinearClient(freshResult.value));
 
-    // Retry exactly once — surface any error without further retry
-    try {
-      return await attempt();
-    } catch (retryErr) {
-      throw mapLinearError(retryErr);
-    }
-  }
+  // Retry exactly once — surface any error without further retry
+  const retry = await ResultAsync.fromPromise(attempt(), mapLinearError);
+  if (retry.isErr()) throw retry.error;
+  return retry.value;
 }
 
 export function getRequestFn(client: LinearClient): RequestFn {

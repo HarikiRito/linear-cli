@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { Result, ResultAsync } from 'neverthrow';
 import { withConfigLock } from '../../lib/config-lock.js';
 import { getGlobalConfigDir } from '../../lib/scope.js';
 import type { Session } from './session.js';
@@ -28,13 +29,15 @@ function isCredentialsStore(value: unknown): value is CredentialsStore {
 
 /** Tolerate missing or malformed store; never throws. */
 export async function readCredentialsStore(): Promise<CredentialsStore> {
-  try {
-    const parsed: unknown = JSON.parse(await readFile(getCredentialsPath(), 'utf-8'));
-    if (isCredentialsStore(parsed)) return parsed;
-    return { workspaces: {} };
-  } catch {
-    return { workspaces: {} };
-  }
+  const content = await ResultAsync.fromPromise(
+    readFile(getCredentialsPath(), 'utf-8'),
+    () => undefined
+  ).unwrapOr('');
+  const parsed = Result.fromThrowable(
+    () => JSON.parse(content) as unknown,
+    () => undefined
+  )().unwrapOr(null);
+  return parsed !== null && isCredentialsStore(parsed) ? parsed : { workspaces: {} };
 }
 
 /** Raw full-store replace — no lock (callers hold it via withConfigLock). */

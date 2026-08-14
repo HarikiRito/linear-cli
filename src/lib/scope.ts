@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Result } from 'neverthrow';
 import { listProjects } from '../features/keepalive/registry.js';
 
 /** Canonical global config dir: ~/.config/.linear */
@@ -10,11 +11,10 @@ export function getGlobalConfigDir(): string {
 
 /** realpath when resolvable, else the path as given (missing dirs fall back). */
 function realpathOrSelf(p: string): string {
-  try {
-    return fs.realpathSync(p);
-  } catch {
-    return p;
-  }
+  return Result.fromThrowable(
+    (x: string) => fs.realpathSync(x),
+    () => undefined
+  )(p).unwrapOr(p);
 }
 
 /**

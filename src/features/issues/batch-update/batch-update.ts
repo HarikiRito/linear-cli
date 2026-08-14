@@ -1,3 +1,4 @@
+import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry } from '../../../lib/client/index.js';
 import { parseCsv } from '../../../lib/commandOptions.js';
 import { ValidationError, validatePriority } from '../../../lib/errors.js';
@@ -120,25 +121,33 @@ export async function batchUpdateIssues(opts: BatchUpdateOptions): Promise<void>
     }
     const resolvedId = idResult.value;
 
-    try {
-      const payload = await client.updateIssue(resolvedId, sharedInput);
-      const issue = await payload.issue;
-      if (!issue) return { ok: false, id, error: 'updateIssue returned no issue' };
+    return ResultAsync.fromPromise(
+      (async (): Promise<IssueUpdateResult> => {
+        const payload = await client.updateIssue(resolvedId, sharedInput);
+        const issue = await payload.issue;
+        if (!issue) return { ok: false, id, error: 'updateIssue returned no issue' };
 
-      const stateObj = await issue.state;
-      return {
-        ok: true,
-        issue: {
-          id: issue.id,
-          identifier: issue.identifier,
-          title: issue.title,
-          url: issue.url,
-          state: stateObj?.name ?? '',
-        },
-      };
-    } catch (e) {
-      return { ok: false, id, error: e instanceof Error ? e.message : String(e) };
-    }
+        const stateObj = await issue.state;
+        return {
+          ok: true,
+          issue: {
+            id: issue.id,
+            identifier: issue.identifier,
+            title: issue.title,
+            url: issue.url,
+            state: stateObj?.name ?? '',
+          },
+        };
+      })(),
+      (e): IssueUpdateResult => ({
+        ok: false,
+        id,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    ).match(
+      (v) => v,
+      (e) => e
+    );
   });
 
   renderResults(results, opts.plain);

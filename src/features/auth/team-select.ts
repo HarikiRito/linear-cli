@@ -1,6 +1,6 @@
 import { isCancel, multiselect, select } from '@clack/prompts';
 import type { LinearClient } from '@linear/sdk';
-import { ResultAsync } from 'neverthrow';
+import { Result, ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
 import {
   type DefaultProject,
@@ -162,15 +162,16 @@ export function mergeGlobalConfig(merge: {
   team?: DefaultTeam;
   projects?: DefaultProject[];
 }): void {
+  const readResult = Result.fromThrowable(() => readConfig(getGlobalConfigPath()), toError)();
   let existingConfig: LinearConfig = {};
-  try {
-    existingConfig = readConfig(getGlobalConfigPath());
-  } catch (e) {
+  if (readResult.isErr()) {
     console.error(
       pc.yellow(
-        `Warning: could not read existing config.toml, it will be overwritten: ${toError(e).message}`
+        `Warning: could not read existing config.toml, it will be overwritten: ${readResult.error.message}`
       )
     );
+  } else {
+    existingConfig = readResult.value;
   }
 
   const config: LinearConfig = {

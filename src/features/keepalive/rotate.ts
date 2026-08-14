@@ -76,36 +76,37 @@ function isStaleLock(lockPath: string): boolean {
   const ts = Number(tsStr);
   if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(ts)) return true; // malformed
   if (Date.now() - ts > LOCK_STALE_MS) return true;
-  try {
-    process.kill(pid, 0);
-    return false; // holder alive
-  } catch {
-    return true; // holder dead
-  }
+  return Result.fromThrowable(
+    () => process.kill(pid, 0),
+    () => undefined // holder dead (ESRCH)
+  )().isErr();
 }
 
 function acquireLock(lockPath: string): boolean {
   const openLock = (): boolean => {
-    try {
-      const fd = fs.openSync(lockPath, 'wx');
+    const opened = Result.fromThrowable(
+      () => fs.openSync(lockPath, 'wx'),
+      (e) => e as NodeJS.ErrnoException
+    )();
+    if (opened.isOk()) {
+      const fd = opened.value;
       try {
         fs.writeSync(fd, `${process.pid}:${Date.now()}`);
       } finally {
         fs.closeSync(fd);
       }
       return true;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') return false;
-      // Locked — maybe by a dead/stale holder, retry once after clearing.
-      if (isStaleLock(lockPath)) {
-        void Result.fromThrowable(
-          () => fs.unlinkSync(lockPath),
-          () => undefined
-        )();
-        return openLock();
-      }
-      return false;
     }
+    if (opened.error.code !== 'EEXIST') return false;
+    // Locked — maybe by a dead/stale holder, retry once after clearing.
+    if (isStaleLock(lockPath)) {
+      void Result.fromThrowable(
+        () => fs.unlinkSync(lockPath),
+        () => undefined
+      )();
+      return openLock();
+    }
+    return false;
   };
   return openLock();
 }
@@ -170,11 +171,13 @@ async function rotateWorkspace(workspaceId: string, summary: RotationSummary): P
   }
 
   const lockPath = getWorkspaceLockPath(workspaceId);
-  try {
-    fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
-  } catch (e) {
+  const mkdirResult = Result.fromThrowable(
+    () => fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 }),
+    toError
+  )();
+  if (mkdirResult.isErr()) {
     summary.failed++;
-    appendLog(`error ${workspaceId}: lock dir: ${toError(e).message}`);
+    appendLog(`error ${workspaceId}: lock dir: ${mkdirResult.error.message}`);
     return;
   }
   if (!acquireLock(lockPath)) {

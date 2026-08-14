@@ -1,6 +1,7 @@
 import { constants, writeSync } from 'node:fs';
-import { type FileHandle, mkdir, open, readFile, unlink } from 'node:fs/promises';
+import { mkdir, open, readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
+import { Result, ResultAsync } from 'neverthrow';
 import { getGlobalConfigDir } from './scope.js';
 
 /**
@@ -36,22 +37,18 @@ function sleep(ms: number): Promise<void> {
 /** True if a PID belongs to a live process (kill(pid, 0) probe). */
 function isPidAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false; // ESRCH (gone) / EPERM (foreign but alive — treat as gone)
-  }
+  return Result.fromThrowable(
+    () => process.kill(pid, 0),
+    () => undefined // ESRCH (gone) / EPERM (foreign but alive — treat as gone)
+  )().isOk();
 }
 
 /** Stale = malformed record, aged past STALE_MS, or dead owner. */
 async function isStaleLock(p: string): Promise<boolean> {
-  let content: string;
-  try {
-    content = await readFile(p, 'utf-8');
-  } catch {
-    return true; // unreadable or already gone — nothing held
-  }
+  const content = await ResultAsync.fromPromise(
+    readFile(p, 'utf-8'),
+    () => undefined // unreadable or already gone — nothing held
+  ).unwrapOr('');
   const [pidStr, tsStr] = content.split(':');
   const pid = Number(pidStr);
   const ts = Number(tsStr);
@@ -67,13 +64,15 @@ async function isStaleLock(p: string): Promise<boolean> {
  * in an empty, stealable state.
  */
 async function tryAcquire(p: string): Promise<boolean> {
-  let fd: FileHandle;
-  try {
-    fd = await open(p, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'EEXIST') return false;
-    throw e; // real fs error (e.g. EACCES) — surface, don't spin
+  const opened = await ResultAsync.fromPromise(
+    open(p, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600),
+    (e) => e as NodeJS.ErrnoException
+  );
+  if (opened.isErr()) {
+    if (opened.error.code === 'EEXIST') return false;
+    throw opened.error; // real fs error (e.g. EACCES) — surface, don't spin
   }
+  const fd = opened.value;
   try {
     writeSync(fd.fd, `${process.pid}:${Date.now()}`);
   } finally {
@@ -84,13 +83,13 @@ async function tryAcquire(p: string): Promise<boolean> {
 
 /** Unlink only while still owned — a reclaimed lock is left alone. */
 async function releaseLock(p: string): Promise<void> {
-  try {
-    const pid = Number((await readFile(p, 'utf-8')).split(':')[0]);
-    if (pid !== process.pid) return;
-    await unlink(p);
-  } catch {
-    // absent or unreadable — nothing to release
-  }
+  const content = await ResultAsync.fromPromise(readFile(p, 'utf-8'), () => undefined).unwrapOr('');
+  const pid = Number(content.split(':')[0]);
+  if (pid !== process.pid) return;
+  await ResultAsync.fromPromise(
+    unlink(p),
+    () => undefined // absent or unreadable — nothing to release
+  );
 }
 
 export async function withConfigLock<T>(fn: () => T | Promise<T>): Promise<T> {

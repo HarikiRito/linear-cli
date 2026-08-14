@@ -1,6 +1,6 @@
 import { intro, isCancel, outro, select, spinner, text } from '@clack/prompts';
 import type { LinearClient } from '@linear/sdk';
-import { ResultAsync } from 'neverthrow';
+import { Result, ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
 import { notifyUpdate } from '../../lib/check-version.js';
 import { buildLinearClient } from '../../lib/client/index.js';
@@ -139,12 +139,10 @@ export async function runLoginFlow(): Promise<void> {
   // Only nudge OAuth sessions when keepalive isn't already set up — and never
   // let the install check break login (unknown ⇒ show the tip).
   if (isOAuthSession(session)) {
-    let keepaliveInstalled = false;
-    try {
-      keepaliveInstalled = isKeepaliveInstalled();
-    } catch {
-      keepaliveInstalled = false;
-    }
+    const keepaliveInstalled = Result.fromThrowable(
+      isKeepaliveInstalled,
+      () => undefined
+    )().unwrapOr(false);
     if (!keepaliveInstalled) {
       console.log(
         pc.cyan(

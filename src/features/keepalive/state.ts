@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { Result, ResultAsync } from 'neverthrow';
 import { getGlobalConfigDir } from '../../lib/scope.js';
 
 /** Per-workspace invalid_grant backoff state (moved off the registry). */
@@ -33,13 +34,15 @@ function isKeepaliveStateFile(value: unknown): value is KeepaliveStateFile {
 
 /** Tolerate missing or malformed state; never throws. */
 export async function readKeepaliveState(): Promise<KeepaliveStateFile> {
-  try {
-    const parsed: unknown = JSON.parse(await readFile(getKeepaliveStatePath(), 'utf-8'));
-    if (isKeepaliveStateFile(parsed)) return parsed;
-    return { workspaces: {} };
-  } catch {
-    return { workspaces: {} };
-  }
+  const content = await ResultAsync.fromPromise(
+    readFile(getKeepaliveStatePath(), 'utf-8'),
+    () => undefined
+  ).unwrapOr('');
+  const parsed = Result.fromThrowable(
+    () => JSON.parse(content) as unknown,
+    () => undefined
+  )().unwrapOr(null);
+  return parsed !== null && isKeepaliveStateFile(parsed) ? parsed : { workspaces: {} };
 }
 
 export async function writeKeepaliveState(state: KeepaliveStateFile): Promise<void> {
