@@ -35,7 +35,9 @@ async function toggleArchive(opts: ArchiveOptions, action: 'archive' | 'unarchiv
   result.match(
     () => {
       if (opts.plain) {
-        console.log(renderPlainRecord('Issue', opts.issue, [{ key: 'status', value: `${action}d` }]));
+        console.log(
+          renderPlainRecord('Issue', opts.issue, [{ key: 'status', value: `${action}d` }])
+        );
         return;
       }
       console.log(`Issue ${opts.issue} ${action}d.`);

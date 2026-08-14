@@ -323,7 +323,12 @@ describe('issues get', () => {
   it('renders labels and blocked-by/blocking relations in --plain output', async () => {
     const requestFn = vi.fn().mockResolvedValue(
       makeIssueResponse({
-        labels: { nodes: [{ id: 'l1', name: 'bug' }, { id: 'l2', name: 'urgent' }] },
+        labels: {
+          nodes: [
+            { id: 'l1', name: 'bug' },
+            { id: 'l2', name: 'urgent' },
+          ],
+        },
         relations: {
           nodes: [{ id: 'rel-1', type: 'blocks', relatedIssue: { identifier: 'ENG-50' } }],
         },

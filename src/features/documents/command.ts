@@ -49,16 +49,14 @@ export function registerDocuments(program: Command): void {
   // documents get
   const getCmd = documents.command('get <id>').description('Get a single document by ID or slug');
 
-  addAuthOptions(getCmd).action(
-    async (id: string, opts: { apiKey?: string; token?: string }) => {
-      await getDocument({
-        apiKey: opts.apiKey,
-        token: opts.token,
-        id,
-        plain: isPlain(getCmd),
-      });
-    }
-  );
+  addAuthOptions(getCmd).action(async (id: string, opts: { apiKey?: string; token?: string }) => {
+    await getDocument({
+      apiKey: opts.apiKey,
+      token: opts.token,
+      id,
+      plain: isPlain(getCmd),
+    });
+  });
 
   // documents create
   const createCmd = documents

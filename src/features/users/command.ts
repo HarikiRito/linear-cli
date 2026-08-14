@@ -22,7 +22,13 @@ export function registerUsers(program: Command): void {
     .option('--all', 'Fetch all pages (one request per page)');
 
   addAuthOptions(listCmd).action(
-    async (opts: { limit: string; after?: string; all?: boolean; apiKey?: string; token?: string }) => {
+    async (opts: {
+      limit: string;
+      after?: string;
+      all?: boolean;
+      apiKey?: string;
+      token?: string;
+    }) => {
       await listUsers({
         apiKey: opts.apiKey,
         token: opts.token,

@@ -12,6 +12,8 @@ export interface OAuthSession {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
+  /** ms epoch of the last token rotation (keepalive interval anchor). */
+  lastRefreshAt?: number;
 }
 
 export type Session = ApiKeySession | OAuthSession;

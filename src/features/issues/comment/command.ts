@@ -48,7 +48,10 @@ export function registerCommentCommand(issues: Command): void {
       )
   );
   addCmd.action(
-    async (issue: string, opts: { body: string; apiKey?: string; token?: string; file?: string }) => {
+    async (
+      issue: string,
+      opts: { body: string; apiKey?: string; token?: string; file?: string }
+    ) => {
       await addComment({
         apiKey: opts.apiKey,
         token: opts.token,

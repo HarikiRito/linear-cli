@@ -5,6 +5,7 @@ import { registerWhoami } from './features/auth/whoami.js';
 import { registerCycles } from './features/cycles/command.js';
 import { registerDocuments } from './features/documents/command.js';
 import { registerIssues } from './features/issues/command.js';
+import { registerKeepaliveCommands } from './features/keepalive/command.js';
 import { registerLabels } from './features/labels/command.js';
 import { registerMilestones } from './features/milestones/command.js';
 import { registerProjects } from './features/projects/command.js';
@@ -26,6 +27,7 @@ export function createProgram(): Command {
   registerAuthCommands(program);
   registerTeamSelectCommand(program);
   registerWhoami(program);
+  registerKeepaliveCommands(program);
   registerIssues(program);
   registerTeams(program);
   registerProjects(program);

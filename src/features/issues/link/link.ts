@@ -79,9 +79,7 @@ export async function unlinkAttachment(opts: UnlinkOptions): Promise<void> {
     () => {
       if (opts.plain) {
         console.log(
-          renderPlainRecord('Attachment', opts.attachmentId, [
-            { key: 'status', value: 'removed' },
-          ])
+          renderPlainRecord('Attachment', opts.attachmentId, [{ key: 'status', value: 'removed' }])
         );
         return;
       }

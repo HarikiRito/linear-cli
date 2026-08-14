@@ -1,6 +1,7 @@
 import pc from 'picocolors';
 import { exitError } from '../../lib/runner.js';
 import { findProjectRoot } from '../../lib/scope.js';
+import { getGlobalEntryRoot, unregisterProject } from '../keepalive/registry.js';
 import { deleteProjectSession, deleteSession, readProjectSession } from './session.js';
 
 export function runLogout(): void {
@@ -12,6 +13,13 @@ export function runLogout(): void {
     console.error(pc.red(`Logout failed: ${result.error.message}`));
     exitError(result.error);
     return;
+  }
+  if (hasProjectSession && projectRoot) {
+    // Keepalive registry cleanup — idempotent, never blocks logout.
+    void unregisterProject(projectRoot);
+  } else {
+    // Global session deleted — drop the global keepalive registry entry.
+    void unregisterProject(getGlobalEntryRoot());
   }
   console.log(hasProjectSession ? 'Logged out of project scope.' : 'Logged out successfully.');
 }

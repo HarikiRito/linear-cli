@@ -52,16 +52,14 @@ export function registerMilestones(program: Command): void {
   // milestones get
   const getCmd = milestones.command('get <id>').description('Get a single milestone by ID');
 
-  addAuthOptions(getCmd).action(
-    async (id: string, opts: { apiKey?: string; token?: string }) => {
-      await getMilestone({
-        apiKey: opts.apiKey,
-        token: opts.token,
-        id,
-        plain: isPlain(getCmd),
-      });
-    }
-  );
+  addAuthOptions(getCmd).action(async (id: string, opts: { apiKey?: string; token?: string }) => {
+    await getMilestone({
+      apiKey: opts.apiKey,
+      token: opts.token,
+      id,
+      plain: isPlain(getCmd),
+    });
+  });
 
   // milestones create
   const createCmd = milestones
@@ -107,7 +105,13 @@ export function registerMilestones(program: Command): void {
   addAuthOptions(updateCmd).action(
     async (
       id: string,
-      opts: { name?: string; targetDate?: string; description?: string; apiKey?: string; token?: string }
+      opts: {
+        name?: string;
+        targetDate?: string;
+        description?: string;
+        apiKey?: string;
+        token?: string;
+      }
     ) => {
       await updateMilestone({
         apiKey: opts.apiKey,
