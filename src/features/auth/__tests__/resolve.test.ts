@@ -1,32 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { errAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { useTmpProjectAndHome } from '../../../../tests/helpers/tmp-env.js';
-import { NetworkError, UnauthenticatedError } from '../../../lib/errors.js';
+import { UnauthenticatedError } from '../../../lib/errors.js';
 import { linkProject } from '../../keepalive/registry.js';
 import { readWorkspaceCredential, writeWorkspaceCredential } from '../credentials.js';
-import { runLoginFlow } from '../login.js';
-import { refreshAccessToken } from '../oauth.js';
 import { resolveCredential } from '../resolve.js';
 import { isApiKeySession, isOAuthSession } from '../session.js';
 
-// Isolate the interactive path: login flow and token refresh are the only
-// boundaries resolve.ts crosses after the store lookups.
-vi.mock('../login.js', () => ({
-  runLoginFlow: vi.fn(),
-  authenticateWorkspace: vi.fn(),
-}));
-
-vi.mock('../oauth.js', () => ({
-  startOAuthFlow: vi.fn(),
-  refreshAccessToken: vi.fn(),
-}));
-
 /**
  * resolveCredential precedence (integration-style, real files on disk):
- * flags > env > registry (cwd-linked workspace) > global default workspace
- * (LINEAR_WORKSPACE / config.workspace / single-workspace auto) > unauthenticated.
+ * flags > env > registry (cwd-linked workspace) > LINEAR_WORKSPACE env
+ * (explicit override) > unauthenticated (context-aware hint). Unlinked
+ * directories never auto-resolve to a stored workspace.
  */
 describe('session type guards', () => {
   it('isApiKeySession returns true for apiKey session', () => {
@@ -98,6 +84,16 @@ describe('resolveCredential: precedence chain (real files)', () => {
     expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'linked-key' });
   });
 
+  it('linked dir whose credential is missing falls through to LINEAR_WORKSPACE env', async () => {
+    await writeWorkspaceCredential('ws-b', { apiKey: 'b-key' });
+    await linkProject(tmpEnv.projectDir, 'ws-a'); // no credential for ws-a
+    cdIntoNested();
+    process.env.LINEAR_WORKSPACE = 'ws-b';
+
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'b-key' });
+  });
+
   it('LINEAR_WORKSPACE env picks a specific stored workspace', async () => {
     await writeWorkspaceCredential('ws-a', { apiKey: 'a-key' });
     await writeWorkspaceCredential('ws-b', { apiKey: 'b-key' });
@@ -105,27 +101,6 @@ describe('resolveCredential: precedence chain (real files)', () => {
 
     const result = await resolveCredential({ allowInteractive: false });
     expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'b-key' });
-  });
-
-  it('global config workspace picks a specific stored workspace', async () => {
-    await writeWorkspaceCredential('ws-a', { apiKey: 'a-key' });
-    await writeWorkspaceCredential('ws-cfg', { apiKey: 'cfg-key' });
-    fs.mkdirSync(path.join(tmpEnv.homeDir, '.config', '.linear'), { recursive: true });
-    fs.writeFileSync(
-      path.join(tmpEnv.homeDir, '.config', '.linear', 'config.toml'),
-      'workspace = "ws-cfg"\n',
-      'utf-8'
-    );
-
-    const result = await resolveCredential({ allowInteractive: false });
-    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'cfg-key' });
-  });
-
-  it('auto-uses the single stored workspace when none is configured', async () => {
-    await writeWorkspaceCredential('ws-solo', { apiKey: 'solo-key' });
-
-    const result = await resolveCredential({ allowInteractive: false });
-    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'solo-key' });
   });
 
   it('explicit LINEAR_WORKSPACE with no matching credential fails rather than falling back', async () => {
@@ -138,8 +113,29 @@ describe('resolveCredential: precedence chain (real files)', () => {
     expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnauthenticatedError);
   });
 
-  it('malformed global config.toml does not block resolution (falls back to auto)', async () => {
+  it('unlinked dir with stored credentials resolves to UnauthenticatedError, not the single workspace', async () => {
+    await writeWorkspaceCredential('ws-solo', { apiKey: 'solo-key' });
+
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result.isErr()).toBe(true);
+    const err = result._unsafeUnwrapErr();
+    expect(err).toBeInstanceOf(UnauthenticatedError);
+    expect(err.message).toContain('linear workspace select');
+    expect(err.message).toContain("isn't linked to a workspace");
+  });
+
+  it('unlinked dir with zero credentials resolves to UnauthenticatedError with login hint', async () => {
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result.isErr()).toBe(true);
+    const err = result._unsafeUnwrapErr();
+    expect(err).toBeInstanceOf(UnauthenticatedError);
+    expect(err.message).toBe('Not authenticated. Run `linear login` to authenticate.');
+  });
+
+  it('malformed global config.toml does not block resolution (config no longer read)', async () => {
     await writeWorkspaceCredential('ws-a', { apiKey: 'a-key' });
+    await linkProject(tmpEnv.projectDir, 'ws-a');
+    cdIntoNested();
     fs.mkdirSync(path.join(tmpEnv.homeDir, '.config', '.linear'), { recursive: true });
     fs.writeFileSync(
       path.join(tmpEnv.homeDir, '.config', '.linear', 'config.toml'),
@@ -149,19 +145,6 @@ describe('resolveCredential: precedence chain (real files)', () => {
 
     const result = await resolveCredential({ allowInteractive: false });
     expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'a-key' });
-  });
-
-  it('malformed global config.toml still yields UnauthenticatedError, not a parse AuthError', async () => {
-    fs.mkdirSync(path.join(tmpEnv.homeDir, '.config', '.linear'), { recursive: true });
-    fs.writeFileSync(
-      path.join(tmpEnv.homeDir, '.config', '.linear', 'config.toml'),
-      'workspace = "unclosed',
-      'utf-8'
-    );
-
-    const result = await resolveCredential({ allowInteractive: false });
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnauthenticatedError);
   });
 
   it('returns UnauthenticatedError when nothing is stored (non-TTY)', async () => {
@@ -179,48 +162,5 @@ describe('resolveCredential: precedence chain (real files)', () => {
   it('apiKey credential round-trips through the workspace store', async () => {
     await writeWorkspaceCredential('ws-rt', { apiKey: 'rt-key' });
     expect(await readWorkspaceCredential('ws-rt')).toEqual({ apiKey: 'rt-key' });
-  });
-});
-
-describe('resolveCredential: post-login re-resolve error preservation', () => {
-  useTmpProjectAndHome({
-    projectPrefix: 'linear-resolve-interactive-',
-    homePrefix: 'linear-resolve-interactive-home-',
-    deleteEnvVars: ['LINEAR_API_KEY', 'LINEAR_ACCESS_TOKEN', 'LINEAR_WORKSPACE'],
-  });
-
-  // process.stdout/stdin isTTY are data properties, not accessors — flip them
-  // via defineProperty (spyOn('get') throws "isTTY does not exist").
-  const origOutTty = process.stdout.isTTY;
-  const origInTty = process.stdin.isTTY;
-
-  beforeEach(() => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
-    Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
-  });
-
-  afterEach(() => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: origOutTty, configurable: true });
-    Object.defineProperty(process.stdin, 'isTTY', { value: origInTty, configurable: true });
-    vi.clearAllMocks();
-  });
-
-  it('preserves a real (non-unauth) error from the post-login re-resolve', async () => {
-    // Login writes a credential whose refresh then fails with a network error —
-    // that failure must surface as NetworkError, not be masked as unauthenticated.
-    vi.mocked(runLoginFlow).mockImplementation(async () => {
-      await writeWorkspaceCredential('ws-oauth', {
-        accessToken: 'expired-at',
-        refreshToken: 'rt',
-        expiresAt: Date.now() - 60_000,
-        lastRefreshAt: Date.now() - 25 * 3600_000,
-      });
-    });
-    vi.mocked(refreshAccessToken).mockReturnValue(errAsync(new NetworkError('network down')));
-
-    const result = await resolveCredential();
-
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr()).toBeInstanceOf(NetworkError);
   });
 });

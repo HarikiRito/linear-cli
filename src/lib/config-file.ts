@@ -16,7 +16,18 @@ export interface DefaultProject {
 }
 
 export interface LinearConfig {
+  /**
+   * @deprecated Retained for backward-compatible reads of legacy config.toml
+   * files — no longer used by production code. Teams are link-only now: the
+   * cwd-linked registry entry's `team` (or the LINEAR_TEAM_ID env override).
+   * May still be written by the legacy `team select` global path.
+   */
   team?: DefaultTeam;
+  /**
+   * @deprecated Retained for backward-compatible reads of legacy config.toml
+   * files — no longer used by production code. Workspace selection is
+   * link-only (registry) with an explicit LINEAR_WORKSPACE env override.
+   */
   workspace?: string;
   projects?: DefaultProject[];
 }

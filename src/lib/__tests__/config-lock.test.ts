@@ -31,11 +31,18 @@ describe('withConfigLock (config-store lock)', () => {
 
   it('two concurrent calls execute serially (second waits for first)', async () => {
     const order: string[] = [];
+    // Wait until the first call is actually holding the lock before starting
+    // the second — otherwise the test races on which call wins acquisition.
+    let firstStarted!: () => void;
+    const started = new Promise<void>((r) => (firstStarted = r));
     const first = withConfigLock(async () => {
       order.push('first-start');
+      firstStarted();
       await new Promise((r) => setTimeout(r, 120));
       order.push('first-end');
     });
+    await started;
+
     const second = withConfigLock(() => {
       order.push('second-start');
     });

@@ -1,6 +1,11 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { getGlobalConfigPath, readConfig } from '../../lib/config-file.js';
-import { AuthError, type CliError, toError, UnauthenticatedError } from '../../lib/errors.js';
+import {
+  AuthError,
+  type CliError,
+  coerceCliError,
+  toError,
+  UnauthenticatedError,
+} from '../../lib/errors.js';
 import { findProjectRoot } from '../../lib/scope.js';
 import { getEntry } from '../keepalive/registry.js';
 import {
@@ -8,7 +13,6 @@ import {
   readWorkspaceCredential,
   writeWorkspaceCredential,
 } from './credentials.js';
-import { runLoginFlow } from './login.js';
 import { refreshAccessToken } from './oauth.js';
 import { isApiKeySession, isOAuthSession, type Session } from './session.js';
 
@@ -20,6 +24,7 @@ export interface ResolvedCredential {
 export interface ResolveOptions {
   apiKey?: string;
   token?: string;
+  /** Retained for callers (e.g. whoami passes false); no interactive fallback remains. */
   allowInteractive?: boolean;
   forceRefresh?: boolean;
   /**
@@ -82,11 +87,29 @@ function resolveWorkspace(
 }
 
 /**
- * Registry + global-default-workspace lookup chain:
+ * Explicit LINEAR_WORKSPACE env override. Wins-or-fails: never falls through
+ * to anything else when the requested credential is absent.
+ */
+function resolveEnvWorkspace(
+  forceRefresh?: boolean
+): ResultAsync<ResolvedCredential | null, CliError> {
+  const configured = process.env.LINEAR_WORKSPACE;
+  if (!configured) return okAsync(null);
+  return ResultAsync.fromPromise(
+    readWorkspaceCredential(configured),
+    (e) => new AuthError(toError(e).message)
+  ).andThen((session) =>
+    session ? resolveSessionWithRefresh(session, configured, forceRefresh) : okAsync(null)
+  );
+}
+
+/**
+ * Link-only store lookup:
  * 1. cwd (or an ancestor) linked in the registry → that workspace's credential
- * 2. LINEAR_WORKSPACE env or global config `workspace` → that credential
- * 3. single-workspace store → the only credential
- * Returns null when no stored credential matches.
+ *    (falls through when linked but no stored credential)
+ * 2. LINEAR_WORKSPACE env → that workspace's credential (explicit override,
+ *    wins-or-fails)
+ * Returns null when neither yields a stored credential.
  */
 function resolveFromStore(opts: ResolveOptions): ResultAsync<ResolvedCredential | null, CliError> {
   const { forceRefresh } = opts;
@@ -95,33 +118,41 @@ function resolveFromStore(opts: ResolveOptions): ResultAsync<ResolvedCredential 
   if (projectRoot) {
     const entry = getEntry(projectRoot);
     if (entry?.workspace) {
-      return resolveWorkspace(entry.workspace, forceRefresh);
+      return resolveWorkspace(entry.workspace, forceRefresh).andThen((cred) => {
+        if (cred) return okAsync(cred);
+        return resolveEnvWorkspace(forceRefresh);
+      });
     }
   }
-  return ResultAsync.fromPromise(
-    (async (): Promise<string | null> => {
-      // Malformed global config.toml must not block auth — tolerate it (only
-      // the explicit LINEAR_WORKSPACE env remains authoritative in that case).
-      let configured: string | undefined;
-      try {
-        configured = process.env.LINEAR_WORKSPACE ?? readConfig(getGlobalConfigPath()).workspace;
-      } catch {
-        configured = process.env.LINEAR_WORKSPACE;
-      }
-      if (configured) {
-        // Explicit selection wins-or-fails: never fall through to another
-        // stored workspace when the requested credential is absent.
-        return (await readWorkspaceCredential(configured)) ? configured : null;
-      }
-      const ids = await listWorkspaceIds();
-      return ids.length === 1 ? ids[0] : null;
-    })(),
-    (e) => new AuthError(toError(e).message)
-  ).andThen((workspaceId) =>
-    workspaceId ? resolveWorkspace(workspaceId, forceRefresh) : okAsync(null)
+  return resolveEnvWorkspace(forceRefresh);
+}
+
+/**
+ * Context-aware unauthenticated hint: no stored credentials at all → point at
+ * `linear login`; credentials exist but cwd isn't linked and no explicit
+ * LINEAR_WORKSPACE matched → point at `linear workspace select`.
+ */
+async function buildUnauthenticatedError(): Promise<never> {
+  const ids = await listWorkspaceIds();
+  if (ids.length === 0) {
+    throw new UnauthenticatedError('Not authenticated. Run `linear login` to authenticate.');
+  }
+  throw new UnauthenticatedError(
+    "This directory isn't linked to a workspace. Run `linear workspace select` to link it (or `linear login` to authenticate a new workspace)."
   );
 }
 
+/**
+ * Resolve a single session to a credential. Strict precedence — no silent
+ * fallbacks:
+ * 1. --api-key flag → apiKey
+ * 2. --token flag → accessToken
+ * 3. LINEAR_API_KEY env → apiKey
+ * 4. LINEAR_ACCESS_TOKEN env → accessToken
+ * 5. registry: cwd-linked workspace credential (refresh + writeback)
+ * 6. LINEAR_WORKSPACE env (explicit per-invocation override)
+ * 7. UnauthenticatedError with a context-aware hint
+ */
 export function resolveCredential(
   opts: ResolveOptions = {}
 ): ResultAsync<ResolvedCredential, CliError> {
@@ -141,28 +172,11 @@ export function resolveCredential(
     return okAsync({ type: 'accessToken', value: process.env.LINEAR_ACCESS_TOKEN });
   }
 
-  // 3) Registry (cwd-linked workspace) → global default workspace → auto single
+  // 3) Registry (cwd-linked workspace) → LINEAR_WORKSPACE env override
   return resolveFromStore(opts).andThen((cred) => {
     if (cred) return okAsync(cred);
 
-    // 4) Interactive fallback if TTY: log in, then re-resolve (no loop)
-    if (opts.allowInteractive !== false && process.stdout.isTTY && process.stdin.isTTY) {
-      return ResultAsync.fromPromise(
-        (async (): Promise<ResolvedCredential> => {
-          await runLoginFlow();
-          const re = await resolveFromStore(opts);
-          if (re.isErr()) throw re.error;
-          if (re.value === null) throw new UnauthenticatedError();
-          return re.value;
-        })(),
-        // Preserve real failures (e.g. a credential write error after login)
-        // instead of masking every rejection as unauthenticated.
-        (e) =>
-          e instanceof Error && 'kind' in e ? (e as CliError) : new AuthError(toError(e).message)
-      );
-    }
-
-    // 5) Non-TTY: return err
-    return errAsync(new UnauthenticatedError());
+    // 4) Unlinked / nothing stored — context-aware UnauthenticatedError
+    return ResultAsync.fromPromise(buildUnauthenticatedError(), coerceCliError);
   });
 }

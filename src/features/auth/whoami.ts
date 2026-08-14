@@ -3,7 +3,6 @@ import { ResultAsync } from 'neverthrow';
 import { notifyUpdate } from '../../lib/check-version.js';
 import { getClientWithAuthRetry } from '../../lib/client/index.js';
 import { isPlain } from '../../lib/commandOptions.js';
-import { getGlobalConfigPath, readConfig } from '../../lib/config-file.js';
 import { mapLinearError } from '../../lib/errors.js';
 import { renderPlainRecord } from '../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../lib/output/table.js';
@@ -26,11 +25,10 @@ export interface WhoamiOptions {
   plain: boolean;
 }
 
-/** Resolve the team bound to the cwd: linked registry entry → global config. */
+/** Resolve the team bound to the cwd: the linked registry entry's team only. */
 function boundTeamKey(): string | undefined {
   const root = findProjectRoot(process.cwd());
-  const linkedTeam = root ? getEntry(root)?.team : undefined;
-  return linkedTeam?.key ?? readConfig(getGlobalConfigPath()).team?.key;
+  return root ? getEntry(root)?.team?.key : undefined;
 }
 
 export async function runWhoami(opts: WhoamiOptions): Promise<void> {
@@ -83,7 +81,8 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
     },
     (e) => {
       if (e.kind === 'UnauthenticatedError') {
-        console.error('Not authenticated. Run `linear login` to authenticate.');
+        // Surface the context-aware hint (login vs workspace-select).
+        console.error(e.message);
         process.exitCode = 1;
       } else {
         exitError(e);

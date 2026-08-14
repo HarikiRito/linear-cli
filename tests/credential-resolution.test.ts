@@ -9,8 +9,9 @@ import { useTmpProjectAndHome } from './helpers/tmp-env.js';
 
 /**
  * resolveCredential precedence (real credentials.json + projects.json in temp
- * HOME): flags > env > registry (cwd-linked workspace) > global default
- * workspace (LINEAR_WORKSPACE / single-workspace auto) > unauthenticated.
+ * HOME): flags > env > registry (cwd-linked workspace) > LINEAR_WORKSPACE env
+ * (explicit override) > unauthenticated (context-aware hint). Unlinked
+ * directories never auto-resolve to a stored workspace.
  */
 describe('Credential resolution order', () => {
   const tmpEnv = useTmpProjectAndHome({
@@ -84,19 +85,24 @@ describe('Credential resolution order', () => {
     expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'b-key' });
   });
 
-  it('uses the single stored workspace automatically when nothing is configured', async () => {
+  it('unlinked dir with a single stored workspace is UnauthenticatedError, not auto-resolved', async () => {
     await writeWorkspaceCredential('ws-solo', { apiKey: 'solo-key' });
 
     const result = await resolveCredential({ allowInteractive: false });
-    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'solo-key' });
+    expect(result.isErr()).toBe(true);
+    const err = result._unsafeUnwrapErr();
+    expect(err).toBeInstanceOf(UnauthenticatedError);
+    expect(err.message).toContain('linear workspace select');
   });
 
-  it('reads a non-expired OAuth workspace credential as accessToken', async () => {
+  it('reads a non-expired OAuth workspace credential as accessToken when linked', async () => {
     await writeWorkspaceCredential('ws-oauth', {
       accessToken: 'session-token',
       refreshToken: 'session-refresh',
       expiresAt: Date.now() + 86400000,
     });
+    await linkProject(tmpEnv.projectDir, 'ws-oauth');
+    cdIntoProject();
 
     const result = await resolveCredential({ allowInteractive: false });
     expect(result._unsafeUnwrap()).toEqual({ type: 'accessToken', value: 'session-token' });

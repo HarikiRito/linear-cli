@@ -90,6 +90,47 @@ describe('project registry (linkage only)', () => {
     expect(listProjects()._unsafeUnwrap()).toEqual([]);
   });
 
+  it('filters out stale entries without a workspace field on read (file untouched)', () => {
+    // Old-model global-sentinel artifacts: `{root, scope}` with no workspace.
+    const registryPath = getRegistryPath();
+    fs.mkdirSync(path.dirname(registryPath), { recursive: true });
+    fs.writeFileSync(
+      registryPath,
+      JSON.stringify({
+        projects: [
+          { root: '~/.config/.linear', scope: 'global', addedAt: 123 },
+          { root: fs.realpathSync(projA), workspace: 'ws-1', addedAt: 456 },
+          null,
+          'garbage',
+        ],
+      }),
+      'utf-8'
+    );
+
+    const projects = listProjects()._unsafeUnwrap();
+    expect(projects).toHaveLength(1);
+    expect(projects[0].root).toBe(fs.realpathSync(projA));
+    expect(projects[0].workspace).toBe('ws-1');
+    expect(projects[0]).not.toHaveProperty('scope');
+
+    // Read-only: the stale entry is filtered in memory, never rewritten.
+    expect(fs.readFileSync(registryPath, 'utf-8')).toContain('"scope":"global"');
+  });
+
+  it('getEntry ignores stale no-workspace entries', () => {
+    const registryPath = getRegistryPath();
+    fs.mkdirSync(path.dirname(registryPath), { recursive: true });
+    fs.writeFileSync(
+      registryPath,
+      JSON.stringify({
+        projects: [{ root: projA, scope: 'global', addedAt: 123 }],
+      }),
+      'utf-8'
+    );
+
+    expect(getEntry(projA)).toBeUndefined();
+  });
+
   it('linkProject creates a new entry with workspace and team', async () => {
     const entry = await linkProject(projA, 'ws-1', { id: 'team-1', key: 'T1' });
 

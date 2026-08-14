@@ -36,8 +36,22 @@ function readRegistry(): RegistryFile {
     toError
   )();
   // Missing or malformed registry — start fresh.
-  if (result.isErr() || !Array.isArray(result.value.projects)) return { projects: [] };
-  return result.value;
+  if (result.isErr()) return { projects: [] };
+  const raw = result.value as { projects?: unknown };
+  if (!Array.isArray(raw.projects)) return { projects: [] };
+  return {
+    projects: raw.projects
+      // Defensive read filter (file never rewritten by reads): drop stale
+      // entries from the old global-sentinel model (no `workspace` field) and
+      // any lingering `scope` field; skip malformed entries entirely.
+      .filter(
+        (p): p is RegisteredProject & { scope?: string } =>
+          p !== null &&
+          typeof p === 'object' &&
+          typeof (p as { workspace?: unknown }).workspace === 'string'
+      )
+      .map(({ scope: _scope, ...rest }) => rest),
+  };
 }
 
 function writeRegistry(registry: RegistryFile): Result<void, Error> {

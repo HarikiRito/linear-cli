@@ -163,25 +163,22 @@ function resolveConfigValue(envVar: string, key: ScalarConfigKey): string | null
 }
 
 /**
- * Resolve the full default `team` table from precedence chain (no env var,
- * no API lookup): cwd-linked registry entry `team` → global config `team` →
- * null. Sibling to resolveConfigValue(), which only handles scalar (string)
- * keys — `team` is a nested `{id, key}` table so it needs its own precedence
- * walk. Exported for direct testing of the nested-table precedence behavior.
+ * Resolve the full default `team` table (no env var, no API lookup): the
+ * cwd-linked registry entry `team` only — global config `team` is no longer
+ * read (link-only model). Sibling to resolveConfigValue(), which only handles
+ * scalar (string) keys — `team` is a nested `{id, key}` table so it needs its
+ * own precedence walk. Exported for direct testing of the precedence behavior.
  */
 export function resolveDefaultTeam(): DefaultTeam | null {
-  const { linkedTeam, globalConfig } = readMergedConfigs();
-  if (linkedTeam) return linkedTeam;
-  if (globalConfig.team) return globalConfig.team;
-  return null;
+  return readMergedConfigs().linkedTeam;
 }
 
 /**
  * Resolve team ID from precedence chain (no API lookup):
- * env LINEAR_TEAM_ID → linked registry entry team.id → global config team.id → null
+ * env LINEAR_TEAM_ID → linked registry entry team.id → null
  *
- * The env var, when set, bypasses the `team` config table entirely (same
- * precedence as before this field became a nested table).
+ * The env var, when set, bypasses the `team` table entirely (same precedence
+ * as before this field became a nested table).
  */
 export function getDefaultTeamId(): string | null {
   const envVal = process.env.LINEAR_TEAM_ID;

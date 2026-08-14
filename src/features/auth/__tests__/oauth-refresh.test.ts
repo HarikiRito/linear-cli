@@ -217,7 +217,7 @@ describe('resolveCredential — workspace credential refresh + writeback', () =>
     expect(mockWriteWorkspaceCredential).not.toHaveBeenCalled();
   });
 
-  it('registry entry without workspace → falls through to global lookup', async () => {
+  it('registry entry without workspace → no linked credential → UnauthenticatedError', async () => {
     mockGetEntry.mockReturnValue({} as RegisteredProject); // no workspace
     mockReadWorkspaceCredential.mockResolvedValue(null);
 
@@ -226,6 +226,6 @@ describe('resolveCredential — workspace credential refresh + writeback', () =>
       projectRoot: '/repo',
     });
     expect(result.isErr()).toBe(true);
-    expect(mockReadWorkspaceCredential).not.toHaveBeenCalled(); // global pick found nothing
+    expect(mockReadWorkspaceCredential).not.toHaveBeenCalled(); // no store lookup happened
   });
 });
