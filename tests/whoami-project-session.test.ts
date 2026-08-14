@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 /**
- * Real two-file precedence, end-to-end through the actual credential resolution
- * chain (unmocked resolveCredential/session read layer) — only the Linear SDK
- * network boundary is mocked. Confirms `whoami` reports the identity resolved
- * from the project session when both a project and a global session exist.
+ * Real end-to-end through the actual credential resolution chain (unmocked
+ * resolveCredential/credentials store) — only the Linear SDK network boundary
+ * is mocked. Confirms `whoami` reports the identity resolved from the
+ * cwd-LINKED workspace credential (registry match).
  *
  * Kept in its own file (rather than alongside tests/whoami.test.ts, which mocks
  * '../src/lib/client/index.js' on nearly every test) so there is no risk of a
@@ -18,22 +18,23 @@ vi.mock('@linear/sdk', () => ({
     client: { request: vi.fn() },
     get viewer() {
       return Promise.resolve({
-        id: 'u-project',
-        name: opts.apiKey === 'project-key-in-use' ? 'Project Identity' : 'WRONG Identity',
-        email: 'project@example.com',
+        id: 'u-linked',
+        name: opts.apiKey === 'linked-key-in-use' ? 'Linked Identity' : 'WRONG Identity',
+        email: 'linked@example.com',
       });
     },
     get organization() {
-      return Promise.resolve({ id: 'org', name: 'Acme', urlKey: 'acme' });
+      return Promise.resolve({ id: 'org-linked', name: 'Acme', urlKey: 'acme' });
     },
   })),
 }));
 
-import { writeProjectSession, writeSession } from '../src/features/auth/session.js';
+import { writeWorkspaceCredential } from '../src/features/auth/credentials.js';
 import { runWhoami } from '../src/features/auth/whoami.js';
+import { linkProject } from '../src/features/keepalive/registry.js';
 import { useTmpProjectAndHome } from './helpers/tmp-env.js';
 
-describe('whoami: real project-session precedence (integration)', () => {
+describe('whoami: uses cwd-linked workspace credential (integration)', () => {
   const tmpEnv = useTmpProjectAndHome({
     projectPrefix: 'linear-whoami-project-',
     homePrefix: 'linear-whoami-home-',
@@ -43,11 +44,10 @@ describe('whoami: real project-session precedence (integration)', () => {
     },
   });
 
-  it('reports identity resolved from the project session when both project and global sessions exist', async () => {
-    expect(writeSession({ apiKey: 'global-key-should-not-be-used' }).isOk()).toBe(true);
-    expect(writeProjectSession(tmpEnv.projectDir, { apiKey: 'project-key-in-use' }).isOk()).toBe(
-      true
-    );
+  it('reports identity from the linked workspace credential when cwd is linked', async () => {
+    await writeWorkspaceCredential('ws-linked', { apiKey: 'linked-key-in-use' });
+    await writeWorkspaceCredential('ws-other', { apiKey: 'other-key-not-used' });
+    await linkProject(tmpEnv.projectDir, 'ws-linked');
 
     process.cwd = () => tmpEnv.projectDir;
 
@@ -56,7 +56,7 @@ describe('whoami: real project-session precedence (integration)', () => {
     await runWhoami({ plain: true });
 
     const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
-    expect(output).toContain('User: Project Identity');
+    expect(output).toContain('User: Linked Identity');
     expect(output).not.toContain('WRONG Identity');
 
     consoleSpy.mockRestore();

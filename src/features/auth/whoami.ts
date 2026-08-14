@@ -3,22 +3,34 @@ import { ResultAsync } from 'neverthrow';
 import { notifyUpdate } from '../../lib/check-version.js';
 import { getClientWithAuthRetry } from '../../lib/client/index.js';
 import { isPlain } from '../../lib/commandOptions.js';
+import { getGlobalConfigPath, readConfig } from '../../lib/config-file.js';
 import { mapLinearError } from '../../lib/errors.js';
 import { renderPlainRecord } from '../../lib/output/plain.js';
 import { prettyTable, printTable } from '../../lib/output/table.js';
 import { exitError } from '../../lib/runner.js';
+import { findProjectRoot } from '../../lib/scope.js';
+import { getEntry } from '../keepalive/registry.js';
 
 export interface WhoamiData {
   id: string;
   name: string;
   email: string;
   workspace: string;
+  /** Key of the team bound to this directory, if any. */
+  teamKey?: string;
 }
 
 export interface WhoamiOptions {
   apiKey?: string;
   token?: string;
   plain: boolean;
+}
+
+/** Resolve the team bound to the cwd: linked registry entry → global config. */
+function boundTeamKey(): string | undefined {
+  const root = findProjectRoot(process.cwd());
+  const linkedTeam = root ? getEntry(root)?.team : undefined;
+  return linkedTeam?.key ?? readConfig(getGlobalConfigPath()).team?.key;
 }
 
 export async function runWhoami(opts: WhoamiOptions): Promise<void> {
@@ -35,6 +47,7 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
           name: viewer.name,
           email: viewer.email ?? '',
           workspace: organization.name,
+          teamKey: boundTeamKey(),
         } satisfies WhoamiData;
       })(),
       (e) => mapLinearError(e)
@@ -43,21 +56,26 @@ export async function runWhoami(opts: WhoamiOptions): Promise<void> {
 
   result.match(
     (data) => {
+      const rows: Array<{ key: string; value: string }> = [
+        { key: 'id', value: data.id },
+        { key: 'email', value: data.email },
+        { key: 'workspace', value: data.workspace },
+        ...(data.teamKey ? [{ key: 'team', value: data.teamKey }] : []),
+      ];
       if (opts.plain) {
-        console.log(
-          renderPlainRecord('User', data.name, [
-            { key: 'id', value: data.id },
-            { key: 'email', value: data.email },
-            { key: 'workspace', value: data.workspace },
-          ])
-        );
+        console.log(renderPlainRecord('User', data.name, rows));
       } else {
-        const rows: string[][] = [
-          ['Name', data.name],
-          ['Email', data.email],
-          ['Workspace', data.workspace],
-        ];
-        printTable(prettyTable(['Field', 'Value'], rows));
+        printTable(
+          prettyTable(
+            ['Field', 'Value'],
+            [
+              ['Name', data.name],
+              ['Email', data.email],
+              ['Workspace', data.workspace],
+              ...(data.teamKey ? ([['Team', data.teamKey]] as string[][]) : []),
+            ]
+          )
+        );
       }
 
       // Fire-and-forget: don't block CLI exit on this best-effort notice.

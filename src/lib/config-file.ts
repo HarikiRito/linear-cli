@@ -3,7 +3,7 @@ import path from 'node:path';
 import { Result } from 'neverthrow';
 import { parse, stringify } from 'smol-toml';
 import { toError } from './errors.js';
-import { getGlobalConfigDir, getProjectLinearDir } from './scope.js';
+import { getGlobalConfigDir } from './scope.js';
 
 export interface DefaultTeam {
   id: string;
@@ -23,10 +23,6 @@ export interface LinearConfig {
 
 export function getGlobalConfigPath(): string {
   return path.join(getGlobalConfigDir(), 'config.toml');
-}
-
-export function getProjectConfigPath(projectRoot: string): string {
-  return path.join(getProjectLinearDir(projectRoot), 'config.toml');
 }
 
 /**

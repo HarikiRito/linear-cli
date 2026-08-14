@@ -1,19 +1,16 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { AuthError, type CliError, UnauthenticatedError } from '../../lib/errors.js';
+import { getGlobalConfigPath, readConfig } from '../../lib/config-file.js';
+import { AuthError, type CliError, toError, UnauthenticatedError } from '../../lib/errors.js';
 import { findProjectRoot } from '../../lib/scope.js';
-import { registerGlobal, registerProject } from '../keepalive/registry.js';
+import { getEntry } from '../keepalive/registry.js';
+import {
+  listWorkspaceIds,
+  readWorkspaceCredential,
+  writeWorkspaceCredential,
+} from './credentials.js';
 import { runLoginFlow } from './login.js';
 import { refreshAccessToken } from './oauth.js';
-import {
-  isApiKeySession,
-  isOAuthSession,
-  type OAuthSession,
-  readProjectSession,
-  readSession,
-  type Session,
-  writeProjectSession,
-  writeSession,
-} from './session.js';
+import { isApiKeySession, isOAuthSession, type Session } from './session.js';
 
 export interface ResolvedCredential {
   type: 'apiKey' | 'accessToken';
@@ -26,22 +23,21 @@ export interface ResolveOptions {
   allowInteractive?: boolean;
   forceRefresh?: boolean;
   /**
-   * Pre-resolved project root, for callers that already computed it (e.g.
-   * runTeamSelectFlow) — avoids a redundant findProjectRoot(process.cwd())
-   * directory walk for the same cwd. When omitted, resolved internally.
+   * Pre-resolved project root, for callers that already computed it — avoids a
+   * redundant findProjectRoot(process.cwd()) directory walk for the same cwd.
+   * When omitted, resolved internally.
    */
   projectRoot?: string | null;
 }
 
-type Scope = { type: 'project'; projectRoot: string } | { type: 'global' };
-
 /**
- * Resolve a single session to a credential, refreshing OAuth tokens when expired.
- * Persists rotated tokens to the same scope they came from (no cross-writing).
+ * Resolve a single session to a credential, refreshing OAuth tokens when
+ * expired. Rotated tokens are written back to the workspace credential the
+ * session came from (no cross-writing).
  */
 function resolveSessionWithRefresh(
   session: Session,
-  scope: Scope,
+  workspaceId: string,
   forceRefresh?: boolean
 ): ResultAsync<ResolvedCredential, CliError> {
   if (isApiKeySession(session)) {
@@ -52,22 +48,17 @@ function resolveSessionWithRefresh(
     const needsRefresh =
       forceRefresh || (session.expiresAt != null && Date.now() >= session.expiresAt - 60_000);
     if (needsRefresh) {
-      return refreshAccessToken(session.refreshToken).andThen((refreshed) => {
-        const updatedSession: OAuthSession = {
-          accessToken: refreshed.accessToken,
-          refreshToken: refreshed.refreshToken,
-          expiresAt: refreshed.expiresAt,
-          lastRefreshAt: Date.now(),
-        };
-        const writeResult =
-          scope.type === 'project'
-            ? writeProjectSession(scope.projectRoot, updatedSession)
-            : writeSession(updatedSession);
-        if (writeResult.isErr()) {
-          return errAsync(new AuthError(writeResult.error.message) as CliError);
-        }
-        return okAsync({ type: 'accessToken' as const, value: refreshed.accessToken });
-      });
+      return refreshAccessToken(session.refreshToken).andThen((refreshed) =>
+        ResultAsync.fromPromise(
+          writeWorkspaceCredential(workspaceId, {
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+            expiresAt: refreshed.expiresAt,
+            lastRefreshAt: Date.now(),
+          }),
+          (e) => new AuthError(toError(e).message)
+        ).map(() => ({ type: 'accessToken' as const, value: refreshed.accessToken }))
+      );
     }
     return okAsync({ type: 'accessToken' as const, value: session.accessToken });
   }
@@ -75,43 +66,50 @@ function resolveSessionWithRefresh(
 }
 
 /**
- * Look up stored credentials using project→global precedence.
- * Handles OAuth refresh for both project and global sessions.
- * Returns null (via errAsync(UnauthenticatedError)) if nothing is stored.
+ * Look up a stored workspace credential by id and resolve it (with refresh +
+ * writeback). Returns null when no credential exists for the id.
  */
-function resolveFromStoredSession(
-  projectRoot: string | null,
+function resolveWorkspace(
+  workspaceId: string,
   forceRefresh?: boolean
-): ResultAsync<ResolvedCredential, CliError> {
-  // Project scope first
+): ResultAsync<ResolvedCredential | null, CliError> {
+  return ResultAsync.fromPromise(
+    readWorkspaceCredential(workspaceId),
+    (e) => new AuthError(toError(e).message)
+  ).andThen((session) =>
+    session ? resolveSessionWithRefresh(session, workspaceId, forceRefresh) : okAsync(null)
+  );
+}
+
+/**
+ * Registry + global-default-workspace lookup chain:
+ * 1. cwd (or an ancestor) linked in the registry → that workspace's credential
+ * 2. LINEAR_WORKSPACE env or global config `workspace` → that credential
+ * 3. single-workspace store → the only credential
+ * Returns null when no stored credential matches.
+ */
+function resolveFromStore(opts: ResolveOptions): ResultAsync<ResolvedCredential | null, CliError> {
+  const { forceRefresh } = opts;
+  const projectRoot =
+    opts.projectRoot !== undefined ? opts.projectRoot : findProjectRoot(process.cwd());
   if (projectRoot) {
-    const projectSession = readProjectSession(projectRoot);
-    if (projectSession) {
-      return resolveSessionWithRefresh(
-        projectSession,
-        { type: 'project', projectRoot },
-        forceRefresh
-      ).map((cred) => {
-        if (isOAuthSession(projectSession)) {
-          // Idempotent; never blocks credential resolution (keepalive registry).
-          void registerProject(projectRoot);
-        }
-        return cred;
-      });
+    const entry = getEntry(projectRoot);
+    if (entry?.workspace) {
+      return resolveWorkspace(entry.workspace, forceRefresh);
     }
   }
-  // Global scope
-  const session = readSession();
-  if (session) {
-    return resolveSessionWithRefresh(session, { type: 'global' }, forceRefresh).map((cred) => {
-      if (isOAuthSession(session)) {
-        // Idempotent; never blocks credential resolution (keepalive registry).
-        void registerGlobal();
-      }
-      return cred;
-    });
-  }
-  return errAsync(new UnauthenticatedError());
+  return ResultAsync.fromPromise(
+    (async (): Promise<string | null> => {
+      const configured =
+        process.env.LINEAR_WORKSPACE ?? readConfig(getGlobalConfigPath()).workspace;
+      if (configured && (await readWorkspaceCredential(configured))) return configured;
+      const ids = await listWorkspaceIds();
+      return ids.length === 1 ? ids[0] : null;
+    })(),
+    (e) => new AuthError(toError(e).message)
+  ).andThen((workspaceId) =>
+    workspaceId ? resolveWorkspace(workspaceId, forceRefresh) : okAsync(null)
+  );
 }
 
 export function resolveCredential(
@@ -119,51 +117,39 @@ export function resolveCredential(
 ): ResultAsync<ResolvedCredential, CliError> {
   // 1) Explicit flag
   if (opts.apiKey) {
-    return okAsync({ type: 'apiKey' as const, value: opts.apiKey });
+    return okAsync({ type: 'apiKey', value: opts.apiKey });
   }
   if (opts.token) {
-    return okAsync({ type: 'accessToken' as const, value: opts.token });
+    return okAsync({ type: 'accessToken', value: opts.token });
   }
 
   // 2) Env var
   if (process.env.LINEAR_API_KEY) {
-    return okAsync({ type: 'apiKey' as const, value: process.env.LINEAR_API_KEY });
+    return okAsync({ type: 'apiKey', value: process.env.LINEAR_API_KEY });
   }
   if (process.env.LINEAR_ACCESS_TOKEN) {
-    return okAsync({ type: 'accessToken' as const, value: process.env.LINEAR_ACCESS_TOKEN });
+    return okAsync({ type: 'accessToken', value: process.env.LINEAR_ACCESS_TOKEN });
   }
 
-  // 3) Project-scoped session, then 4) global session (with OAuth refresh)
-  const projectRoot =
-    opts.projectRoot !== undefined ? opts.projectRoot : findProjectRoot(process.cwd());
-  const stored = resolveFromStoredSession(projectRoot, opts.forceRefresh);
+  // 3) Registry (cwd-linked workspace) → global default workspace → auto single
+  return resolveFromStore(opts).andThen((cred) => {
+    if (cred) return okAsync(cred);
 
-  // If a stored session was found (including after refresh), return it.
-  // We use orElse to continue to the interactive fallback only on UnauthenticatedError.
-  return stored.orElse((e) => {
-    if (!(e instanceof UnauthenticatedError)) {
-      return errAsync(e);
-    }
-
-    // 5) Interactive fallback if TTY
+    // 4) Interactive fallback if TTY: log in, then re-resolve (no loop)
     if (opts.allowInteractive !== false && process.stdout.isTTY && process.stdin.isTTY) {
       return ResultAsync.fromPromise(
-        runLoginFlow().then(() => {
-          // Re-resolve projectRoot AFTER login: login may have created .linear/ dir
-          const freshProjectRoot = findProjectRoot(process.cwd());
-          const credential = resolveFromStoredSession(freshProjectRoot);
-          return credential.match(
-            (c) => c,
-            () => {
-              throw new UnauthenticatedError();
-            }
-          );
-        }),
-        (e) => (e instanceof UnauthenticatedError ? e : new UnauthenticatedError())
+        (async (): Promise<ResolvedCredential> => {
+          await runLoginFlow();
+          const re = await resolveFromStore(opts);
+          if (re.isErr()) throw re.error;
+          if (re.value === null) throw new UnauthenticatedError();
+          return re.value;
+        })(),
+        () => new UnauthenticatedError()
       );
     }
 
-    // 6) Non-TTY: return err
+    // 5) Non-TTY: return err
     return errAsync(new UnauthenticatedError());
   });
 }

@@ -4,7 +4,8 @@ import { Result } from 'neverthrow';
 import pc from 'picocolors';
 import { KEEPALIVE_INTERVAL_MS } from '../../lib/config.js';
 import { exitError } from '../../lib/runner.js';
-import { isOAuthSession, readProjectSession, readSession } from '../auth/session.js';
+import { readWorkspaceCredential } from '../auth/credentials.js';
+import { isOAuthSession } from '../auth/session.js';
 import { listProjects } from './registry.js';
 import { runKeepaliveCycle } from './rotate.js';
 import { getScheduler } from './scheduler/index.js';
@@ -51,7 +52,7 @@ export function registerKeepaliveCommands(program: Command): void {
   keepalive
     .command('status')
     .description('Show scheduler + registered projects.')
-    .action(() => {
+    .action(async () => {
       const statusResult = getScheduler().status();
       const listResult = listProjects();
       if (statusResult.isErr()) {
@@ -75,11 +76,11 @@ export function registerKeepaliveCommands(program: Command): void {
       }
       console.log('Registered projects:');
       for (const p of projects) {
-        const session = p.scope === 'global' ? readSession() : readProjectSession(p.root);
+        const session = p.workspace ? await readWorkspaceCredential(p.workspace) : null;
         const last = session && isOAuthSession(session) ? (session.lastRefreshAt ?? 0) : 0;
         const due = Date.now() - last >= KEEPALIVE_INTERVAL_MS;
         const lastLabel = last ? new Date(last).toISOString() : 'never';
-        const scopeLabel = p.scope === 'global' ? '[global]' : '[project]';
+        const scopeLabel = p.workspace ? `[ws:${p.workspace}]` : '[unlinked]';
         console.log(
           `  ${scopeLabel} ${p.root}  lastRefresh: ${lastLabel}  ${due ? pc.yellow('due') : pc.green('ok')}`
         );

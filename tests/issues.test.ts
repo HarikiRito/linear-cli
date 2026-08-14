@@ -299,12 +299,12 @@ describe('issues list', () => {
     expect(json).toContain('"and"');
   });
 
-  it('resolves team automatically from a real project config.toml when --team is omitted (end-to-end)', async () => {
-    // Real project .linear/config.toml — no mocking of the resolve/config-file layer.
+  it('resolves team automatically from a real global config.toml when --team is omitted (end-to-end)', async () => {
+    // Real global config.toml — no mocking of the resolve/config-file layer.
     // Verifies the intended purpose of config.toml: commands that omit --team should
-    // pick up the project-scoped team.id via getDefaultTeamId()'s resolution chain.
-    const tmpProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-list-team-cfg-'));
-    const linearDir = path.join(tmpProjectDir, '.linear');
+    // pick up the configured team.id via getDefaultTeamId()'s resolution chain.
+    const tmpHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-list-team-cfg-home-'));
+    const linearDir = path.join(tmpHomeDir, '.config', '.linear');
     fs.mkdirSync(linearDir, { recursive: true });
     fs.writeFileSync(
       path.join(linearDir, 'config.toml'),
@@ -313,7 +313,8 @@ describe('issues list', () => {
     );
 
     const originalCwd = process.cwd.bind(process);
-    process.cwd = () => tmpProjectDir;
+    const originalHome = process.env.HOME;
+    process.env.HOME = tmpHomeDir;
 
     try {
       const request = vi.fn().mockResolvedValue(makeListResponse([]));
@@ -327,7 +328,12 @@ describe('issues list', () => {
       expect(JSON.stringify(vars)).toContain('"PROJCFG"');
     } finally {
       process.cwd = originalCwd;
-      fs.rmSync(tmpProjectDir, { recursive: true, force: true });
+      if (originalHome !== undefined) {
+        process.env.HOME = originalHome;
+      } else {
+        delete process.env.HOME;
+      }
+      fs.rmSync(tmpHomeDir, { recursive: true, force: true });
     }
   });
 

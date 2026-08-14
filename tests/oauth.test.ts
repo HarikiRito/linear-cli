@@ -624,7 +624,7 @@ describe('OAuth startOAuthFlow — workspace-switching safety', () => {
     expect(writeSession).not.toHaveBeenCalled();
   });
 
-  it('(c) successful OAuth flow writes the new session', async () => {
+  it('(c) successful OAuth flow returns the new session (no file write)', async () => {
     vi.resetModules();
 
     const existingSession = { apiKey: 'old-key' };
@@ -674,100 +674,14 @@ describe('OAuth startOAuthFlow — workspace-switching safety', () => {
     const result = await flowPromise;
 
     expect(result.isOk()).toBe(true);
-    expect(writeSession).toHaveBeenCalledOnce();
-    expect(writeSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-      })
-    );
-  });
-});
-
-// ─── API-key login path: writes only on success ───────────────────────────────
-
-describe('login.ts — API-key path writes session only on success', () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-    vi.unstubAllGlobals();
-    vi.resetModules();
-  });
-
-  it('(d) does NOT call writeSession when LinearClient.viewer rejects (key validation fails)', async () => {
-    vi.resetModules();
-
-    vi.doMock('@clack/prompts', () => ({
-      intro: vi.fn(),
-      outro: vi.fn(),
-      select: vi.fn().mockResolvedValue('apikey'),
-      text: vi.fn().mockResolvedValue('lin_api_bad_key'),
-      spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
-      isCancel: vi.fn().mockReturnValue(false),
-    }));
-
-    vi.doMock('@linear/sdk', () => ({
-      LinearClient: vi.fn().mockImplementation(() => ({
-        viewer: Promise.reject(new Error('Auth failed')),
-      })),
-    }));
-
-    const writeSession = vi.fn().mockReturnValue({ isErr: () => false });
-    vi.doMock('../src/features/auth/session.js', () => ({
-      ...makeSessionMock({ apiKey: 'old-key-preserved' }),
-      writeSession,
-    }));
-    vi.doMock('../src/features/auth/oauth.js', () => ({
-      startOAuthFlow: vi.fn(),
-      refreshAccessToken: vi.fn(),
-    }));
-
-    const { runLoginFlow } = await import('../src/features/auth/login.js');
-
-    const mockExit = vi
-      .spyOn(process, 'exit')
-      .mockImplementation((_code?: number | string | null) => {
-        throw new Error(`process.exit(${String(_code)})`);
-      });
-
-    await expect(runLoginFlow()).rejects.toThrow('process.exit(1)');
+    expect(result._unsafeUnwrap()).toMatchObject({
+      accessToken: 'new-access-token',
+      refreshToken: 'new-refresh-token',
+      expiresAt: expect.any(Number),
+      lastRefreshAt: expect.any(Number),
+    });
+    // startOAuthFlow never writes — the caller persists the returned session.
     expect(writeSession).not.toHaveBeenCalled();
-
-    mockExit.mockRestore();
-  });
-
-  it('(d) DOES call writeSession when LinearClient.viewer resolves (valid key)', async () => {
-    vi.resetModules();
-
-    vi.doMock('@clack/prompts', () => ({
-      intro: vi.fn(),
-      outro: vi.fn(),
-      select: vi.fn().mockResolvedValue('apikey'),
-      text: vi.fn().mockResolvedValue('lin_api_good_key'),
-      spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
-      isCancel: vi.fn().mockReturnValue(false),
-    }));
-
-    vi.doMock('@linear/sdk', () => ({
-      LinearClient: vi.fn().mockImplementation(() => ({
-        viewer: Promise.resolve({ id: 'u1', name: 'Test', email: 'test@x.com' }),
-      })),
-    }));
-
-    const writeSession = vi.fn().mockReturnValue({ isErr: () => false, isOk: () => true });
-    vi.doMock('../src/features/auth/session.js', () => ({
-      ...makeSessionMock({ apiKey: 'old-key' }),
-      writeSession,
-    }));
-    vi.doMock('../src/features/auth/oauth.js', () => ({
-      startOAuthFlow: vi.fn(),
-      refreshAccessToken: vi.fn(),
-    }));
-
-    const { runLoginFlow } = await import('../src/features/auth/login.js');
-    await runLoginFlow();
-
-    expect(writeSession).toHaveBeenCalledOnce();
-    expect(writeSession).toHaveBeenCalledWith({ apiKey: 'lin_api_good_key' });
   });
 });
 

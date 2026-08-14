@@ -1,28 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { err, ok, Result } from 'neverthrow';
+import { err, ok, Result, ResultAsync } from 'neverthrow';
 import {
   KEEPALIVE_BACKOFF_MS,
   KEEPALIVE_INTERVAL_MS,
   KEEPALIVE_LOCK_FILE,
 } from '../../lib/config.js';
 import { toError } from '../../lib/errors.js';
-import { getGlobalConfigDir, getProjectLinearDir } from '../../lib/scope.js';
+import { getGlobalConfigDir } from '../../lib/scope.js';
+import { readWorkspaceCredential, writeWorkspaceCredential } from '../auth/credentials.js';
 import { refreshAccessToken } from '../auth/oauth.js';
-import {
-  getProjectSessionPath,
-  getSessionPath,
-  isOAuthSession,
-  type OAuthSession,
-  readProjectSession,
-  readSession,
-  type Session,
-  writeProjectSession,
-  writeSession,
-} from '../auth/session.js';
+import { isOAuthSession, type OAuthSession, type Session } from '../auth/session.js';
 import {
   getEntry,
-  getGlobalEntryRoot,
   listProjects,
   type RegisteredProject,
   unregisterProject,
@@ -115,40 +105,67 @@ function releaseLock(lockPath: string): void {
   )();
 }
 
-// --- entry-aware helpers: project entries use <root>/.linear, global uses ~/.config/.linear ---
+// --- entry-aware helpers: credentials live in the workspace-keyed store ---
+// Transitional bridge (commit 3 rewrites keepalive fully): linked entries read
+// their workspace credential; legacy entries without a workspace fall back to
+// the old global ~/.config/.linear/auth.json.
 
-function entrySessionPath(entry: RegisteredProject): string {
-  return entry.scope === 'global' ? getSessionPath() : getProjectSessionPath(entry.root);
+function legacySessionPath(): string {
+  return path.join(getGlobalConfigDir(), 'auth.json');
 }
 
-function entryLockPath(entry: RegisteredProject): string {
-  const dir = entry.scope === 'global' ? getGlobalConfigDir() : getProjectLinearDir(entry.root);
-  return path.join(dir, KEEPALIVE_LOCK_FILE);
+function legacyReadSession(): Session | null {
+  return Result.fromThrowable(
+    () => JSON.parse(fs.readFileSync(legacySessionPath(), 'utf-8')) as Session,
+    () => undefined
+  )().unwrapOr(null);
 }
 
-function entryReadSession(entry: RegisteredProject): Session | null {
-  return entry.scope === 'global' ? readSession() : readProjectSession(entry.root);
+function legacyWriteSession(session: OAuthSession): Result<void, Error> {
+  return Result.fromThrowable(() => {
+    const p = legacySessionPath();
+    fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(p, JSON.stringify(session, null, 2), { encoding: 'utf-8', mode: 0o600 });
+  }, toError)();
 }
 
-function entryWriteSession(entry: RegisteredProject, session: OAuthSession): Result<void, Error> {
-  return entry.scope === 'global'
-    ? writeSession(session)
-    : writeProjectSession(entry.root, session);
+async function entryReadSession(entry: RegisteredProject): Promise<Session | null> {
+  if (entry.workspace) return readWorkspaceCredential(entry.workspace);
+  return legacyReadSession();
+}
+
+async function entryWriteSession(
+  entry: RegisteredProject,
+  session: OAuthSession
+): Promise<Result<void, Error>> {
+  if (entry.workspace) {
+    const result = await ResultAsync.fromPromise(
+      writeWorkspaceCredential(entry.workspace, session),
+      toError
+    );
+    return result.isOk() ? ok(undefined) : err(result.error);
+  }
+  return legacyWriteSession(session);
+}
+
+/** Single shared lock in the global config dir (no per-project .linear/). */
+function entryLockPath(): string {
+  return path.join(getGlobalConfigDir(), KEEPALIVE_LOCK_FILE);
 }
 
 function entryUnregister(entry: RegisteredProject): Result<void, Error> {
-  return unregisterProject(entry.scope === 'global' ? getGlobalEntryRoot() : entry.root);
+  return unregisterProject(entry.root);
 }
 
 function entryUpdateBackoff(
   entry: RegisteredProject,
   patch: Partial<RegisteredProject>
 ): Result<void, Error> {
-  return updateEntry(entry.scope === 'global' ? getGlobalEntryRoot() : entry.root, patch);
+  return updateEntry(entry.root, patch);
 }
 
 function entryGetBackoff(entry: RegisteredProject): { tier?: number; nextAttemptAt?: number } {
-  const e = getEntry(entry.scope === 'global' ? getGlobalEntryRoot() : entry.root);
+  const e = getEntry(entry.root);
   return { tier: e?.invalidGrantTier, nextAttemptAt: e?.invalidGrantNextAttemptAt };
 }
 
@@ -174,12 +191,12 @@ export async function rotateEntry(
   _opts: KeepaliveCycleOptions,
   summary: RotationSummary
 ): Promise<void> {
-  const authPath = entrySessionPath(entry);
-  if (!fs.existsSync(authPath)) {
-    // Session gone — drop from registry.
+  const session = await entryReadSession(entry);
+  if (!session) {
+    // Credential gone — drop from registry.
     void entryUnregister(entry);
     summary.pruned++;
-    appendLog(`prune ${entry.scope ?? 'project'}:${entry.root}: no auth.json`);
+    appendLog(`prune ${entry.root}: no credential`);
     return;
   }
 
@@ -190,8 +207,7 @@ export async function rotateEntry(
     return;
   }
 
-  const session = entryReadSession(entry);
-  if (!session || !isOAuthSession(session)) {
+  if (!isOAuthSession(session)) {
     summary.skipped++; // API key / unreadable — nothing to rotate
     return;
   }
@@ -202,7 +218,7 @@ export async function rotateEntry(
     return;
   }
 
-  const lockPath = entryLockPath(entry);
+  const lockPath = entryLockPath();
   if (!acquireLock(lockPath)) {
     summary.skipped++; // another run holds the lock
     return;
@@ -210,7 +226,7 @@ export async function rotateEntry(
 
   try {
     // Re-read after locking (TOCTOU) and re-check the interval.
-    const fresh = entryReadSession(entry);
+    const fresh = await entryReadSession(entry);
     if (!fresh || !isOAuthSession(fresh)) {
       clearBackoffIfSet(entry, backoff.tier);
       return;
@@ -229,7 +245,7 @@ export async function rotateEntry(
         expiresAt: refreshResult.value.expiresAt,
         lastRefreshAt: Date.now(),
       };
-      const writeResult = entryWriteSession(entry, updated);
+      const writeResult = await entryWriteSession(entry, updated);
       if (writeResult.isErr()) {
         summary.failed++;
         appendLog(`error ${entry.root}: persist failed: ${writeResult.error.message}`);

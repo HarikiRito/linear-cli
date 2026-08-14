@@ -1,104 +1,104 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-// Fix #7: mock session, login and oauth before importing resolve to ensure hermetic tests.
-// Without this, tests may fall through to readSession() and hit the real ~/.config/.linear/auth.json
-
-vi.mock('../src/features/auth/session.js', () => ({
-  readSession: vi.fn().mockReturnValue(null),
-  readProjectSession: vi.fn().mockReturnValue(null),
-  writeSession: vi.fn().mockReturnValue({ isErr: () => false }),
-  deleteSession: vi.fn().mockReturnValue({ isErr: () => false }),
-  isApiKeySession: (s: unknown) => typeof s === 'object' && s !== null && 'apiKey' in s,
-  isOAuthSession: (s: unknown) => typeof s === 'object' && s !== null && 'accessToken' in s,
-  getSessionPath: () => '/tmp/test-linear-cli/auth.json',
-}));
-
-vi.mock('../src/features/auth/login.js', () => ({
-  runLoginFlow: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('../src/features/auth/oauth.js', () => ({
-  startOAuthFlow: vi.fn(),
-  refreshAccessToken: vi.fn(),
-}));
-
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { writeWorkspaceCredential } from '../src/features/auth/credentials.js';
 import { resolveCredential } from '../src/features/auth/resolve.js';
-import { readProjectSession, readSession } from '../src/features/auth/session.js';
+import { linkProject } from '../src/features/keepalive/registry.js';
 import { UnauthenticatedError } from '../src/lib/errors.js';
+import { useTmpProjectAndHome } from './helpers/tmp-env.js';
 
-const mockReadSession = vi.mocked(readSession);
-const mockReadProjectSession = vi.mocked(readProjectSession);
-
+/**
+ * resolveCredential precedence (real credentials.json + projects.json in temp
+ * HOME): flags > env > registry (cwd-linked workspace) > global default
+ * workspace (LINEAR_WORKSPACE / single-workspace auto) > unauthenticated.
+ */
 describe('Credential resolution order', () => {
-  const savedEnv: Record<string, string | undefined> = {};
-
-  beforeEach(() => {
-    savedEnv.LINEAR_API_KEY = process.env.LINEAR_API_KEY;
-    savedEnv.LINEAR_ACCESS_TOKEN = process.env.LINEAR_ACCESS_TOKEN;
-    delete process.env.LINEAR_API_KEY;
-    delete process.env.LINEAR_ACCESS_TOKEN;
-    // Ensure clean state per test — no session by default
-    mockReadSession.mockReturnValue(null);
-    mockReadProjectSession.mockReturnValue(null);
+  const tmpEnv = useTmpProjectAndHome({
+    projectPrefix: 'linear-cred-res-project-',
+    homePrefix: 'linear-cred-res-home-',
+    deleteEnvVars: ['LINEAR_API_KEY', 'LINEAR_ACCESS_TOKEN', 'LINEAR_WORKSPACE'],
+    extraTeardown: () => {
+      process.exitCode = undefined;
+    },
   });
 
-  afterEach(() => {
-    if (savedEnv.LINEAR_API_KEY !== undefined) {
-      process.env.LINEAR_API_KEY = savedEnv.LINEAR_API_KEY;
-    } else {
-      delete process.env.LINEAR_API_KEY;
-    }
-    if (savedEnv.LINEAR_ACCESS_TOKEN !== undefined) {
-      process.env.LINEAR_ACCESS_TOKEN = savedEnv.LINEAR_ACCESS_TOKEN;
-    } else {
-      delete process.env.LINEAR_ACCESS_TOKEN;
-    }
-    vi.clearAllMocks();
-  });
+  /** Point cwd at a real nested dir inside the project dir. */
+  function cdIntoProject(): string {
+    const nested = path.join(tmpEnv.projectDir, 'src', 'feature');
+    fs.mkdirSync(nested, { recursive: true });
+    process.cwd = () => nested;
+    return nested;
+  }
 
   it('--api-key flag takes priority over env var', async () => {
     process.env.LINEAR_API_KEY = 'env-key';
     const result = await resolveCredential({ apiKey: 'flag-key', allowInteractive: false });
-    expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'flag-key' });
   });
 
   it('--token flag takes priority over env var', async () => {
     process.env.LINEAR_ACCESS_TOKEN = 'env-token';
     const result = await resolveCredential({ token: 'flag-token', allowInteractive: false });
-    expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ type: 'accessToken', value: 'flag-token' });
   });
 
   it('LINEAR_API_KEY env var used when no flag', async () => {
     process.env.LINEAR_API_KEY = 'env-key';
     const result = await resolveCredential({ allowInteractive: false });
-    expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'env-key' });
   });
 
   it('LINEAR_ACCESS_TOKEN env var used when no flag', async () => {
     process.env.LINEAR_ACCESS_TOKEN = 'env-token';
     const result = await resolveCredential({ allowInteractive: false });
-    expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ type: 'accessToken', value: 'env-token' });
   });
 
-  it('reads apiKey from session file when no flag or env var', async () => {
-    mockReadSession.mockReturnValue({ apiKey: 'session-api-key' });
+  it('uses the cwd-linked workspace credential when inside a linked directory', async () => {
+    await writeWorkspaceCredential('ws-proj', { apiKey: 'proj-key' });
+    await linkProject(tmpEnv.projectDir, 'ws-proj');
+    cdIntoProject();
+
     const result = await resolveCredential({ allowInteractive: false });
     expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'session-api-key' });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'proj-key' });
   });
 
-  it('reads accessToken from non-expired OAuth session', async () => {
-    mockReadSession.mockReturnValue({
+  it('linked workspace credential wins over an unrelated global workspace', async () => {
+    await writeWorkspaceCredential('ws-linked', { apiKey: 'linked-key' });
+    await writeWorkspaceCredential('ws-other', { apiKey: 'other-key' });
+    await linkProject(tmpEnv.projectDir, 'ws-linked');
+    cdIntoProject();
+    process.env.LINEAR_WORKSPACE = 'ws-other';
+
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'linked-key' });
+  });
+
+  it('LINEAR_WORKSPACE picks the matching stored workspace when not linked', async () => {
+    await writeWorkspaceCredential('ws-a', { apiKey: 'a-key' });
+    await writeWorkspaceCredential('ws-b', { apiKey: 'b-key' });
+    process.env.LINEAR_WORKSPACE = 'ws-b';
+
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'b-key' });
+  });
+
+  it('uses the single stored workspace automatically when nothing is configured', async () => {
+    await writeWorkspaceCredential('ws-solo', { apiKey: 'solo-key' });
+
+    const result = await resolveCredential({ allowInteractive: false });
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'solo-key' });
+  });
+
+  it('reads a non-expired OAuth workspace credential as accessToken', async () => {
+    await writeWorkspaceCredential('ws-oauth', {
       accessToken: 'session-token',
       refreshToken: 'session-refresh',
       expiresAt: Date.now() + 86400000,
     });
+
     const result = await resolveCredential({ allowInteractive: false });
-    expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ type: 'accessToken', value: 'session-token' });
   });
 
