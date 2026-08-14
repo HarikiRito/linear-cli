@@ -17,8 +17,7 @@ import { updateEntry } from '../keepalive/registry.js';
  * Fetch the authenticated user's teams and let them pick a default team.
  * Applies to both API-key and OAuth paths, and both Global and Project save
  * scopes, as well as the standalone `team select` command. When exactly one
- * team exists it is pre-selected as the initial value — the user still
- * confirms via Enter, the prompt is not skipped.
+ * team exists it is auto-selected without prompting — nothing to choose.
  *
  * Returns both `id` and `key` (not just the bare id) so callers can persist
  * a human-readable config alongside the id. Returns undefined if the fetch
@@ -44,13 +43,18 @@ export async function selectDefaultTeam(client: LinearClient): Promise<DefaultTe
     return undefined;
   }
 
+  // Exactly one team — nothing to choose, auto-pick it.
+  if (teams.length === 1) {
+    const only = teams[0];
+    console.log(pc.dim(`Using team ${only.name} (${only.key}) — only team in workspace.`));
+    return { id: only.id, key: only.key };
+  }
+
   const options = teams.map((t) => ({ value: t.id, label: `${t.name} (${t.key})` }));
-  const initialValue = teams.length === 1 ? teams[0].id : undefined;
 
   const picked = await select({
     message: 'Default team for this project:',
     options,
-    initialValue,
   });
 
   if (isCancel(picked)) {
@@ -70,6 +74,8 @@ export async function selectDefaultTeam(client: LinearClient): Promise<DefaultTe
  * Returns undefined if the fetch fails, no projects exist for the team, the
  * user selects nothing, or the user cancels — callers should treat that as
  * "no default projects selected" (non-fatal), mirroring selectDefaultTeam.
+ * When the team has exactly one project it is auto-selected without prompting —
+ * nothing to choose.
  *
  * Returns `{id, name}[]` (not just bare ids) so callers can persist a
  * human-readable config alongside each id.
@@ -95,6 +101,13 @@ export async function selectDefaultProjects(
   const projects = projectsResult.value;
   if (projects.length === 0) {
     return undefined;
+  }
+
+  // Exactly one project — nothing to choose, auto-pick it.
+  if (projects.length === 1) {
+    const only = projects[0];
+    console.log(pc.dim(`Using project ${only.name} — only project in team.`));
+    return [{ id: only.id, name: only.name }];
   }
 
   const options = projects.map((p) => ({ value: p.id, label: p.name }));
