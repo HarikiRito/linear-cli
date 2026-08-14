@@ -61,7 +61,7 @@ describe('project registry (linkage only)', () => {
   it('unregisterProject removes the matching entry', async () => {
     await linkProject(projA, 'ws-1');
     await linkProject(projB, 'ws-2');
-    const result = unregisterProject(projA);
+    const result = await unregisterProject(projA);
     expect(result.isOk()).toBe(true);
 
     const projects = listProjects()._unsafeUnwrap();
@@ -69,8 +69,8 @@ describe('project registry (linkage only)', () => {
     expect(projects[0].root).toBe(fs.realpathSync(projB));
   });
 
-  it('unregisterProject is idempotent for unknown roots', () => {
-    const result = unregisterProject(projA);
+  it('unregisterProject is idempotent for unknown roots', async () => {
+    const result = await unregisterProject(projA);
     expect(result.isOk()).toBe(true);
     expect(listProjects()._unsafeUnwrap()).toEqual([]);
   });
@@ -136,7 +136,7 @@ describe('project registry (linkage only)', () => {
 
   it('updateEntry patches a field (e.g. team override) by root', async () => {
     await linkProject(projA, 'ws-1');
-    const result = updateEntry(projA, { team: { id: 'team-1', key: 'T1' } });
+    const result = await updateEntry(projA, { team: { id: 'team-1', key: 'T1' } });
     expect(result.isOk()).toBe(true);
 
     const entry = getEntry(projA);

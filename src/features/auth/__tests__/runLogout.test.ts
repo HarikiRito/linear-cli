@@ -15,7 +15,7 @@ vi.mock('../../../lib/scope.js', () => ({
 vi.mock('../../keepalive/registry.js', () => ({
   getEntry: vi.fn(),
   listProjects: vi.fn(),
-  unregisterProject: vi.fn().mockReturnValue({ isOk: () => true, isErr: () => false }),
+  unregisterProject: vi.fn().mockResolvedValue({ isOk: () => true, isErr: () => false }),
 }));
 
 vi.mock('../credentials.js', () => ({

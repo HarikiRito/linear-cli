@@ -75,8 +75,18 @@ export async function runWorkspaceSelect(): Promise<void> {
     workspaceId = picked;
     const info = workspaces.find((w) => w.id === picked);
     name = info?.name ?? picked;
-    const session = stored[picked];
-    if (session) client = buildLinearClient(sessionToCredential(session));
+    if (info && !info.valid) {
+      // Stored credential is dead — re-auth and overwrite it before linking.
+      // Never linkProject against the stale client.
+      const auth = await authenticateWorkspace();
+      await writeWorkspaceCredential(auth.workspaceId, auth.session);
+      workspaceId = auth.workspaceId;
+      client = auth.client;
+      name = auth.name;
+    } else {
+      const session = stored[picked];
+      if (session) client = buildLinearClient(sessionToCredential(session));
+    }
   }
 
   if (!client) {

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok, Result } from 'neverthrow';
+import { withConfigLock } from '../../lib/config-lock.js';
 import { toError } from '../../lib/errors.js';
 import { getGlobalConfigDir } from '../../lib/scope.js';
 
@@ -48,12 +49,14 @@ function writeRegistry(registry: RegistryFile): Result<void, Error> {
 }
 
 /** Idempotent: remove root (compared via realpath) from the registry. */
-export function unregisterProject(root: string): Result<void, Error> {
-  const canonical = realpathOrSelf(root);
-  const registry = readRegistry();
-  const filtered = registry.projects.filter((p) => realpathOrSelf(p.root) !== canonical);
-  if (filtered.length === registry.projects.length) return ok(undefined);
-  return writeRegistry({ projects: filtered });
+export function unregisterProject(root: string): Promise<Result<void, Error>> {
+  return withConfigLock(() => {
+    const canonical = realpathOrSelf(root);
+    const registry = readRegistry();
+    const filtered = registry.projects.filter((p) => realpathOrSelf(p.root) !== canonical);
+    if (filtered.length === registry.projects.length) return ok(undefined);
+    return writeRegistry({ projects: filtered });
+  });
 }
 
 export function listProjects(): Result<RegisteredProject[], Error> {
@@ -67,13 +70,18 @@ export function getEntry(root: string): RegisteredProject | undefined {
 }
 
 /** Patch a registry entry by root. No-op if entry not found. */
-export function updateEntry(root: string, patch: Partial<RegisteredProject>): Result<void, Error> {
-  const canonical = realpathOrSelf(root);
-  const registry = readRegistry();
-  const idx = registry.projects.findIndex((p) => realpathOrSelf(p.root) === canonical);
-  if (idx === -1) return ok(undefined);
-  registry.projects[idx] = { ...registry.projects[idx], ...patch };
-  return writeRegistry(registry);
+export function updateEntry(
+  root: string,
+  patch: Partial<RegisteredProject>
+): Promise<Result<void, Error>> {
+  return withConfigLock(() => {
+    const canonical = realpathOrSelf(root);
+    const registry = readRegistry();
+    const idx = registry.projects.findIndex((p) => realpathOrSelf(p.root) === canonical);
+    if (idx === -1) return ok(undefined);
+    registry.projects[idx] = { ...registry.projects[idx], ...patch };
+    return writeRegistry(registry);
+  });
 }
 
 /**
@@ -86,30 +94,32 @@ export async function linkProject(
   workspaceId: string,
   team?: { id: string; key: string }
 ): Promise<RegisteredProject> {
-  const canonical = realpathOrSelf(root);
-  const registry = readRegistry();
-  const idx = registry.projects.findIndex((p) => realpathOrSelf(p.root) === canonical);
-  if (idx !== -1) {
-    const existing = registry.projects[idx];
-    const updated: RegisteredProject = {
-      ...existing,
+  return withConfigLock(async () => {
+    const canonical = realpathOrSelf(root);
+    const registry = readRegistry();
+    const idx = registry.projects.findIndex((p) => realpathOrSelf(p.root) === canonical);
+    if (idx !== -1) {
+      const existing = registry.projects[idx];
+      const updated: RegisteredProject = {
+        ...existing,
+        workspace: workspaceId,
+        ...(team !== undefined && { team }),
+        addedAt: existing.addedAt ?? Date.now(),
+      };
+      registry.projects[idx] = updated;
+      await writeRegistryFile(registry);
+      return updated;
+    }
+    const entry: RegisteredProject = {
+      root: canonical,
       workspace: workspaceId,
       ...(team !== undefined && { team }),
-      addedAt: existing.addedAt ?? Date.now(),
+      addedAt: Date.now(),
     };
-    registry.projects[idx] = updated;
+    registry.projects.push(entry);
     await writeRegistryFile(registry);
-    return updated;
-  }
-  const entry: RegisteredProject = {
-    root: canonical,
-    workspace: workspaceId,
-    ...(team !== undefined && { team }),
-    addedAt: Date.now(),
-  };
-  registry.projects.push(entry);
-  await writeRegistryFile(registry);
-  return entry;
+    return entry;
+  });
 }
 
 /** Async persist used by linkProject (same path/modes as writeRegistry). */

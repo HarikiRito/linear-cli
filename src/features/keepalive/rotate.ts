@@ -48,6 +48,23 @@ function appendLog(line: string): void {
   }, toError)();
 }
 
+/**
+ * Fold a best-effort keepalive-state write into the summary; never rejects.
+ * Returns true on success; on failure counts it in `summary.failed` and logs.
+ */
+async function foldStateWrite(
+  op: () => Promise<void>,
+  summary: RotationSummary,
+  workspaceId: string,
+  label: string
+): Promise<boolean> {
+  const result = await ResultAsync.fromPromise(op(), toError);
+  if (result.isOk()) return true;
+  summary.failed++;
+  appendLog(`error ${workspaceId}: ${label}: ${result.error.message}`);
+  return false;
+}
+
 /** True if the holder is gone (dead PID) or the lock has aged past LOCK_STALE_MS. */
 function isStaleLock(lockPath: string): boolean {
   const content = Result.fromThrowable(
@@ -116,7 +133,16 @@ async function rotateWorkspace(workspaceId: string, summary: RotationSummary): P
   const session = await readWorkspaceCredential(workspaceId);
   if (!session) {
     // Credential gone (raced) — drop any lingering backoff state.
-    await deleteWorkspaceState(workspaceId);
+    if (
+      !(await foldStateWrite(
+        () => deleteWorkspaceState(workspaceId),
+        summary,
+        workspaceId,
+        'prune state'
+      ))
+    ) {
+      return;
+    }
     summary.pruned++;
     appendLog(`prune ${workspaceId}: no credential`);
     return;
@@ -144,7 +170,13 @@ async function rotateWorkspace(workspaceId: string, summary: RotationSummary): P
   }
 
   const lockPath = getWorkspaceLockPath(workspaceId);
-  fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
+  try {
+    fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
+  } catch (e) {
+    summary.failed++;
+    appendLog(`error ${workspaceId}: lock dir: ${toError(e).message}`);
+    return;
+  }
   if (!acquireLock(lockPath)) {
     summary.skipped++; // another run holds the lock
     return;
@@ -154,11 +186,26 @@ async function rotateWorkspace(workspaceId: string, summary: RotationSummary): P
     // Re-read after locking (TOCTOU) and re-check the interval.
     const fresh = await readWorkspaceCredential(workspaceId);
     if (!fresh || !isOAuthSession(fresh)) {
-      if (backoff.invalidGrantTier !== undefined) await clearWorkspaceBackoff(workspaceId);
+      if (backoff.invalidGrantTier !== undefined) {
+        await foldStateWrite(
+          () => clearWorkspaceBackoff(workspaceId),
+          summary,
+          workspaceId,
+          'clear backoff'
+        );
+      }
       return;
     }
     if (Date.now() - (fresh.lastRefreshAt ?? 0) < KEEPALIVE_INTERVAL_MS) {
-      if (backoff.invalidGrantTier !== undefined) await clearWorkspaceBackoff(workspaceId); // rotated elsewhere — backoff moot
+      if (backoff.invalidGrantTier !== undefined) {
+        // rotated elsewhere — backoff moot
+        await foldStateWrite(
+          () => clearWorkspaceBackoff(workspaceId),
+          summary,
+          workspaceId,
+          'clear backoff'
+        );
+      }
       summary.skipped++;
       return;
     }
@@ -181,7 +228,12 @@ async function rotateWorkspace(workspaceId: string, summary: RotationSummary): P
       } else {
         summary.rotated++;
         // Refresh worked — clear any accumulated invalid_grant backoff.
-        await clearWorkspaceBackoff(workspaceId);
+        await foldStateWrite(
+          () => clearWorkspaceBackoff(workspaceId),
+          summary,
+          workspaceId,
+          'clear backoff'
+        );
         appendLog(`rotated ${workspaceId}`);
       }
     } else {
@@ -192,13 +244,21 @@ async function rotateWorkspace(workspaceId: string, summary: RotationSummary): P
         const tier = (backoff.invalidGrantTier ?? 0) + 1;
         const delay = KEEPALIVE_BACKOFF_MS[Math.min(tier - 1, KEEPALIVE_BACKOFF_MS.length - 1)];
         const nextAttemptAt = Date.now() + delay;
-        await updateWorkspaceState(workspaceId, {
-          invalidGrantTier: tier,
-          invalidGrantNextAttemptAt: nextAttemptAt,
-        });
-        appendLog(
-          `invalid_grant ${workspaceId}: backing off for ${Math.round(delay / 60_000)}min (tier ${tier}) — needs interactive re-auth`
+        const recorded = await foldStateWrite(
+          () =>
+            updateWorkspaceState(workspaceId, {
+              invalidGrantTier: tier,
+              invalidGrantNextAttemptAt: nextAttemptAt,
+            }),
+          summary,
+          workspaceId,
+          'backoff state'
         );
+        if (recorded) {
+          appendLog(
+            `invalid_grant ${workspaceId}: backing off for ${Math.round(delay / 60_000)}min (tier ${tier}) — needs interactive re-auth`
+          );
+        }
       }
     }
   } finally {

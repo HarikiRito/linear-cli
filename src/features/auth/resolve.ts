@@ -100,9 +100,19 @@ function resolveFromStore(opts: ResolveOptions): ResultAsync<ResolvedCredential 
   }
   return ResultAsync.fromPromise(
     (async (): Promise<string | null> => {
-      const configured =
-        process.env.LINEAR_WORKSPACE ?? readConfig(getGlobalConfigPath()).workspace;
-      if (configured && (await readWorkspaceCredential(configured))) return configured;
+      // Malformed global config.toml must not block auth — tolerate it (only
+      // the explicit LINEAR_WORKSPACE env remains authoritative in that case).
+      let configured: string | undefined;
+      try {
+        configured = process.env.LINEAR_WORKSPACE ?? readConfig(getGlobalConfigPath()).workspace;
+      } catch {
+        configured = process.env.LINEAR_WORKSPACE;
+      }
+      if (configured) {
+        // Explicit selection wins-or-fails: never fall through to another
+        // stored workspace when the requested credential is absent.
+        return (await readWorkspaceCredential(configured)) ? configured : null;
+      }
       const ids = await listWorkspaceIds();
       return ids.length === 1 ? ids[0] : null;
     })(),
@@ -145,7 +155,10 @@ export function resolveCredential(
           if (re.value === null) throw new UnauthenticatedError();
           return re.value;
         })(),
-        () => new UnauthenticatedError()
+        // Preserve real failures (e.g. a credential write error after login)
+        // instead of masking every rejection as unauthenticated.
+        (e) =>
+          e instanceof Error && 'kind' in e ? (e as CliError) : new AuthError(toError(e).message)
       );
     }
 

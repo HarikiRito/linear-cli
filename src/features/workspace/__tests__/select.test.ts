@@ -100,12 +100,55 @@ describe('runWorkspaceSelect', () => {
           },
         }) as unknown as InstanceType<typeof LinearClient>
     );
+    mockAuthenticateWorkspace.mockResolvedValue({
+      workspaceId: 'ws-fresh',
+      name: 'Acme',
+      urlKey: 'acme',
+      session: { apiKey: 'new-key' },
+      client: {} as InstanceType<typeof LinearClient>,
+    });
     mockSelect.mockResolvedValue('ws-bad');
 
     await runWorkspaceSelect();
 
     const wsPrompt = mockSelect.mock.calls[0][0] as { options: Array<{ label: string }> };
     expect(wsPrompt.options[0].label).toContain('invalid');
+  });
+
+  it('picking an invalid workspace re-authenticates and links the fresh credential', async () => {
+    mockListWorkspaceCredentials.mockResolvedValue({ 'ws-bad': { apiKey: 'bad' } });
+    MockLinearClient.mockImplementation(
+      () =>
+        ({
+          get organization() {
+            return Promise.reject(new Error('401'));
+          },
+        }) as unknown as InstanceType<typeof LinearClient>
+    );
+    mockAuthenticateWorkspace.mockResolvedValue({
+      workspaceId: 'ws-fresh',
+      name: 'Acme',
+      urlKey: 'acme',
+      session: { apiKey: 'fresh-key' },
+      client: {} as InstanceType<typeof LinearClient>,
+    });
+    mockSelect.mockResolvedValue('ws-bad');
+
+    await runWorkspaceSelect();
+
+    // Re-auth ran and persisted the fresh session over the dead credential…
+    expect(mockAuthenticateWorkspace).toHaveBeenCalledOnce();
+    expect(mockWriteWorkspaceCredential).toHaveBeenCalledWith('ws-fresh', { apiKey: 'fresh-key' });
+    // …and the directory links to the fresh workspace, never the dead one.
+    expect(mockLinkProject).toHaveBeenCalledWith(expect.any(String), 'ws-fresh', {
+      id: 'team-1',
+      key: 'ENG',
+    });
+    expect(mockLinkProject).not.toHaveBeenCalledWith(
+      expect.any(String),
+      'ws-bad',
+      expect.anything()
+    );
   });
 
   it('"Authenticate a new workspace" runs the login flow and links the new id', async () => {

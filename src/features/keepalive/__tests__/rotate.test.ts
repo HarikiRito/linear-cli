@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { err, ok } from 'neverthrow';
+import { err, errAsync, ok, okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthError, NetworkError } from '../../../lib/errors.js';
 
@@ -291,5 +291,36 @@ describe('keepalive rotation cycle (per-workspace)', () => {
 
     expect(summary).toMatchObject({ skipped: 1, rotated: 0 });
     expect(mockRefresh).not.toHaveBeenCalled();
+  });
+
+  it('state-write failure counts as failed and other workspaces still rotate', async () => {
+    const stateMod = await import('../state.js');
+    // ws-1's invalid_grant backoff record write blows up (ENOSPC etc.)…
+    vi.spyOn(stateMod, 'updateWorkspaceState').mockRejectedValue(new Error('ENOSPC'));
+    mockRefresh.mockImplementation((token: string) =>
+      token === 'old-rt'
+        ? errAsync(new AuthError('invalid_grant'))
+        : okAsync({
+            accessToken: 'new-at',
+            refreshToken: 'new-rt',
+            expiresAt: Date.now() + 3600_000,
+          })
+    );
+    await seedOAuthSession('ws-1');
+    await writeWorkspaceCredential('ws-2', {
+      accessToken: 'old-at-2',
+      refreshToken: 'old-rt-2',
+      expiresAt: Date.now() + 3600_000,
+      lastRefreshAt: Date.now() - 25 * 3600_000,
+    });
+
+    // Must NOT reject — the failure is folded into summary.failed.
+    const summary = await runCycle();
+
+    expect(summary).toMatchObject({ checked: 2, rotated: 1, failed: 2 });
+    // The other workspace still rotated and persisted.
+    expect(await readWorkspaceCredential('ws-2')).toMatchObject({ accessToken: 'new-at' });
+    const log = fs.readFileSync(path.join(tmpHome, 'keepalive.log'), 'utf-8');
+    expect(log).toContain('backoff state');
   });
 });

@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { withConfigLock } from '../../lib/config-lock.js';
 import { getGlobalConfigDir } from '../../lib/scope.js';
 import type { Session } from './session.js';
 
@@ -36,10 +37,16 @@ export async function readCredentialsStore(): Promise<CredentialsStore> {
   }
 }
 
-export async function writeCredentialsStore(store: CredentialsStore): Promise<void> {
+/** Raw full-store replace — no lock (callers hold it via withConfigLock). */
+async function writeCredentialsStoreRaw(store: CredentialsStore): Promise<void> {
   const p = getCredentialsPath();
   await mkdir(path.dirname(p), { recursive: true, mode: 0o700 });
   await writeFile(p, `${JSON.stringify(store, null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
+}
+
+/** Full-store replace, serialized against other store mutations. */
+export function writeCredentialsStore(store: CredentialsStore): Promise<void> {
+  return withConfigLock(() => writeCredentialsStoreRaw(store));
 }
 
 export async function readWorkspaceCredential(workspaceId: string): Promise<Session | null> {
@@ -47,22 +54,24 @@ export async function readWorkspaceCredential(workspaceId: string): Promise<Sess
   return store.workspaces[workspaceId] ?? null;
 }
 
-export async function writeWorkspaceCredential(
-  workspaceId: string,
-  session: Session
-): Promise<void> {
-  const store = await readCredentialsStore();
-  store.workspaces[workspaceId] = session;
-  await writeCredentialsStore(store);
+/** Read-modify-write on the shared store, serialized via the config lock. */
+export function writeWorkspaceCredential(workspaceId: string, session: Session): Promise<void> {
+  return withConfigLock(async () => {
+    const store = await readCredentialsStore();
+    store.workspaces[workspaceId] = session;
+    await writeCredentialsStoreRaw(store);
+  });
 }
 
 /** True if the workspace credential existed and was deleted; false if absent. */
-export async function deleteWorkspaceCredential(workspaceId: string): Promise<boolean> {
-  const store = await readCredentialsStore();
-  if (!(workspaceId in store.workspaces)) return false;
-  delete store.workspaces[workspaceId];
-  await writeCredentialsStore(store);
-  return true;
+export function deleteWorkspaceCredential(workspaceId: string): Promise<boolean> {
+  return withConfigLock(async () => {
+    const store = await readCredentialsStore();
+    if (!(workspaceId in store.workspaces)) return false;
+    delete store.workspaces[workspaceId];
+    await writeCredentialsStoreRaw(store);
+    return true;
+  });
 }
 
 export async function listWorkspaceCredentials(): Promise<Record<string, Session>> {

@@ -150,7 +150,7 @@ export async function selectAndPersistTeamAndProjects(
 
   if (target.type === 'registry') {
     // Linked dir: team override lives on the registry entry.
-    const updateResult = updateEntry(target.root, { team });
+    const updateResult = await updateEntry(target.root, { team });
     if (updateResult.isErr()) {
       console.error(
         pc.yellow(`Warning: could not update registry entry: ${updateResult.error.message}`)

@@ -17,10 +17,10 @@ function entriesForWorkspace(workspaceId: string): number {
 }
 
 /** Unlink every registry entry pointing at the given workspace. */
-function unlinkAll(workspaceId: string): void {
+async function unlinkAll(workspaceId: string): Promise<void> {
   for (const entry of listProjects().unwrapOr([])) {
     if (entry.workspace === workspaceId) {
-      void unregisterProject(entry.root);
+      await unregisterProject(entry.root);
     }
   }
 }
@@ -34,7 +34,7 @@ export async function runLogout(opts: LogoutOptions = {}): Promise<void> {
 
   if (opts.workspace) {
     const deleted = await deleteWorkspaceCredential(opts.workspace);
-    unlinkAll(opts.workspace);
+    await unlinkAll(opts.workspace);
     console.log(
       deleted
         ? `Removed credentials for workspace ${opts.workspace}.`
@@ -52,7 +52,7 @@ export async function runLogout(opts: LogoutOptions = {}): Promise<void> {
   }
 
   const workspaceId = entry.workspace;
-  void unregisterProject(root);
+  await unregisterProject(root);
   if (entriesForWorkspace(workspaceId) === 0) {
     // No other linked directory uses this credential — drop it too.
     const deleted = await deleteWorkspaceCredential(workspaceId);
