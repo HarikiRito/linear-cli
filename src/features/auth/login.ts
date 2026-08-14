@@ -7,6 +7,7 @@ import { buildLinearClient } from '../../lib/client/index.js';
 import type { DefaultTeam } from '../../lib/config-file.js';
 import { toError } from '../../lib/errors.js';
 import { linkProject } from '../keepalive/registry.js';
+import { isKeepaliveInstalled } from '../keepalive/scheduler/index.js';
 import { writeWorkspaceCredential } from './credentials.js';
 import { startOAuthFlow } from './oauth.js';
 import { isOAuthSession, type Session } from './session.js';
@@ -135,10 +136,22 @@ export async function runLoginFlow(): Promise<void> {
 
   console.log(pc.green(`Linked this directory to workspace ${name}.`));
 
+  // Only nudge OAuth sessions when keepalive isn't already set up — and never
+  // let the install check break login (unknown ⇒ show the tip).
   if (isOAuthSession(session)) {
-    console.log(
-      pc.cyan('Tip: run `linear keepalive install` once to keep this session alive automatically.')
-    );
+    let keepaliveInstalled = false;
+    try {
+      keepaliveInstalled = isKeepaliveInstalled();
+    } catch {
+      keepaliveInstalled = false;
+    }
+    if (!keepaliveInstalled) {
+      console.log(
+        pc.cyan(
+          'Tip: run `linear keepalive install` once to keep this session alive automatically.'
+        )
+      );
+    }
   }
 
   outro(pc.green('Login complete.'));
