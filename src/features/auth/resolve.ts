@@ -1,7 +1,7 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { AuthError, type CliError, UnauthenticatedError } from '../../lib/errors.js';
 import { findProjectRoot } from '../../lib/scope.js';
-import { registerProject } from '../keepalive/registry.js';
+import { registerGlobal, registerProject } from '../keepalive/registry.js';
 import { runLoginFlow } from './login.js';
 import { refreshAccessToken } from './oauth.js';
 import {
@@ -103,7 +103,13 @@ function resolveFromStoredSession(
   // Global scope
   const session = readSession();
   if (session) {
-    return resolveSessionWithRefresh(session, { type: 'global' }, forceRefresh);
+    return resolveSessionWithRefresh(session, { type: 'global' }, forceRefresh).map((cred) => {
+      if (isOAuthSession(session)) {
+        // Idempotent; never blocks credential resolution (keepalive registry).
+        void registerGlobal();
+      }
+      return cred;
+    });
   }
   return errAsync(new UnauthenticatedError());
 }

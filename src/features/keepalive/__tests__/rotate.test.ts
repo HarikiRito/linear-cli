@@ -15,8 +15,14 @@ vi.mock('../../auth/oauth.js', () => ({
 import * as scopeMod from '../../../lib/scope.js';
 import { refreshAccessToken } from '../../auth/oauth.js';
 import * as sessionMod from '../../auth/session.js';
-import { type OAuthSession, readProjectSession, writeProjectSession } from '../../auth/session.js';
-import { listProjects, registerProject } from '../registry.js';
+import {
+  type OAuthSession,
+  readProjectSession,
+  readSession,
+  writeProjectSession,
+  writeSession,
+} from '../../auth/session.js';
+import { listProjects, registerGlobal, registerProject, updateEntry } from '../registry.js';
 import { type RotationSummary, runKeepaliveCycle } from '../rotate.js';
 
 const mockRefresh = vi.mocked(refreshAccessToken);
@@ -123,11 +129,99 @@ describe('keepalive rotation cycle', () => {
     expect(summary).toMatchObject({ rotated: 0, failed: 1 });
     // session NOT deleted
     expect(fs.existsSync(path.join(projDir, '.linear', 'auth.json'))).toBe(true);
-    // registry entry untouched
-    expect(listProjects()._unsafeUnwrap()).toHaveLength(1);
+    // registry entry untouched (backoff fields only)
+    const entries = listProjects()._unsafeUnwrap();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].invalidGrantTier).toBe(1);
+    expect(entries[0].invalidGrantNextAttemptAt).toBeGreaterThan(Date.now());
     const log = fs.readFileSync(path.join(tmpHome, 'keepalive.log'), 'utf-8');
     expect(log).toContain('invalid_grant');
-    expect(log).toContain('needs interactive re-auth');
+    expect(log).toContain('backing off');
+    expect(log).toContain('tier 1');
+  });
+
+  it('invalid_grant skips subsequent cycle until backoff expires', async () => {
+    mockRefresh.mockResolvedValue(err(new AuthError('invalid_grant')));
+    seedOAuthSession();
+
+    const first = await runCycle();
+    expect(first).toMatchObject({ rotated: 0, failed: 1 });
+    const entry = listProjects()._unsafeUnwrap()[0];
+    expect(entry.invalidGrantTier).toBe(1);
+    expect(entry.invalidGrantNextAttemptAt).toBeGreaterThan(Date.now());
+
+    mockRefresh.mockReset(); // clear — lets us detect non-invocation
+
+    const second = await runCycle();
+    expect(second).toMatchObject({ checked: 1, skipped: 1, rotated: 0, failed: 0 });
+    expect(mockRefresh).not.toHaveBeenCalled();
+    expect(listProjects()._unsafeUnwrap()[0].invalidGrantTier).toBe(1);
+  });
+
+  it('successful rotation clears invalid_grant backoff', async () => {
+    seedOAuthSession();
+    // Backoff already expired — cycle must proceed despite the tier.
+    expect(
+      updateEntry(projDir, {
+        invalidGrantTier: 3,
+        invalidGrantNextAttemptAt: Date.now() - 1000,
+      }).isOk()
+    ).toBe(true);
+
+    mockRefresh.mockResolvedValue(
+      ok({ accessToken: 'new-at', refreshToken: 'new-rt', expiresAt: Date.now() + 3600_000 })
+    );
+
+    const summary = await runCycle();
+
+    expect(summary).toMatchObject({ rotated: 1, failed: 0 });
+    const entry = listProjects()._unsafeUnwrap()[0];
+    expect(entry.invalidGrantTier).toBeUndefined();
+    expect(entry.invalidGrantNextAttemptAt).toBeUndefined();
+  });
+
+  it('rotates a global-scope session registered via registerGlobal', async () => {
+    const session = {
+      accessToken: 'g-old-at',
+      refreshToken: 'g-old-rt',
+      expiresAt: Date.now() + 3600_000,
+      lastRefreshAt: Date.now() - 25 * 3600_000, // 25h old → due
+    };
+    expect(writeSession(session).isOk()).toBe(true);
+    expect(registerGlobal().isOk()).toBe(true);
+
+    mockRefresh.mockResolvedValue(
+      ok({ accessToken: 'g-new-at', refreshToken: 'g-new-rt', expiresAt: Date.now() + 3600_000 })
+    );
+
+    const summary = await runCycle();
+
+    expect(summary).toMatchObject({ checked: 1, rotated: 1, failed: 0 });
+    expect(mockRefresh).toHaveBeenCalledWith('g-old-rt');
+    const stored = readSession();
+    expect(stored).toMatchObject({ accessToken: 'g-new-at', refreshToken: 'g-new-rt' });
+  });
+
+  it('mixed project + global cycle rotates both', async () => {
+    seedOAuthSession(); // project entry
+    expect(
+      writeSession({
+        accessToken: 'g-at',
+        refreshToken: 'g-rt',
+        expiresAt: Date.now() + 3600_000,
+        lastRefreshAt: Date.now() - 25 * 3600_000,
+      }).isOk()
+    ).toBe(true);
+    expect(registerGlobal().isOk()).toBe(true);
+
+    mockRefresh.mockResolvedValue(
+      ok({ accessToken: 'new-at', refreshToken: 'new-rt', expiresAt: Date.now() + 3600_000 })
+    );
+
+    const summary = await runCycle();
+
+    expect(summary).toMatchObject({ checked: 2, rotated: 2, failed: 0 });
+    expect(mockRefresh).toHaveBeenCalledTimes(2);
   });
 
   it('generic refresh failure counts as failed but still logs', async () => {
@@ -205,6 +299,38 @@ describe('keepalive rotation cycle', () => {
     expect(mockRefresh).not.toHaveBeenCalled();
     expect(summary).toMatchObject({ checked: 1, rotated: 0, skipped: 1, failed: 0 });
     expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
+  it('clears stale backoff on TOCTOU skip after another process rotated', async () => {
+    seedOAuthSession();
+    // Backoff expired → cycle proceeds despite the tier.
+    expect(
+      updateEntry(projDir, {
+        invalidGrantTier: 2,
+        invalidGrantNextAttemptAt: Date.now() - 1000,
+      }).isOk()
+    ).toBe(true);
+
+    // Pre-check sees a due (stale) session; post-lock re-read shows another
+    // process already refreshed it → skip path must still clear the backoff.
+    const stale: OAuthSession = {
+      accessToken: 'old-at',
+      refreshToken: 'old-rt',
+      expiresAt: Date.now() + 3600_000,
+      lastRefreshAt: Date.now() - 25 * 3600_000,
+    };
+    const fresh: OAuthSession = { ...stale, lastRefreshAt: Date.now() };
+    vi.spyOn(sessionMod, 'readProjectSession')
+      .mockReturnValueOnce(stale)
+      .mockReturnValueOnce(fresh);
+
+    const summary = await runCycle();
+
+    expect(summary).toMatchObject({ checked: 1, rotated: 0, skipped: 1, failed: 0 });
+    expect(mockRefresh).not.toHaveBeenCalled();
+    const entry = listProjects()._unsafeUnwrap()[0];
+    expect(entry.invalidGrantTier).toBeUndefined();
+    expect(entry.invalidGrantNextAttemptAt).toBeUndefined();
   });
 
   it('skips API-key sessions (nothing to rotate)', async () => {

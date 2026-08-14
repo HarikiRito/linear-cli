@@ -23,9 +23,10 @@ vi.mock('../../../lib/runner.js', () => ({
 
 vi.mock('../../keepalive/registry.js', () => ({
   registerProject: vi.fn(),
+  registerGlobal: vi.fn(),
   unregisterProject: vi.fn().mockReturnValue({ isOk: () => true, isErr: () => false }),
   listProjects: vi.fn(),
-  pruneMissing: vi.fn(),
+  getGlobalEntryRoot: vi.fn().mockReturnValue('/global/config/dir'),
 }));
 
 import { findProjectRoot } from '../../../lib/scope.js';
@@ -65,7 +66,9 @@ describe('runLogout — scope branching', () => {
 
     expect(mockDeleteSession).toHaveBeenCalledOnce();
     expect(mockDeleteProjectSession).not.toHaveBeenCalled();
-    expect(mockUnregisterProject).not.toHaveBeenCalled();
+    // Global session deleted → global keepalive registry entry unregistered.
+    expect(mockUnregisterProject).toHaveBeenCalledOnce();
+    expect(mockUnregisterProject).toHaveBeenCalledWith('/global/config/dir');
   });
 
   it('calls deleteSession (not deleteProjectSession) when outside any project root', () => {
@@ -75,6 +78,8 @@ describe('runLogout — scope branching', () => {
 
     expect(mockDeleteSession).toHaveBeenCalledOnce();
     expect(mockDeleteProjectSession).not.toHaveBeenCalled();
-    expect(mockUnregisterProject).not.toHaveBeenCalled();
+    // Global session deleted → global keepalive registry entry unregistered.
+    expect(mockUnregisterProject).toHaveBeenCalledOnce();
+    expect(mockUnregisterProject).toHaveBeenCalledWith('/global/config/dir');
   });
 });

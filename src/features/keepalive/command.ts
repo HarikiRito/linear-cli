@@ -4,7 +4,7 @@ import { Result } from 'neverthrow';
 import pc from 'picocolors';
 import { KEEPALIVE_INTERVAL_MS } from '../../lib/config.js';
 import { exitError } from '../../lib/runner.js';
-import { isOAuthSession, readProjectSession } from '../auth/session.js';
+import { isOAuthSession, readProjectSession, readSession } from '../auth/session.js';
 import { listProjects } from './registry.js';
 import { runKeepaliveCycle } from './rotate.js';
 import { getScheduler } from './scheduler/index.js';
@@ -75,12 +75,13 @@ export function registerKeepaliveCommands(program: Command): void {
       }
       console.log('Registered projects:');
       for (const p of projects) {
-        const session = readProjectSession(p.root);
+        const session = p.scope === 'global' ? readSession() : readProjectSession(p.root);
         const last = session && isOAuthSession(session) ? (session.lastRefreshAt ?? 0) : 0;
         const due = Date.now() - last >= KEEPALIVE_INTERVAL_MS;
         const lastLabel = last ? new Date(last).toISOString() : 'never';
+        const scopeLabel = p.scope === 'global' ? '[global]' : '[project]';
         console.log(
-          `  ${p.root}  lastRefresh: ${lastLabel}  ${due ? pc.yellow('due') : pc.green('ok')}`
+          `  ${scopeLabel} ${p.root}  lastRefresh: ${lastLabel}  ${due ? pc.yellow('due') : pc.green('ok')}`
         );
       }
     });

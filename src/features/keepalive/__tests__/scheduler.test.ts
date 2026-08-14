@@ -50,12 +50,51 @@ describe('CronBackend', () => {
   });
 
   it('install is a no-op when the marker is already present', () => {
-    crontab = `# existing\n${KEEPALIVE_CRON_MARKER}\n*/15 * * * * /node /cli keepalive run --quiet >> /log 2>&1\n`;
+    crontab = `# existing\n${KEEPALIVE_CRON_MARKER}\n*/15 * * * * "/node" "/cli" keepalive run --quiet >> "/log" 2>&1\n`;
 
     const result = new CronBackend().install('/node', '/cli');
 
     expect(result.isOk()).toBe(true);
     expect(written).toHaveLength(0);
+  });
+
+  it('install replaces stale schedule line after CLI path change', () => {
+    crontab = `${KEEPALIVE_CRON_MARKER}\n*/15 * * * * /old/store/path/linear.js keepalive run --quiet >> /old/log 2>&1\n`;
+
+    const result = new CronBackend().install('/usr/bin/node', '/new/store/path/linear.js');
+
+    expect(result.isOk()).toBe(true);
+    expect(written).toHaveLength(1);
+    const content = written[0];
+    expect(content).toContain('/new/store/path/linear.js');
+    expect(content).not.toContain('/old/store/path/linear.js');
+    expect(content.match(new RegExp(KEEPALIVE_CRON_MARKER, 'g'))).toHaveLength(1);
+  });
+
+  it('install reinstalls when nodePath changes', () => {
+    crontab = `${KEEPALIVE_CRON_MARKER}\n*/15 * * * * "/usr/bin/node" "/usr/local/bin/linear" keepalive run --quiet >> /log 2>&1\n`;
+
+    const result = new CronBackend().install('/usr/local/bin/node', '/usr/local/bin/linear');
+
+    expect(result.isOk()).toBe(true);
+    expect(written).toHaveLength(1);
+    const content = written[0];
+    expect(content).toContain('"/usr/local/bin/node"');
+    expect(content).not.toContain('"/usr/bin/node"');
+  });
+
+  it('install does not false-match on path suffix', () => {
+    // Old quoted token "/old/store/linear.js" must not match "/store/linear.js"
+    // (substring) — the stale line must be replaced, not silently kept.
+    crontab = `${KEEPALIVE_CRON_MARKER}\n*/15 * * * * "/usr/bin/node" "/old/store/linear.js" keepalive run --quiet >> /log 2>&1\n`;
+
+    const result = new CronBackend().install('/usr/bin/node', '/store/linear.js');
+
+    expect(result.isOk()).toBe(true);
+    expect(written).toHaveLength(1);
+    const content = written[0];
+    expect(content).toContain('"/store/linear.js"');
+    expect(content).not.toContain('"/old/store/linear.js"');
   });
 
   it('uninstall strips the marker + schedule line, keeping other crontab content', () => {
@@ -149,7 +188,13 @@ describe('TaskSchedulerBackend (win32)', () => {
     expect(taskArg).toContain('keepalive.log');
   });
 
-  it('uninstall deletes the task', () => {
+  it('uninstall deletes the task when installed', () => {
+    mockExecFileSync.mockImplementation(((_exe: string, args: string[]) => {
+      if (args.includes('/query')) return 'INFO: task exists';
+      if (args.includes('/delete')) return 'SUCCESS: The scheduled task was deleted';
+      return '';
+    }) as never);
+
     const result = new TaskSchedulerBackend().uninstall();
 
     expect(result.isOk()).toBe(true);
@@ -157,6 +202,32 @@ describe('TaskSchedulerBackend (win32)', () => {
       'schtasks.exe',
       expect.arrayContaining(['/delete', '/tn', 'linear-cli-keepalive', '/f']),
       expect.any(Object)
+    );
+  });
+
+  it('uninstall is idempotent when not installed', () => {
+    // Default mock: /query throws → task absent.
+    const result = new TaskSchedulerBackend().uninstall();
+
+    expect(result.isOk()).toBe(true);
+    expect(mockExecFileSync.mock.calls.every((call) => !(call[1] ?? []).includes('/delete'))).toBe(
+      true
+    );
+  });
+
+  it('uninstall propagates non-not-found query errors', () => {
+    mockExecFileSync.mockImplementation(((_exe: string, args: string[]) => {
+      if (args.includes('/query')) throw new Error('Access is denied.');
+      return '';
+    }) as never);
+
+    const result = new TaskSchedulerBackend().uninstall();
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().message).toBe('Access is denied.');
+    // No /delete attempted — the error must not be swallowed into a no-op.
+    expect(mockExecFileSync.mock.calls.every((call) => !(call[1] ?? []).includes('/delete'))).toBe(
+      true
     );
   });
 

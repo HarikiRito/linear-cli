@@ -6,7 +6,7 @@ import * as scopeMod from '../../../lib/scope.js';
 import {
   getRegistryPath,
   listProjects,
-  pruneMissing,
+  registerGlobal,
   registerProject,
   unregisterProject,
 } from '../registry.js';
@@ -89,32 +89,13 @@ describe('project registry', () => {
     expect(listProjects()._unsafeUnwrap()).toEqual([]);
   });
 
-  it('pruneMissing removes entries whose auth.json is missing', () => {
-    // projA has a session, projB does not
-    const authA = path.join(projA, '.linear', 'auth.json');
-    fs.mkdirSync(path.dirname(authA), { recursive: true });
-    fs.writeFileSync(authA, JSON.stringify({ apiKey: 'k' }), 'utf-8');
-    registerProject(projA);
-    registerProject(projB);
-
-    const result = pruneMissing();
-    expect(result._unsafeUnwrap()).toEqual({ pruned: 1 });
+  it('registerGlobal writes a global entry and dedups', () => {
+    expect(registerGlobal().isOk()).toBe(true);
+    expect(registerGlobal().isOk()).toBe(true);
 
     const projects = listProjects()._unsafeUnwrap();
     expect(projects).toHaveLength(1);
-    expect(projects[0].root).toBe(fs.realpathSync(projA));
-  });
-
-  it('pruneMissing removes entries whose root dir is gone', () => {
-    const authA = path.join(projA, '.linear', 'auth.json');
-    fs.mkdirSync(path.dirname(authA), { recursive: true });
-    fs.writeFileSync(authA, JSON.stringify({ apiKey: 'k' }), 'utf-8');
-    registerProject(projA);
-    const ghost = path.join(os.tmpdir(), `linear-registry-ghost-${Date.now()}`);
-    registerProject(ghost); // dir does not exist
-
-    const result = pruneMissing();
-    expect(result._unsafeUnwrap()).toEqual({ pruned: 1 });
-    expect(listProjects()._unsafeUnwrap()).toHaveLength(1);
+    expect(projects[0].scope).toBe('global');
+    expect(projects[0].root).toBe(tmpHome);
   });
 });

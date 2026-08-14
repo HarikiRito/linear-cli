@@ -14,6 +14,8 @@ export const CANDIDATE_PORTS = [9876, 9877, 9878] as const;
 
 // Keepalive: automatic refresh-token rotation to keep sessions alive.
 export const KEEPALIVE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+/** Backoff schedule (ms) for invalid_grant retries; last entry is the cap. */
+export const KEEPALIVE_BACKOFF_MS = [15 * 60_000, 60 * 60_000, 4 * 60 * 60_000, 24 * 60 * 60_000];
 export const KEEPALIVE_POLL_CRON = '*/15 * * * *';
 export const KEEPALIVE_TASK_NAME = 'linear-cli-keepalive';
 export const KEEPALIVE_LOCK_FILE = 'auth.lock';

@@ -2,11 +2,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, Result } from 'neverthrow';
 import { toError } from '../../lib/errors.js';
-import { getGlobalConfigDir, getProjectLinearDir } from '../../lib/scope.js';
+import { getGlobalConfigDir } from '../../lib/scope.js';
 
 export interface RegisteredProject {
   root: string;
   addedAt: number;
+  /** Backoff tier for invalid_grant (1-based; undefined = healthy). */
+  invalidGrantTier?: number;
+  /** ms-epoch before which rotation should be skipped due to invalid_grant backoff. */
+  invalidGrantNextAttemptAt?: number;
+  /** 'project' | 'global' scope; defaults to 'project' for back-compat. */
+  scope?: 'project' | 'global';
 }
 
 interface RegistryFile {
@@ -67,14 +73,35 @@ export function listProjects(): Result<RegisteredProject[], Error> {
   return ok(readRegistry().projects);
 }
 
-/** Drop entries whose root dir or <root>/.linear/auth.json no longer exists. */
-export function pruneMissing(): Result<{ pruned: number }, Error> {
+/** Find one entry by canonical root (realpath-compared). Returns undefined if absent. */
+export function getEntry(root: string): RegisteredProject | undefined {
+  const canonical = realpathOrSelf(root);
+  return readRegistry().projects.find((p) => realpathOrSelf(p.root) === canonical);
+}
+
+/** Patch a registry entry by root. No-op if entry not found. */
+export function updateEntry(root: string, patch: Partial<RegisteredProject>): Result<void, Error> {
+  const canonical = realpathOrSelf(root);
   const registry = readRegistry();
-  const alive = registry.projects.filter((p) => {
-    const authPath = path.join(getProjectLinearDir(p.root), 'auth.json');
-    return fs.existsSync(p.root) && fs.existsSync(authPath);
-  });
-  const pruned = registry.projects.length - alive.length;
-  if (pruned === 0) return ok({ pruned: 0 });
-  return writeRegistry({ projects: alive }).map(() => ({ pruned }));
+  const idx = registry.projects.findIndex((p) => realpathOrSelf(p.root) === canonical);
+  if (idx === -1) return ok(undefined);
+  registry.projects[idx] = { ...registry.projects[idx], ...patch };
+  return writeRegistry(registry);
+}
+
+/** Sentinel "root" used for the global session entry. */
+export function getGlobalEntryRoot(): string {
+  return getGlobalConfigDir();
+}
+
+/** Idempotent: register the global session for keepalive rotation. */
+export function registerGlobal(): Result<void, Error> {
+  const root = getGlobalEntryRoot();
+  const registry = readRegistry();
+  const exists = registry.projects.some(
+    (p) => p.scope === 'global' || (!p.scope && realpathOrSelf(p.root) === root)
+  );
+  if (exists) return ok(undefined);
+  registry.projects.push({ root, addedAt: Date.now(), scope: 'global' });
+  return writeRegistry(registry);
 }

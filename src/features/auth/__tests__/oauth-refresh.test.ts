@@ -25,9 +25,9 @@ vi.mock('../../lib/config.js', async (importOriginal) => {
 
 vi.mock('../../keepalive/registry.js', () => ({
   registerProject: vi.fn().mockReturnValue({ isOk: () => true, isErr: () => false }),
+  registerGlobal: vi.fn().mockReturnValue({ isOk: () => true, isErr: () => false }),
   unregisterProject: vi.fn(),
   listProjects: vi.fn(),
-  pruneMissing: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------

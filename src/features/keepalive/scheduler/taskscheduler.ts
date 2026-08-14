@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { ok, Result } from 'neverthrow';
+import { err, ok, Result } from 'neverthrow';
 import { KEEPALIVE_TASK_NAME } from '../../../lib/config.js';
 import { toError } from '../../../lib/errors.js';
 import { getLogPath, type KeepaliveScheduler } from './index.js';
@@ -13,9 +13,22 @@ function runSchTasks(args: string[]): Result<string, Error> {
   )();
 }
 
+/**
+ * schtasks reports a missing task via stderr/stdout messages like
+ * "ERROR: The system cannot find the file specified." or
+ * "ERROR: Cannot find the task" — both contain "cannot find".
+ */
+function isTaskNotFoundError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+  return message.includes('cannot find') || message.includes('not exist');
+}
+
 export class TaskSchedulerBackend implements KeepaliveScheduler {
   isInstalled(): Result<boolean, Error> {
-    return ok(runSchTasks(['/query', '/tn', KEEPALIVE_TASK_NAME]).isOk());
+    const query = runSchTasks(['/query', '/tn', KEEPALIVE_TASK_NAME]);
+    if (query.isOk()) return ok(true);
+    // Absent task → not installed; anything else (access denied, transient) propagates.
+    return isTaskNotFoundError(query.error) ? ok(false) : err(query.error);
   }
 
   install(nodePath: string, cliPath: string): Result<void, Error> {
@@ -35,7 +48,11 @@ export class TaskSchedulerBackend implements KeepaliveScheduler {
   }
 
   uninstall(): Result<void, Error> {
-    return runSchTasks(['/delete', '/tn', KEEPALIVE_TASK_NAME, '/f']).map(() => undefined);
+    // Idempotent when the task is absent; propagate non-not-found errors.
+    return this.isInstalled().andThen((installed) => {
+      if (!installed) return ok(undefined);
+      return runSchTasks(['/delete', '/tn', KEEPALIVE_TASK_NAME, '/f']).map(() => undefined);
+    });
   }
 
   status(): Result<{ installed: boolean; detail: string }, Error> {
