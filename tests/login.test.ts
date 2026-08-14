@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * runLoginFlow (workspace-keyed):
  * - prompts auth method (OAuth / API key)
  * - writes the credential via writeWorkspaceCredential(workspaceId, session)
- * - TTY: offers to link cwd → team pick (registry entry or global config)
- * - non-TTY: credential only, no link/team prompts
+ * - TTY: team pick → default-project pick → auto-links cwd (no confirmation)
+ * - non-TTY: credential + auto-link only, no team/project prompts
  */
 
 // All mocks must be registered before the module under test is imported.
@@ -39,7 +39,9 @@ vi.mock('../src/features/keepalive/registry.js', () => ({
 }));
 
 vi.mock('../src/features/auth/team-select.js', () => ({
-  selectAndPersistTeamAndProjects: vi.fn().mockResolvedValue(undefined),
+  selectDefaultTeam: vi.fn().mockResolvedValue({ id: 'team-1', key: 'ENG' }),
+  selectDefaultProjects: vi.fn().mockResolvedValue(undefined),
+  mergeGlobalConfig: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../src/lib/check-version.js', () => ({
@@ -51,7 +53,11 @@ import { LinearClient } from '@linear/sdk';
 import { writeWorkspaceCredential } from '../src/features/auth/credentials.js';
 import { runLoginFlow } from '../src/features/auth/login.js';
 import { startOAuthFlow } from '../src/features/auth/oauth.js';
-import { selectAndPersistTeamAndProjects } from '../src/features/auth/team-select.js';
+import {
+  mergeGlobalConfig,
+  selectDefaultProjects,
+  selectDefaultTeam,
+} from '../src/features/auth/team-select.js';
 import { linkProject } from '../src/features/keepalive/registry.js';
 
 const mockSelect = vi.mocked(select);
@@ -61,7 +67,9 @@ const mockIsCancel = vi.mocked(isCancel);
 const mockStartOAuthFlow = vi.mocked(startOAuthFlow);
 const mockWriteWorkspaceCredential = vi.mocked(writeWorkspaceCredential);
 const mockLinkProject = vi.mocked(linkProject);
-const mockSelectAndPersist = vi.mocked(selectAndPersistTeamAndProjects);
+const mockSelectDefaultTeam = vi.mocked(selectDefaultTeam);
+const mockSelectDefaultProjects = vi.mocked(selectDefaultProjects);
+const mockMergeGlobalConfig = vi.mocked(mergeGlobalConfig);
 const MockLinearClient = vi.mocked(LinearClient);
 
 const ORG = { id: 'ws-1', name: 'Acme', urlKey: 'acme' };
@@ -112,7 +120,7 @@ describe('runLoginFlow', () => {
     mockExit.mockRestore();
   });
 
-  it('API key (non-TTY): writes workspace credential, no link/team prompts', async () => {
+  it('API key (non-TTY): writes workspace credential and auto-links cwd, no team prompts', async () => {
     mockSelect.mockResolvedValue('apikey');
     mockText.mockResolvedValue('lin_api_good_key');
 
@@ -122,11 +130,13 @@ describe('runLoginFlow', () => {
     expect(mockWriteWorkspaceCredential).toHaveBeenCalledWith('ws-1', {
       apiKey: 'lin_api_good_key',
     });
-    expect(mockConfirm).not.toHaveBeenCalled();
-    expect(mockSelectAndPersist).not.toHaveBeenCalled();
+    // Auto-link happens without a confirmation prompt, with no team.
+    expect(mockLinkProject).toHaveBeenCalledWith(process.cwd(), 'ws-1', undefined);
+    expect(mockSelectDefaultTeam).not.toHaveBeenCalled();
+    expect(mockSelectDefaultProjects).not.toHaveBeenCalled();
   });
 
-  it('OAuth (non-TTY): writes the returned session to the workspace credential', async () => {
+  it('OAuth (non-TTY): writes the returned session and auto-links cwd', async () => {
     const oauthSession = {
       accessToken: 'tok_abc',
       refreshToken: 'ref_xyz',
@@ -140,36 +150,43 @@ describe('runLoginFlow', () => {
 
     expect(mockStartOAuthFlow).toHaveBeenCalledOnce();
     expect(mockWriteWorkspaceCredential).toHaveBeenCalledWith('ws-1', oauthSession);
+    expect(mockLinkProject).toHaveBeenCalledWith(process.cwd(), 'ws-1', undefined);
   });
 
-  it('TTY: accepting the link prompt links cwd and persists team to the registry entry', async () => {
+  it('TTY: auto-links cwd with the picked team, no confirmation prompt, project pick writes global config', async () => {
     setTTY(true);
     mockSelect.mockResolvedValue('apikey');
     mockText.mockResolvedValue('lin_api_good_key');
-    mockConfirm.mockResolvedValue(true);
+    mockSelectDefaultTeam.mockResolvedValue({ id: 'team-1', key: 'ENG' });
+    mockSelectDefaultProjects.mockResolvedValue([{ id: 'proj-1', name: 'Mobile' }]);
 
     await runLoginFlow();
 
-    expect(mockConfirm).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('Acme') })
-    );
-    expect(mockLinkProject).toHaveBeenCalledWith(expect.any(String), 'ws-1');
-    expect(mockSelectAndPersist).toHaveBeenCalledWith(expect.anything(), {
-      type: 'registry',
-      root: '/linked/root',
+    expect(mockSelectDefaultTeam).toHaveBeenCalledOnce();
+    expect(mockSelectDefaultProjects).toHaveBeenCalledWith(expect.anything(), 'team-1');
+    expect(mockMergeGlobalConfig).toHaveBeenCalledWith({
+      projects: [{ id: 'proj-1', name: 'Mobile' }],
+    });
+    // Link is unconditional — no confirm prompt, registry entry gets the team.
+    expect(mockConfirm).not.toHaveBeenCalled();
+    expect(mockLinkProject).toHaveBeenCalledWith(process.cwd(), 'ws-1', {
+      id: 'team-1',
+      key: 'ENG',
     });
   });
 
-  it('TTY: declining the link prompt persists team to the global config', async () => {
+  it('TTY: skipped team pick still auto-links cwd without a team', async () => {
     setTTY(true);
     mockSelect.mockResolvedValue('apikey');
     mockText.mockResolvedValue('lin_api_good_key');
-    mockConfirm.mockResolvedValue(false);
+    mockSelectDefaultTeam.mockResolvedValue(undefined);
 
     await runLoginFlow();
 
-    expect(mockLinkProject).not.toHaveBeenCalled();
-    expect(mockSelectAndPersist).toHaveBeenCalledWith(expect.anything(), { type: 'global' });
+    expect(mockSelectDefaultTeam).toHaveBeenCalledOnce();
+    expect(mockSelectDefaultProjects).not.toHaveBeenCalled();
+    expect(mockMergeGlobalConfig).not.toHaveBeenCalled();
+    expect(mockLinkProject).toHaveBeenCalledWith(process.cwd(), 'ws-1', undefined);
   });
 
   it('OAuth flow failure → process.exit(1), nothing written', async () => {

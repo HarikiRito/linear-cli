@@ -1,15 +1,16 @@
-import { confirm, intro, isCancel, outro, select, spinner, text } from '@clack/prompts';
+import { intro, isCancel, outro, select, spinner, text } from '@clack/prompts';
 import type { LinearClient } from '@linear/sdk';
 import { ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
 import { notifyUpdate } from '../../lib/check-version.js';
 import { buildLinearClient } from '../../lib/client/index.js';
+import type { DefaultTeam } from '../../lib/config-file.js';
 import { toError } from '../../lib/errors.js';
 import { linkProject } from '../keepalive/registry.js';
 import { writeWorkspaceCredential } from './credentials.js';
 import { startOAuthFlow } from './oauth.js';
 import { isOAuthSession, type Session } from './session.js';
-import { selectAndPersistTeamAndProjects } from './team-select.js';
+import { mergeGlobalConfig, selectDefaultProjects, selectDefaultTeam } from './team-select.js';
 
 export interface AuthenticatedWorkspace {
   workspaceId: string;
@@ -110,40 +111,29 @@ export async function authenticateWorkspace(): Promise<AuthenticatedWorkspace> {
 export async function runLoginFlow(): Promise<void> {
   intro(pc.bold('Linear CLI Login'));
 
-  const { workspaceId, name, urlKey, session, client } = await authenticateWorkspace();
+  const { workspaceId, name, session, client } = await authenticateWorkspace();
   await writeWorkspaceCredential(workspaceId, session);
 
   const cwd = process.cwd();
-  let linkedRoot: string | null = null;
 
+  // Team + default-project pickers are interactive — only run on a TTY.
+  let team: DefaultTeam | undefined;
   if (process.stdout.isTTY && process.stdin.isTTY) {
-    const link = await confirm({
-      message: `Link this directory to workspace ${name}?`,
-      initialValue: true,
-    });
-    if (!isCancel(link) && link === true) {
-      const linkResult = await ResultAsync.fromPromise(linkProject(cwd, workspaceId), toError);
-      if (linkResult.isErr()) {
-        console.error(
-          pc.yellow(`Warning: could not link this directory: ${linkResult.error.message}`)
-        );
-      } else {
-        linkedRoot = linkResult.value.root;
-      }
+    team = await selectDefaultTeam(client);
+    const projects = team ? await selectDefaultProjects(client, team.id) : undefined;
+    if (projects && projects.length > 0) {
+      mergeGlobalConfig({ projects });
     }
-
-    // Team pick: linked → registry entry; otherwise global config.
-    await selectAndPersistTeamAndProjects(
-      client,
-      linkedRoot ? { type: 'registry', root: linkedRoot } : { type: 'global' }
-    );
   }
 
-  if (linkedRoot) {
-    console.log(pc.green(`Linked ${cwd} → ${name}`));
-  } else {
-    console.log(pc.green(`Authenticated workspace: ${name} (${urlKey})`));
+  // The credential already determines the workspace — auto-link cwd without
+  // asking. The picked team lands on the registry entry in one shot.
+  const linkResult = await ResultAsync.fromPromise(linkProject(cwd, workspaceId, team), toError);
+  if (linkResult.isErr()) {
+    console.error(pc.yellow(`Warning: could not link this directory: ${linkResult.error.message}`));
   }
+
+  console.log(pc.green(`Linked this directory to workspace ${name}.`));
 
   if (isOAuthSession(session)) {
     console.log(

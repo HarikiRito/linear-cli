@@ -121,8 +121,9 @@ export async function selectDefaultProjects(
 }
 
 /**
- * Shared "team-select → project-select → persist" sequence used by both
- * `runLoginFlow()` and the standalone `linear team select` command.
+ * Shared "team-select → project-select → persist" sequence used by the
+ * standalone `linear team select` command (and `runLoginFlow()` previously —
+ * login now links unconditionally and persists via its own pick + link calls).
  *
  * Persist target:
  * - registry (`{type:'registry', root}`) — the linked directory's team goes
@@ -136,6 +137,39 @@ export async function selectDefaultProjects(
  * a non-empty selection.
  */
 export type TeamPersistTarget = { type: 'registry'; root: string } | { type: 'global' };
+
+/**
+ * Merge default team/projects onto the global config.toml. `team` is included
+ * only when explicitly provided (for linked directories the team lives on the
+ * registry entry instead); `projects` is included only when non-empty. The
+ * write merges onto the existing config so unrelated keys (e.g. `workspace`)
+ * survive, and warns rather than failing on read/write errors.
+ */
+export function mergeGlobalConfig(merge: {
+  team?: DefaultTeam;
+  projects?: DefaultProject[];
+}): void {
+  let existingConfig: LinearConfig = {};
+  try {
+    existingConfig = readConfig(getGlobalConfigPath());
+  } catch (e) {
+    console.error(
+      pc.yellow(
+        `Warning: could not read existing config.toml, it will be overwritten: ${toError(e).message}`
+      )
+    );
+  }
+
+  const config: LinearConfig = {
+    ...existingConfig,
+    ...(merge.team ? { team: merge.team } : {}),
+    ...(merge.projects && merge.projects.length > 0 ? { projects: merge.projects } : {}),
+  };
+  const configResult = writeConfig(getGlobalConfigPath(), config);
+  if (configResult.isErr()) {
+    console.error(pc.yellow(`Warning: could not write config.toml: ${configResult.error.message}`));
+  }
+}
 
 export async function selectAndPersistTeamAndProjects(
   client: LinearClient,
@@ -158,24 +192,5 @@ export async function selectAndPersistTeamAndProjects(
     }
   }
 
-  let existingConfig: LinearConfig = {};
-  try {
-    existingConfig = readConfig(getGlobalConfigPath());
-  } catch (e) {
-    console.error(
-      pc.yellow(
-        `Warning: could not read existing config.toml, it will be overwritten: ${toError(e).message}`
-      )
-    );
-  }
-
-  const config: LinearConfig = {
-    ...existingConfig,
-    ...(target.type === 'global' ? { team } : {}),
-    ...(projects && projects.length > 0 ? { projects } : {}),
-  };
-  const configResult = writeConfig(getGlobalConfigPath(), config);
-  if (configResult.isErr()) {
-    console.error(pc.yellow(`Warning: could not write config.toml: ${configResult.error.message}`));
-  }
+  mergeGlobalConfig(target.type === 'global' ? { team, projects } : { projects });
 }
