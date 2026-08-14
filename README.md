@@ -21,15 +21,29 @@ linear whoami
 
 ## Authentication
 
+Credentials are **workspace-keyed**: one session per Linear workspace, stored in `~/.config/.linear/credentials.json`. There is no per-project `.linear/` folder — instead directories are *linked* to a workspace via `linear login` or `linear workspace select`, and the mapping lives in `~/.config/.linear/projects.json`.
+
 Credentials are resolved in this order:
 
 1. `--api-key <key>` / `--token <token>` flags
 2. Env vars `LINEAR_API_KEY` / `LINEAR_ACCESS_TOKEN`
-3. Project session `./.linear/auth.json`
-4. Global session `~/.config/.linear/auth.json` (auto-refresh for OAuth tokens)
-5. Interactive `linear login`
+3. Linked directory: cwd (or an ancestor) mapped in `projects.json` → that workspace's credential
+4. Global default workspace: `LINEAR_WORKSPACE` env or config `workspace`, or auto-selected when exactly one workspace is authenticated
+5. Interactive `linear login` (TTY only)
 
-`linear login` saves credentials to global scope by default, or project scope if run inside a project directory. `linear logout` clears stored credentials.
+`linear login` authenticates one workspace (OAuth2 or API key), optionally links the current directory, and picks a default team — no scope prompt. `linear workspace select` links an already-authenticated workspace to the current directory (and picks a team). `linear logout` unlinks the current directory and removes its credential when no other directory uses it.
+
+Data files (all under `~/.config/.linear/`):
+
+| File | Purpose |
+|---|---|
+| `credentials.json` | Workspace-keyed sessions (OAuth or API key); OAuth tokens auto-refresh |
+| `projects.json` | Directory-link registry: project root → `{workspace, team}` |
+| `config.toml` | Global defaults: `team`, `workspace`, `projects` |
+| `keepalive-state.json` | Per-workspace keepalive rotation/backoff state |
+| `keepalive/` | Per-workspace rotation locks (`<workspace-id>.lock`) |
+
+> **Migrating from the old per-project model:** `.linear/auth.json` and `.linear/config.toml` no longer exist. Re-run `linear login` once per workspace, then `linear workspace select` in each directory you work from.
 
 ## Command Reference
 
@@ -47,9 +61,15 @@ List commands also accept: `--limit <n>` (default 50), `--after <cursor>`, `--al
 
 | Command | Description |
 |---|---|
-| `linear login` | Authenticate with Linear (saves to global or project scope) |
-| `linear logout` | Remove stored credentials |
-| `linear whoami` | Show the currently authenticated user. Does not start interactive login when unauthenticated — run `linear login` first. |
+| `linear login` | Authenticate a workspace (OAuth2 or API key). Optionally links cwd and picks the default team (TTY only) |
+| `linear logout` | Unlink cwd and remove its credential if orphaned. `--workspace <id>`: remove one workspace's credentials. `--all`: wipe all workspace credentials |
+| `linear workspace select` | Link the current directory to an authenticated workspace (validates the token, picks a team). Re-linkable |
+| `linear team select` | Pick default team/projects: sets the cwd link's team when the directory is linked, otherwise the global config |
+| `linear whoami` | Show the resolved user + workspace + bound team for cwd. Does not start interactive login when unauthenticated — run `linear login` first. |
+| `linear keepalive install` | Install the global polling scheduler (one-time) that keeps all authenticated workspace sessions alive |
+| `linear keepalive uninstall` | Remove the scheduler |
+| `linear keepalive status` | Show scheduler state, per-workspace rotation state, and linked directories |
+| `linear keepalive run` | Run one rotation cycle manually (used by the scheduler) |
 
 ### Issues
 
@@ -203,21 +223,21 @@ Agent users should always pass `--plain` to get output in the format the skill e
 
 ## Config File
 
-Config lives in `config.toml`. Resolution order per key: **env var > project config > global config**.
-
-| Scope | Path |
-|---|---|
-| Global (default) | `~/.config/.linear/config.toml` |
-| Project | `./.linear/config.toml` |
-
-Project config overrides global on a per-key basis — a project can set only `team_id` and still inherit `workspace` from global.
+Global config lives at `~/.config/.linear/config.toml`. Project-local `config.toml` was removed — defaults are global only; per-directory overrides come from the `projects.json` link (its `team`).
 
 ```toml
-team_id = "ENG"      # default team key or name
-workspace = "myorg"  # workspace slug
+[team]
+id = "xxx"
+key = "ENG"   # default team for issue commands
+
+workspace = "myorg"  # default workspace (must match an authenticated workspace id)
+
+[[projects]]
+id = "yyy"
+name = "API"  # default project(s) for the default team
 ```
 
-Both keys are optional. Environment overrides: `LINEAR_TEAM_ID` → `team_id`, `LINEAR_WORKSPACE` → `workspace`.
+All keys are optional. Environment overrides: `LINEAR_TEAM_ID` → default team, `LINEAR_WORKSPACE` → `workspace`.
 
 ## Contributing
 
