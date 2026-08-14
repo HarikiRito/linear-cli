@@ -18,11 +18,9 @@ import {
 } from '../../../lib/upload.js';
 import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 import {
-  getDefaultProjectIds,
   looksLikeId,
   resolveAssignee,
   resolveCycle,
-  resolveDefaultProjectId,
   resolveIssueIdentifier,
   resolveLabels,
   resolveMilestone,
@@ -83,17 +81,20 @@ async function buildInput(
     input.teamId = resolvedTeamId;
   }
 
-  // Resolve project — milestone depends on projectId. Explicit --project
-  // always wins; when omitted, fall back to the first configured default
-  // project (deterministic, no prompt) — see resolveDefaultProjectId().
-  let explicitProjectId: string | undefined;
+  // Resolve project — milestone depends on projectId. projectId is set ONLY
+  // when --project is explicitly passed: a global config.toml default
+  // project can belong to a different workspace than the resolved
+  // credential/team, and injecting it into an update leaks cross-workspace
+  // (the API rejects it with validateAccess — see H-475). Updates never
+  // auto-fill the config default; `issues create` keeps that behavior for
+  // new issues.
+  let resolvedProjectId: string | undefined;
   if (opts.project !== undefined) {
     const r = await resolveProject(opts.project, client);
     if (r.isErr()) throw r.error;
-    explicitProjectId = r.value;
+    resolvedProjectId = r.value;
+    input.projectId = resolvedProjectId;
   }
-  const resolvedProjectId = resolveDefaultProjectId(explicitProjectId, getDefaultProjectIds);
-  if (resolvedProjectId !== undefined) input.projectId = resolvedProjectId;
 
   if (opts.milestone !== undefined && !resolvedProjectId) {
     throw new ValidationError('--milestone requires --project to be specified');

@@ -360,22 +360,56 @@ describe('issues update', () => {
     );
   });
 
-  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+  it('no --project: does not inject config default projectId into the update (H-475)', async () => {
     const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
-    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-h', name: 'H', key: 'H' }] });
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn, teams: teamsFn });
     stdMocks(clientMock);
+    // A config default project EXISTS — it must NOT leak into the update.
+    // A default from another workspace would be rejected by the API
+    // (validateAccess), same class as the global-team leak.
+    const getDefaultProjectIdsMock = vi.fn().mockReturnValue(['p1', 'p2']);
     vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
       const actual =
         await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
-      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(['p1', 'p2', 'p3']) };
+      return { ...actual, getDefaultProjectIds: getDefaultProjectIdsMock };
     });
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'update', 'ISSUE-1']);
+    await program.parseAsync(['node', 'linear', 'issues', 'update', 'ISSUE-1', '--team', 'H']);
 
     expect(updateIssueFn).toHaveBeenCalledWith(
       'ISSUE-1',
-      expect.objectContaining({ projectId: 'p1' })
+      expect.objectContaining({ teamId: 'team-h' })
+    );
+    const [, input] = updateIssueFn.mock.calls[0] as [string, Record<string, unknown>];
+    expect(input).not.toHaveProperty('projectId');
+    expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
+  });
+
+  it('--team and --project together: both applied to the mutation', async () => {
+    const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-h', name: 'H', key: 'H' }] });
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn, teams: teamsFn });
+    stdMocks(clientMock);
+    const program = await buildProgram();
+
+    const uuid = '77777777-7777-7777-7777-777777777777';
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'update',
+      'ISSUE-1',
+      '--team',
+      'H',
+      '--project',
+      uuid,
+    ]);
+
+    expect(updateIssueFn).toHaveBeenCalledWith(
+      'ISSUE-1',
+      expect.objectContaining({ teamId: 'team-h', projectId: uuid })
     );
   });
 
@@ -598,21 +632,25 @@ describe('issues batch-update', () => {
     expect(updateFn).toHaveBeenCalledTimes(ids.length);
   });
 
-  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+  it('no --project: does not inject config default projectId into batch-update (H-475)', async () => {
     const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
     const clientMock = makeClientMock({ updateIssue: updateIssueFn });
     stdMocks(clientMock);
+    // A config default project EXISTS — batch-update shares resolveUpdateInput
+    // with `issues update`, so it must not leak either.
+    const getDefaultProjectIdsMock = vi.fn().mockReturnValue(['p1', 'p2']);
     vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
       const actual =
         await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
-      return { ...actual, getDefaultProjectIds: vi.fn().mockReturnValue(['p1', 'p2', 'p3']) };
+      return { ...actual, getDefaultProjectIds: getDefaultProjectIdsMock };
     });
     const program = await buildProgram();
 
     await program.parseAsync(['node', 'linear', 'issues', 'batch-update', 'ENG-1']);
 
     const [, input] = updateIssueFn.mock.calls[0] as [string, Record<string, unknown>];
-    expect(input).toEqual(expect.objectContaining({ projectId: 'p1' }));
+    expect(input).not.toHaveProperty('projectId');
+    expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
   });
 
   it('explicit --project bypasses the config fallback entirely', async () => {

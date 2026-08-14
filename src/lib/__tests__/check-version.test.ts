@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { version as pkgVersion } from '../../../package.json';
 import { fetchLatestVersion, isNewerVersion } from '../check-version.js';
 
 // ---------------------------------------------------------------------------
@@ -101,7 +102,13 @@ describe('fetchLatestVersion', () => {
 // ---------------------------------------------------------------------------
 
 describe('notifyUpdate', () => {
-  const ORIGINAL_VERSION = '0.3.2';
+  // Derive from the installed version so the tests survive releases —
+  // notifyUpdate compares against package.json's version.
+  const ORIGINAL_VERSION = pkgVersion;
+  const NEWER_VERSION = (() => {
+    const [major, minor, patch] = pkgVersion.split('.').map(Number);
+    return `${major}.${minor}.${patch + 1}`;
+  })();
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -151,14 +158,14 @@ describe('notifyUpdate', () => {
 
   it('prints notice when newer version available', async () => {
     const { notifyUpdate } = await import('../check-version.js');
-    mockFetch('0.4.0');
+    mockFetch(NEWER_VERSION);
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     await notifyUpdate();
 
     expect(consoleSpy).toHaveBeenCalledOnce();
-    expect(consoleSpy.mock.calls[0][0]).toContain('0.3.2 → 0.4.0');
+    expect(consoleSpy.mock.calls[0][0]).toContain(`${ORIGINAL_VERSION} → ${NEWER_VERSION}`);
 
     consoleSpy.mockRestore();
   });
