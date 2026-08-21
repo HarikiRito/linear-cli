@@ -28,6 +28,8 @@ vi.mock('../../auth/session.js', () => ({
 
 vi.mock('../../auth/team-select.js', () => ({
   selectDefaultTeam: vi.fn().mockResolvedValue({ id: 'team-1', key: 'ENG' }),
+  selectDefaultProjects: vi.fn().mockResolvedValue(undefined),
+  mergeGlobalConfig: vi.fn(),
 }));
 
 vi.mock('../../keepalive/registry.js', () => ({
@@ -39,7 +41,7 @@ import { isCancel, select } from '@clack/prompts';
 import { LinearClient } from '@linear/sdk';
 import { listWorkspaceCredentials, writeWorkspaceCredential } from '../../auth/credentials.js';
 import { authenticateWorkspace } from '../../auth/login.js';
-import { selectDefaultTeam } from '../../auth/team-select.js';
+import { mergeGlobalConfig, selectDefaultProjects, selectDefaultTeam } from '../../auth/team-select.js';
 import { getEntry, linkProject, type RegisteredProject } from '../../keepalive/registry.js';
 import { runWorkspaceSelect } from '../select.js';
 
@@ -49,6 +51,8 @@ const mockListWorkspaceCredentials = vi.mocked(listWorkspaceCredentials);
 const mockWriteWorkspaceCredential = vi.mocked(writeWorkspaceCredential);
 const mockAuthenticateWorkspace = vi.mocked(authenticateWorkspace);
 const mockSelectDefaultTeam = vi.mocked(selectDefaultTeam);
+const mockSelectDefaultProjects = vi.mocked(selectDefaultProjects);
+const mockMergeGlobalConfig = vi.mocked(mergeGlobalConfig);
 const mockGetEntry = vi.mocked(getEntry);
 const mockLinkProject = vi.mocked(linkProject);
 const MockLinearClient = vi.mocked(LinearClient);
@@ -58,6 +62,7 @@ describe('runWorkspaceSelect', () => {
     vi.clearAllMocks();
     mockIsCancel.mockReturnValue(false);
     mockSelectDefaultTeam.mockResolvedValue({ id: 'team-1', key: 'ENG' });
+    mockSelectDefaultProjects.mockResolvedValue(undefined);
     mockGetEntry.mockReturnValue(undefined);
     // Stored workspaces ping the Linear API; default to a valid one.
     MockLinearClient.mockImplementation(
@@ -84,10 +89,52 @@ describe('runWorkspaceSelect', () => {
     expect(wsPrompt.options).toContainEqual(expect.objectContaining({ value: 'ws-1' }));
     expect(wsPrompt.options).toContainEqual(expect.objectContaining({ value: '__new__' }));
     expect(mockSelectDefaultTeam).toHaveBeenCalledOnce();
+    expect(mockSelectDefaultProjects).toHaveBeenCalledWith(expect.anything(), 'team-1');
     expect(mockLinkProject).toHaveBeenCalledWith(expect.any(String), 'ws-1', {
       id: 'team-1',
       key: 'ENG',
     });
+  });
+
+  it('1 project auto-selects and persists it to global config without prompting', async () => {
+    mockListWorkspaceCredentials.mockResolvedValue({ 'ws-1': { apiKey: 'key' } });
+    mockSelect.mockResolvedValue('ws-1');
+    mockSelectDefaultProjects.mockResolvedValue([{ id: 'proj-1', name: 'Roadmap' }]);
+
+    await runWorkspaceSelect();
+
+    expect(mockMergeGlobalConfig).toHaveBeenCalledWith({
+      projects: [{ id: 'proj-1', name: 'Roadmap' }],
+    });
+  });
+
+  it('2+ projects prompts (via selectDefaultProjects) and persists the picks', async () => {
+    mockListWorkspaceCredentials.mockResolvedValue({ 'ws-1': { apiKey: 'key' } });
+    mockSelect.mockResolvedValue('ws-1');
+    mockSelectDefaultProjects.mockResolvedValue([
+      { id: 'proj-1', name: 'Roadmap' },
+      { id: 'proj-2', name: 'Infra' },
+    ]);
+
+    await runWorkspaceSelect();
+
+    expect(mockSelectDefaultProjects).toHaveBeenCalledWith(expect.anything(), 'team-1');
+    expect(mockMergeGlobalConfig).toHaveBeenCalledWith({
+      projects: [
+        { id: 'proj-1', name: 'Roadmap' },
+        { id: 'proj-2', name: 'Infra' },
+      ],
+    });
+  });
+
+  it('does not persist when no projects are selected', async () => {
+    mockListWorkspaceCredentials.mockResolvedValue({ 'ws-1': { apiKey: 'key' } });
+    mockSelect.mockResolvedValue('ws-1');
+    mockSelectDefaultProjects.mockResolvedValue(undefined);
+
+    await runWorkspaceSelect();
+
+    expect(mockMergeGlobalConfig).not.toHaveBeenCalled();
   });
 
   it('marks a workspace invalid when the org ping fails', async () => {

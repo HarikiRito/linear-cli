@@ -7,7 +7,7 @@ import { toError } from '../../lib/errors.js';
 import { listWorkspaceCredentials, writeWorkspaceCredential } from '../auth/credentials.js';
 import { authenticateWorkspace } from '../auth/login.js';
 import { isApiKeySession, type Session } from '../auth/session.js';
-import { selectDefaultTeam } from '../auth/team-select.js';
+import { mergeGlobalConfig, selectDefaultProjects, selectDefaultTeam } from '../auth/team-select.js';
 import { getEntry, linkProject } from '../keepalive/registry.js';
 
 function sessionToCredential(session: Session): { type: 'apiKey' | 'accessToken'; value: string } {
@@ -112,6 +112,10 @@ export async function runWorkspaceSelect(): Promise<void> {
   }
 
   const team = await selectDefaultTeam(client);
+  const projects = team ? await selectDefaultProjects(client, team.id) : undefined;
+  if (projects && projects.length > 0) {
+    mergeGlobalConfig({ projects });
+  }
   await linkProject(cwd, workspaceId, team);
   outro(pc.green(`Linked ${cwd} → ${name}${team ? ` (${team.key})` : ''}`));
 }
