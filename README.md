@@ -99,6 +99,16 @@ List commands also accept: `--limit <n>` (default 50), `--after <cursor>`, `--al
 |---|---|
 | `linear issues branch <id>` | Print the git branch name for an issue. `--checkout` runs `git checkout -b <name>` |
 
+### Attachments & Assets
+
+| Command | Description |
+|---|---|
+| `linear issues upload <issue> --file <path>` | Upload a local file and attach it to an issue |
+| `linear issues attachments list <issue>` | List attachments on an issue |
+| `linear issues attachments download <issue> <attachmentId>` | Download an issue attachment. `--output <path>` (default: derived from the attachment) |
+| `linear issues assets download <issue>` | Download `uploads.linear.app` URLs embedded in an issue's description and comments (not registered `Attachment` entities). `--output-dir <dir>` (default: cwd) |
+| `linear assets download <url>` | Download a single known `uploads.linear.app` URL. `--output <path>` (default: derived from the URL) |
+
 ### Projects
 
 | Command | Description |

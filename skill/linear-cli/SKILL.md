@@ -41,6 +41,7 @@ Append `--plain` to any read command for clean, agent-parseable output.
 | `linear issues update <id>` | same flags as create (all optional) |
 | `linear issues delete <id>` | — |
 | `linear issues branch <id>` | — |
+| `linear issues assets download <issue>` | `--output-dir <dir>` — downloads `uploads.linear.app` URLs embedded in the description/comments (not `Attachment` entities) |
 | `linear issues comment list <issue>` | `--limit <n>` |
 | `linear issues comment add <issue>` | `--body <text\|->` (req) |
 | `linear issues comment reply <comment>` | `--body <text\|->` (req) |
@@ -52,6 +53,8 @@ All read commands (list, get, me, query, comment list) accept `--plain`.
 ## Other commands
 
 Run `linear --help` and `linear <area> --help` to discover commands for: projects, cycles, documents, teams, labels, milestones, statuses, users, whoami.
+
+`linear assets download <url> --output <path>` downloads a single known `uploads.linear.app` URL (e.g. one found by scanning markdown yourself).
 
 ## Auth & linking
 
