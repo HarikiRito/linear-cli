@@ -15,13 +15,17 @@ function makeAttachmentResponse(attachment: {
   title: string;
   url: string;
   issueId: string;
+  issueIdentifier?: string;
 }) {
   return {
     attachment: {
       id: attachment.id,
       title: attachment.title,
       url: attachment.url,
-      issue: { id: attachment.issueId },
+      issue: {
+        id: attachment.issueId,
+        identifier: attachment.issueIdentifier ?? attachment.issueId,
+      },
     },
   };
 }
@@ -178,6 +182,76 @@ describe('downloadAttachment', () => {
       'https://uploads.linear.app/notes.txt',
       expect.objectContaining({ headers: { Authorization: 'Bearer oauth-token' } })
     );
+  });
+
+  it('downloads the attachment when the issue was resolved by its human-readable identifier (case-insensitive)', async () => {
+    const requestFn = vi.fn().mockResolvedValue(
+      makeAttachmentResponse({
+        ...attachment,
+        issueId: 'issue-uuid-1',
+        issueIdentifier: 'EPIC-936',
+      })
+    );
+    const writeFileSyncFn = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    vi.doMock('../../../lib/client/index.js', () => ({
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(requestFn),
+    }));
+    vi.doMock('../../auth/resolve.js', () => ({
+      resolveCredential: vi.fn().mockReturnValue(ok({ type: 'apiKey', value: 'lin_api_key' })),
+    }));
+    vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
+    vi.doMock('node:fs', () => ({ writeFileSync: writeFileSyncFn }));
+
+    const { downloadAttachment } = await import('../attachments/download.js');
+    // lowercase input; resolveIssueIdentifier passes non-numeric input through unchanged
+    await downloadAttachment({ issue: 'epic-936', attachmentId: attachment.id });
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(writeFileSyncFn).toHaveBeenCalled();
+  });
+
+  it('downloads the attachment when the issue was resolved by UUID', async () => {
+    const issueUuid = '11111111-1111-1111-1111-111111111111';
+    const requestFn = vi.fn().mockResolvedValue(
+      makeAttachmentResponse({
+        ...attachment,
+        issueId: issueUuid,
+        issueIdentifier: 'EPIC-936',
+      })
+    );
+    const writeFileSyncFn = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    vi.doMock('../../../lib/client/index.js', () => ({
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(requestFn),
+    }));
+    vi.doMock('../../auth/resolve.js', () => ({
+      resolveCredential: vi.fn().mockReturnValue(ok({ type: 'apiKey', value: 'lin_api_key' })),
+    }));
+    vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
+    vi.doMock('node:fs', () => ({ writeFileSync: writeFileSyncFn }));
+
+    const { downloadAttachment } = await import('../attachments/download.js');
+    await downloadAttachment({ issue: issueUuid, attachmentId: attachment.id });
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(writeFileSyncFn).toHaveBeenCalled();
   });
 
   it('reports a NotFoundError when the attachment ID does not exist', async () => {

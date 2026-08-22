@@ -27,6 +27,7 @@ export const GET_ATTACHMENT_QUERY = graphql(`
       url
       issue {
         id
+        identifier
       }
     }
   }

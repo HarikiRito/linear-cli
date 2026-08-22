@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { version } from '../package.json';
+import { registerAssets } from './features/assets/command.js';
 import { registerAuthCommands, registerTeamSelectCommand } from './features/auth/command.js';
 import { registerWhoami } from './features/auth/whoami.js';
 import { registerCycles } from './features/cycles/command.js';
@@ -31,6 +32,7 @@ export function createProgram(): Command {
   registerWorkspaceCommand(program);
   registerKeepaliveCommands(program);
   registerIssues(program);
+  registerAssets(program);
   registerTeams(program);
   registerProjects(program);
   registerUsers(program);

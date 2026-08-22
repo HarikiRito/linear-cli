@@ -41,7 +41,11 @@ import { isCancel, select } from '@clack/prompts';
 import { LinearClient } from '@linear/sdk';
 import { listWorkspaceCredentials, writeWorkspaceCredential } from '../../auth/credentials.js';
 import { authenticateWorkspace } from '../../auth/login.js';
-import { mergeGlobalConfig, selectDefaultProjects, selectDefaultTeam } from '../../auth/team-select.js';
+import {
+  mergeGlobalConfig,
+  selectDefaultProjects,
+  selectDefaultTeam,
+} from '../../auth/team-select.js';
 import { getEntry, linkProject, type RegisteredProject } from '../../keepalive/registry.js';
 import { runWorkspaceSelect } from '../select.js';
 
