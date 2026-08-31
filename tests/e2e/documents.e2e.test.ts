@@ -131,6 +131,16 @@ describe.skipIf(!RUN_E2E)('documents CRUD E2E', () => {
     CMD_TIMEOUT
   );
 
+  it(
+    'documents create without --project exits non-zero',
+    async () => {
+      const r = await runCLI(['documents', 'create', '--title', uniqueName('e2e-doc-noproject')]);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr + r.stdout).toMatch(/project|required|missing/i);
+    },
+    CMD_TIMEOUT
+  );
+
   // ── get ───────────────────────────────────────────────────────────────────
 
   it(

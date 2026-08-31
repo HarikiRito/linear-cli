@@ -25,13 +25,33 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
   const updatedTitle = uniqueName('e2e-issue-updated');
 
   let teamName = '';
+  let projectId = '';
   let issueId = '';
   let issueIdentifier = '';
 
   beforeAll(async () => {
     const team = await discoverTeam();
     teamName = team.name;
-  }, CMD_TIMEOUT);
+
+    // Create a project to host the issue (--project is required)
+    const projName = uniqueName('e2e-issue-proj');
+    const r = await runCLI([
+      'projects',
+      'create',
+      '--name',
+      projName,
+      '--team',
+      team.name,
+      '--plain',
+    ]);
+    if (r.code !== 0) {
+      throw new Error(`Failed to create project for issues E2E: ${r.stderr}`);
+    }
+    const data = parsePlainRecord(r.stdout);
+    projectId = data.id ?? '';
+    if (!projectId) throw new Error('No project id returned from create');
+    reg.trackProject(projectId);
+  }, CMD_TIMEOUT * 2);
 
   // ── create ───────────────────────────────────────────────────────────────
 
@@ -46,6 +66,8 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
         createTitle,
         '--team',
         teamName,
+        '--project',
+        projectId,
         '--description',
         `E2E test created at ${new Date().toISOString()}`,
         '--priority',
@@ -166,6 +188,24 @@ describe.skipIf(!RUN_E2E)('issues CRUD E2E', () => {
       ]);
       expect(r.code).not.toBe(0);
       expect(r.stderr + r.stdout).toMatch(/priority/i);
+    },
+    CMD_TIMEOUT
+  );
+
+  it(
+    'issues create without --project exits non-zero',
+    async () => {
+      expect(teamName).not.toBe('');
+      const r = await runCLI([
+        'issues',
+        'create',
+        '--title',
+        uniqueName('e2e-no-project'),
+        '--team',
+        teamName,
+      ]);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr + r.stdout).toMatch(/project|required|missing/i);
     },
     CMD_TIMEOUT
   );

@@ -63,7 +63,7 @@ export function registerDocuments(program: Command): void {
     .command('create')
     .description('Create a new document')
     .requiredOption('--title <title>', 'Document title')
-    .option('--project <id-or-name>', 'Project ID or name to associate the document with')
+    .option('--project <id-or-name>', 'Project ID or name (required)')
     .option('--content <text>', 'Document content as markdown (use "-" to read from stdin)')
     .option('--content-file <path>', 'Path to a file containing document content');
 

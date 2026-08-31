@@ -117,17 +117,12 @@ describe('documents create', () => {
     ).rejects.toThrow();
   });
 
-  it('creates standalone doc without --project (no projectId in mutation)', async () => {
-    const createDocumentFn = vi.fn().mockResolvedValue(
-      makeDocumentPayloadMock({
-        ...makeDocumentMock('Standalone'),
-        get project() {
-          return Promise.resolve(null);
-        },
-      })
-    );
+  it('missing --project calls exitError with no fallback', async () => {
+    const createDocumentFn = vi.fn().mockResolvedValue(makeDocumentPayloadMock());
     const clientMock = makeClientMock({ createDocument: createDocumentFn });
+    const exitErrorMock = vi.fn();
     stdMocks(clientMock);
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
     vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
       const actual =
         await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
@@ -137,16 +132,16 @@ describe('documents create', () => {
 
     await program.parseAsync(['node', 'linear', 'documents', 'create', '--title', 'Standalone']);
 
-    expect(createDocumentFn).toHaveBeenCalledOnce();
-    const callArg = createDocumentFn.mock.calls[0][0] as Record<string, unknown>;
-    expect(callArg).toMatchObject({ title: 'Standalone' });
-    expect(callArg).not.toHaveProperty('projectId');
+    expect(createDocumentFn).not.toHaveBeenCalled();
+    expect(exitErrorMock).toHaveBeenCalled();
   });
 
-  it('missing --project but a default project is configured: no fallback, creates without a project', async () => {
+  it('missing --project but a default project is configured: no fallback, calls exitError', async () => {
     const createDocumentFn = vi.fn().mockResolvedValue(makeDocumentPayloadMock());
     const clientMock = makeClientMock({ createDocument: createDocumentFn });
+    const exitErrorMock = vi.fn();
     stdMocks(clientMock);
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
     vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
       const actual =
         await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
@@ -156,9 +151,10 @@ describe('documents create', () => {
 
     await program.parseAsync(['node', 'linear', 'documents', 'create', '--title', 'Doc']);
 
-    expect(createDocumentFn).toHaveBeenCalledWith(
-      expect.not.objectContaining({ projectId: expect.anything() })
-    );
+    expect(createDocumentFn).not.toHaveBeenCalled();
+    expect(exitErrorMock).toHaveBeenCalled();
+    const errArg = exitErrorMock.mock.calls[0][0] as Error;
+    expect(errArg.message).toBe('--project is required for documents create');
   });
 
   it('explicit --project bypasses the config fallback entirely', async () => {
