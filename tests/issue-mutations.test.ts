@@ -60,6 +60,8 @@ async function buildProgram() {
 // ---------------------------------------------------------------------------
 // issues create
 // ---------------------------------------------------------------------------
+const ISSUE_PROJ_UUID = '22222222-2222-2222-2222-222222222222';
+
 describe('issues create', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -86,10 +88,12 @@ describe('issues create', () => {
       'Foo',
       '--team',
       'Engineering',
+      '--project',
+      ISSUE_PROJ_UUID,
     ]);
 
     expect(createIssueFn).toHaveBeenCalledWith(
-      expect.objectContaining({ teamId: 'team-uuid', title: 'Foo' })
+      expect.objectContaining({ teamId: 'team-uuid', title: 'Foo', projectId: ISSUE_PROJ_UUID })
     );
   });
 
@@ -165,6 +169,8 @@ describe('issues create', () => {
       'eng',
       '--priority',
       '0',
+      '--project',
+      ISSUE_PROJ_UUID,
     ]);
 
     expect(createIssueFn).toHaveBeenCalledWith(expect.objectContaining({ priority: 0 }));
@@ -201,6 +207,8 @@ describe('issues create', () => {
       'bug',
       '--state',
       'In Progress',
+      '--project',
+      ISSUE_PROJ_UUID,
     ]);
 
     expect(createIssueFn).toHaveBeenCalledWith(
@@ -208,11 +216,13 @@ describe('issues create', () => {
     );
   });
 
-  it('missing --project but a default project is configured: no fallback, creates without a project', async () => {
+  it('missing --project: no fallback, calls exitError', async () => {
     const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
     const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'eng' }] });
     const clientMock = makeClientMock({ createIssue: createIssueFn, teams: teamsFn });
+    const exitErrorMock = vi.fn();
     stdMocks(clientMock);
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
     vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
       const actual =
         await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
@@ -231,9 +241,10 @@ describe('issues create', () => {
       'eng',
     ]);
 
-    expect(createIssueFn).toHaveBeenCalledWith(
-      expect.not.objectContaining({ projectId: expect.anything() })
-    );
+    expect(createIssueFn).not.toHaveBeenCalled();
+    expect(exitErrorMock).toHaveBeenCalled();
+    const errArg = exitErrorMock.mock.calls[0][0] as Error;
+    expect(errArg.message).toBe('--project is required for issue create');
   });
 
   it('explicit --project bypasses the config fallback entirely', async () => {

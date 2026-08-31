@@ -183,8 +183,9 @@ describe('documents create', () => {
     process.exitCode = undefined;
   });
 
-  it('creates standalone doc without --project (no projectId in mutation)', async () => {
+  it('missing --project calls exitError, no mutation sent', async () => {
     const createFn = vi.fn().mockResolvedValue(makeCreateDocumentPayload({ project: null }));
+    const exitErrorMock = vi.fn();
 
     vi.doMock('../src/lib/client/index.js', () => ({
       getClient: vi.fn().mockReturnValue(ok({ createDocument: createFn })),
@@ -195,15 +196,15 @@ describe('documents create', () => {
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),
     }));
-    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
 
     const program = await buildProgram();
     await program.parseAsync(['node', 'linear', 'documents', 'create', '--title', 'My Doc']);
 
-    expect(createFn).toHaveBeenCalledOnce();
-    const input = createFn.mock.calls[0][0] as Record<string, unknown>;
-    expect(input).toMatchObject({ title: 'My Doc' });
-    expect(input).not.toHaveProperty('projectId');
+    expect(createFn).not.toHaveBeenCalled();
+    expect(exitErrorMock).toHaveBeenCalled();
+    const errArg = exitErrorMock.mock.calls[0][0] as Error;
+    expect(errArg.message).toBe('--project is required for documents create');
   });
 
   it('creates doc with --project resolved by UUID (projectId in mutation)', async () => {

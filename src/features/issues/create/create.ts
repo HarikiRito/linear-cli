@@ -8,6 +8,7 @@ import { readStdin } from '../../../lib/stdin.js';
 import { attachIfNonImage, type FileAttachResult, uploadAndClassify } from '../../../lib/upload.js';
 import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 import {
+  projectRequiredError,
   resolveAssignee,
   resolveCycle,
   resolveDefaultProjectId,
@@ -64,26 +65,25 @@ async function resolveAndCreate(
   if (opts.dueDate !== undefined) input.dueDate = opts.dueDate;
 
   // Resolve project first — milestone depends on projectId. --project is
-  // optional for issue creation; when omitted, no project is set (no default
-  // project fallback — see resolveDefaultProjectId()).
+  // required for issue creation (no default project fallback — see
+  // resolveDefaultProjectId()).
   let explicitProjectId: string | undefined;
   if (opts.project !== undefined) {
     const r = await resolveProject(opts.project, client);
     if (r.isErr()) throw r.error;
     explicitProjectId = r.value;
   }
-  const projectId = resolveDefaultProjectId(explicitProjectId);
-  if (projectId !== undefined) input.projectId = projectId;
-
-  // Milestone validation must precede the parallel batch
-  if (opts.milestone !== undefined && !input.projectId) {
-    throw new ValidationError('--milestone requires --project to be specified');
+  const resolvedProjectId = resolveDefaultProjectId(explicitProjectId);
+  if (resolvedProjectId === undefined) {
+    throw projectRequiredError('issue create');
   }
+  const projectId = resolvedProjectId;
+  input.projectId = projectId;
 
   const [milestoneResult, assigneeResult, labelsResult, stateResult, cycleResult] =
     await Promise.all([
       opts.milestone !== undefined
-        ? resolveMilestone(opts.milestone, input.projectId as string, client)
+        ? resolveMilestone(opts.milestone, projectId, client)
         : Promise.resolve(null),
       opts.assignee !== undefined ? resolveAssignee(opts.assignee, client) : Promise.resolve(null),
       opts.labels !== undefined && opts.labels.length > 0
