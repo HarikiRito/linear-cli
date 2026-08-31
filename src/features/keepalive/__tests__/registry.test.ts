@@ -184,4 +184,35 @@ describe('project registry (linkage only)', () => {
     expect(entry?.team).toEqual({ id: 'team-1', key: 'T1' });
     expect(entry?.workspace).toBe('ws-1');
   });
+
+  it('updateEntry round-trips a project selection', async () => {
+    await linkProject(projA, 'ws-1');
+    const result = await updateEntry(projA, {
+      projects: [
+        { id: 'p1', name: 'Roadmap' },
+        { id: 'p2', name: 'Infra' },
+      ],
+    });
+    expect(result.isOk()).toBe(true);
+
+    const entry = getEntry(projA);
+    expect(entry?.projects).toEqual([
+      { id: 'p1', name: 'Roadmap' },
+      { id: 'p2', name: 'Infra' },
+    ]);
+
+    const registry = JSON.parse(fs.readFileSync(getRegistryPath(), 'utf-8')) as {
+      projects: Array<{ root: string; projects?: { id: string; name: string }[] }>;
+    };
+    expect(registry.projects[0].projects).toEqual([
+      { id: 'p1', name: 'Roadmap' },
+      { id: 'p2', name: 'Infra' },
+    ]);
+  });
+
+  it('old entries without a projects field remain valid (backward compatible)', async () => {
+    await linkProject(projA, 'ws-1');
+    const entry = getEntry(projA);
+    expect(entry?.projects).toBeUndefined();
+  });
 });

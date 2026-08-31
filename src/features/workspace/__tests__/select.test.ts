@@ -30,6 +30,7 @@ vi.mock('../../auth/team-select.js', () => ({
   selectDefaultTeam: vi.fn().mockResolvedValue({ id: 'team-1', key: 'ENG' }),
   selectDefaultProjects: vi.fn().mockResolvedValue(undefined),
   mergeGlobalConfig: vi.fn(),
+  persistLinkedProjects: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../keepalive/registry.js', () => ({
@@ -43,6 +44,7 @@ import { listWorkspaceCredentials, writeWorkspaceCredential } from '../../auth/c
 import { authenticateWorkspace } from '../../auth/login.js';
 import {
   mergeGlobalConfig,
+  persistLinkedProjects,
   selectDefaultProjects,
   selectDefaultTeam,
 } from '../../auth/team-select.js';
@@ -59,6 +61,7 @@ const mockSelectDefaultProjects = vi.mocked(selectDefaultProjects);
 const mockMergeGlobalConfig = vi.mocked(mergeGlobalConfig);
 const mockGetEntry = vi.mocked(getEntry);
 const mockLinkProject = vi.mocked(linkProject);
+const mockPersistLinkedProjects = vi.mocked(persistLinkedProjects);
 const MockLinearClient = vi.mocked(LinearClient);
 
 describe('runWorkspaceSelect', () => {
@@ -110,6 +113,9 @@ describe('runWorkspaceSelect', () => {
     expect(mockMergeGlobalConfig).toHaveBeenCalledWith({
       projects: [{ id: 'proj-1', name: 'Roadmap' }],
     });
+    expect(mockPersistLinkedProjects).toHaveBeenCalledWith(expect.any(String), [
+      { id: 'proj-1', name: 'Roadmap' },
+    ]);
   });
 
   it('2+ projects prompts (via selectDefaultProjects) and persists the picks', async () => {
@@ -129,9 +135,13 @@ describe('runWorkspaceSelect', () => {
         { id: 'proj-2', name: 'Infra' },
       ],
     });
+    expect(mockPersistLinkedProjects).toHaveBeenCalledWith(expect.any(String), [
+      { id: 'proj-1', name: 'Roadmap' },
+      { id: 'proj-2', name: 'Infra' },
+    ]);
   });
 
-  it('does not persist when no projects are selected', async () => {
+  it('does not merge the global config default when no projects are selected, but still persists (clears) the registry scope', async () => {
     mockListWorkspaceCredentials.mockResolvedValue({ 'ws-1': { apiKey: 'key' } });
     mockSelect.mockResolvedValue('ws-1');
     mockSelectDefaultProjects.mockResolvedValue(undefined);
@@ -139,6 +149,7 @@ describe('runWorkspaceSelect', () => {
     await runWorkspaceSelect();
 
     expect(mockMergeGlobalConfig).not.toHaveBeenCalled();
+    expect(mockPersistLinkedProjects).toHaveBeenCalledWith(expect.any(String), undefined);
   });
 
   it('marks a workspace invalid when the org ping fails', async () => {

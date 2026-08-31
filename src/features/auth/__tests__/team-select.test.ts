@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useTmpProjectAndHome } from '../../../../tests/helpers/tmp-env.js';
 
 // Mock before importing the module under test.
 vi.mock('@clack/prompts', () => ({
@@ -8,7 +9,8 @@ vi.mock('@clack/prompts', () => ({
 }));
 
 import { isCancel, multiselect, select } from '@clack/prompts';
-import { selectDefaultProjects, selectDefaultTeam } from '../team-select.js';
+import { getEntry, linkProject } from '../../keepalive/registry.js';
+import { persistLinkedProjects, selectDefaultProjects, selectDefaultTeam } from '../team-select.js';
 
 const mockSelect = vi.mocked(select);
 const mockMultiselect = vi.mocked(multiselect);
@@ -167,5 +169,41 @@ describe('selectDefaultProjects', () => {
     const client = mockClient([ENGINEERING], [WEBSITE, MOBILE]);
 
     expect(await selectDefaultProjects(client, 'team-1')).toBeUndefined();
+  });
+});
+
+describe('persistLinkedProjects', () => {
+  const tmpEnv = useTmpProjectAndHome({
+    projectPrefix: 'linear-persist-linked-projects-',
+    homePrefix: 'linear-persist-linked-projects-home-',
+  });
+
+  it('writes a non-empty selection onto the linked registry entry', async () => {
+    await linkProject(tmpEnv.projectDir, 'ws-1');
+
+    await persistLinkedProjects(tmpEnv.projectDir, [
+      { id: 'proj-1', name: 'Website' },
+      { id: 'proj-2', name: 'Mobile' },
+    ]);
+
+    expect(getEntry(tmpEnv.projectDir)?.projects).toEqual([
+      { id: 'proj-1', name: 'Website' },
+      { id: 'proj-2', name: 'Mobile' },
+    ]);
+  });
+
+  it('an undefined selection clears a previously scoped one', async () => {
+    await linkProject(tmpEnv.projectDir, 'ws-1');
+    await persistLinkedProjects(tmpEnv.projectDir, [{ id: 'proj-1', name: 'Website' }]);
+    expect(getEntry(tmpEnv.projectDir)?.projects).toEqual([{ id: 'proj-1', name: 'Website' }]);
+
+    await persistLinkedProjects(tmpEnv.projectDir, undefined);
+
+    expect(getEntry(tmpEnv.projectDir)?.projects).toEqual([]);
+  });
+
+  it('is a no-op when the directory is not a linked registry entry', async () => {
+    await persistLinkedProjects(tmpEnv.projectDir, [{ id: 'proj-1', name: 'X' }]);
+    expect(getEntry(tmpEnv.projectDir)).toBeUndefined();
   });
 });

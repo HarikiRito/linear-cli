@@ -12,3 +12,13 @@ export const PROJECT_MILESTONES_QUERY = graphql(`
     }
   }
 `);
+
+export const ISSUE_PROJECT_SCOPE_QUERY = graphql(`
+  query IssueProjectScope($id: String!) {
+    issue(id: $id) {
+      project {
+        id
+      }
+    }
+  }
+`);
