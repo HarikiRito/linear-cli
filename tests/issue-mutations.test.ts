@@ -208,7 +208,7 @@ describe('issues create', () => {
     );
   });
 
-  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+  it('missing --project but a default project is configured: no fallback, creates without a project', async () => {
     const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
     const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'eng' }] });
     const clientMock = makeClientMock({ createIssue: createIssueFn, teams: teamsFn });
@@ -231,7 +231,9 @@ describe('issues create', () => {
       'eng',
     ]);
 
-    expect(createIssueFn).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1' }));
+    expect(createIssueFn).toHaveBeenCalledWith(
+      expect.not.objectContaining({ projectId: expect.anything() })
+    );
   });
 
   it('explicit --project bypasses the config fallback entirely', async () => {

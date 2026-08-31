@@ -65,10 +65,7 @@ export function registerMilestones(program: Command): void {
   const createCmd = milestones
     .command('create')
     .description('Create a new project milestone')
-    .option(
-      '--project <id-or-name>',
-      'Project ID or name (required, unless a default project is configured — see login)'
-    )
+    .option('--project <id-or-name>', 'Project ID or name (required)')
     .requiredOption('--name <name>', 'Milestone name (required)')
     .option('--target-date <YYYY-MM-DD>', 'Target date for the milestone')
     .option('--description <text>', 'Milestone description');

@@ -70,12 +70,66 @@ describe('workspace project scoping', () => {
       await updateEntry(tmpEnv.projectDir, { projects: [{ id: 'p1', name: 'Scoped' }] });
       process.cwd = () => tmpEnv.projectDir;
 
-      const { resolveDefaultProjectId, getDefaultProjectIds } = await import('../resolve.js');
-      const getDefaultProjectIdsSpy = vi.fn(getDefaultProjectIds);
-      expect(resolveDefaultProjectId('out-of-scope-project', getDefaultProjectIdsSpy)).toBe(
-        'out-of-scope-project'
+      const { resolveDefaultProjectId } = await import('../resolve.js');
+      expect(resolveDefaultProjectId('out-of-scope-project')).toBe('out-of-scope-project');
+    });
+  });
+
+  describe('resolveDefaultProjectId / projectRequiredError — no first-scoped fallback', () => {
+    it('no explicit --project: returns undefined even with a single scoped project', async () => {
+      await linkProject(tmpEnv.projectDir, 'ws-1');
+      await updateEntry(tmpEnv.projectDir, { projects: [{ id: 'p1', name: 'Scoped' }] });
+      process.cwd = () => tmpEnv.projectDir;
+
+      const { resolveDefaultProjectId } = await import('../resolve.js');
+      expect(resolveDefaultProjectId(undefined)).toBeUndefined();
+    });
+
+    it('no explicit --project: returns undefined with multiple scoped projects', async () => {
+      await linkProject(tmpEnv.projectDir, 'ws-1');
+      await updateEntry(tmpEnv.projectDir, {
+        projects: [
+          { id: 'p1', name: 'Scoped' },
+          { id: 'p2', name: 'Scoped 2' },
+        ],
+      });
+      process.cwd = () => tmpEnv.projectDir;
+
+      const { resolveDefaultProjectId } = await import('../resolve.js');
+      expect(resolveDefaultProjectId(undefined)).toBeUndefined();
+    });
+
+    it('no explicit --project and no scope: returns undefined even with a global config default', async () => {
+      writeGlobalConfig('[[projects]]\nid = "g1"\nname = "Global"\n');
+      process.cwd = () => tmpEnv.projectDir;
+
+      const { resolveDefaultProjectId } = await import('../resolve.js');
+      expect(resolveDefaultProjectId(undefined)).toBeUndefined();
+    });
+
+    it('projectRequiredError includes scoped project names as a hint when scope is active', async () => {
+      await linkProject(tmpEnv.projectDir, 'ws-1');
+      await updateEntry(tmpEnv.projectDir, {
+        projects: [
+          { id: 'p1', name: 'Alpha' },
+          { id: 'p2', name: 'Beta' },
+        ],
+      });
+      process.cwd = () => tmpEnv.projectDir;
+
+      const { projectRequiredError } = await import('../resolve.js');
+      const error = projectRequiredError('milestones create');
+      expect(error.message).toBe(
+        '--project is required for milestones create. Scoped projects: Alpha, Beta — pass --project <name-or-id>'
       );
-      expect(getDefaultProjectIdsSpy).not.toHaveBeenCalled();
+    });
+
+    it('projectRequiredError has no hint when no scope is active', async () => {
+      process.cwd = () => tmpEnv.projectDir;
+
+      const { projectRequiredError } = await import('../resolve.js');
+      const error = projectRequiredError('milestones create');
+      expect(error.message).toBe('--project is required for milestones create');
     });
   });
 

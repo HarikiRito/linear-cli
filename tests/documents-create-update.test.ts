@@ -143,7 +143,7 @@ describe('documents create', () => {
     expect(callArg).not.toHaveProperty('projectId');
   });
 
-  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+  it('missing --project but a default project is configured: no fallback, creates without a project', async () => {
     const createDocumentFn = vi.fn().mockResolvedValue(makeDocumentPayloadMock());
     const clientMock = makeClientMock({ createDocument: createDocumentFn });
     stdMocks(clientMock);
@@ -157,7 +157,7 @@ describe('documents create', () => {
     await program.parseAsync(['node', 'linear', 'documents', 'create', '--title', 'Doc']);
 
     expect(createDocumentFn).toHaveBeenCalledWith(
-      expect.objectContaining({ projectId: PROJ_UUID })
+      expect.not.objectContaining({ projectId: expect.anything() })
     );
   });
 
