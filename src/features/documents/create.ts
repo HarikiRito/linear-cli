@@ -5,11 +5,7 @@ import { getClientWithAuthRetry } from '../../lib/client/index.js';
 import { coerceCliError } from '../../lib/errors.js';
 import { exitError } from '../../lib/runner.js';
 import { readStdin } from '../../lib/stdin.js';
-import {
-  getDefaultProjectIds,
-  resolveDefaultProjectId,
-  resolveProject,
-} from '../issues/shared/resolve.js';
+import { resolveDefaultProjectId, resolveProject } from '../issues/shared/resolve.js';
 import { type DocumentResult, normalizeUpdatedAt, renderDocumentResult } from './shared.js';
 
 export interface CreateDocumentOptions {
@@ -29,16 +25,16 @@ async function doCreate(
 ): Promise<DocumentResult> {
   const input: Record<string, unknown> = { title: opts.title };
 
-  // Explicit --project always wins; when omitted, fall back to the first
-  // configured default project (deterministic, no prompt) — see
-  // resolveDefaultProjectId().
+  // --project is optional for documents; when omitted, the document is
+  // created with no project (no default project fallback — see
+  // resolveDefaultProjectId()).
   let explicitProjectId: string | undefined;
   if (opts.project !== undefined) {
     const projectResult = await resolveProject(opts.project, client);
     if (projectResult.isErr()) throw projectResult.error;
     explicitProjectId = projectResult.value;
   }
-  const projectId = resolveDefaultProjectId(explicitProjectId, getDefaultProjectIds);
+  const projectId = resolveDefaultProjectId(explicitProjectId);
   if (projectId !== undefined) input.projectId = projectId;
 
   if (content !== undefined) input.content = content;

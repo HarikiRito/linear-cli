@@ -231,34 +231,43 @@ export function getDefaultProjectIds(): string[] | undefined {
 }
 
 /**
- * Error message shown when a command requires a project (--project or a
- * configured default) but neither is available. Shared by all commands that
- * treat a resolved default project as mandatory rather than optional.
+ * Error message shown when a command requires a project (--project) but
+ * none is available. Shared by read-path commands that still span all
+ * configured default project ids (see buildDefaultProjectFilter) — mutation
+ * / single-project commands should use projectRequiredError() instead, since
+ * they no longer default to a project at all (see resolveDefaultProjectId).
  */
 export const DEFAULT_PROJECT_REQUIRED_ERROR =
   '--project is required (no default project configured)';
 
 /**
+ * Error for commands that require a single --project and got neither an
+ * explicit value nor (since defaulting was removed) a configured default.
+ * Appends the cwd-linked scope's project names as a hint when one is active,
+ * since silently picking one of several scoped projects is exactly what
+ * resolveDefaultProjectId() no longer does.
+ */
+export function projectRequiredError(command: string): ValidationError {
+  const { linkedProjects } = readMergedConfigs();
+  if (linkedProjects && linkedProjects.length > 0) {
+    const names = linkedProjects.map((p) => p.name).join(', ');
+    return new ValidationError(
+      `--project is required for ${command}. Scoped projects: ${names} — pass --project <name-or-id>`
+    );
+  }
+  return new ValidationError(`--project is required for ${command}`);
+}
+
+/**
  * Resolve the effective single project ID for commands that accept a single
  * --project flag: the already-resolved explicit value when the caller
- * provided one, otherwise the first entry of the caller-supplied default
- * project ID list, otherwise undefined when neither is available.
- *
- * Takes `getDefaultIds` as a lazy accessor (rather than calling
- * getDefaultProjectIds() itself) for two reasons: (1) it must NOT be invoked
- * at all when an explicit project was given — callers/tests assert
- * getDefaultProjectIds() is skipped in that case — and (2) passing the
- * caller's own imported function reference (instead of this module reaching
- * for its own internal binding) keeps this helper correctly mockable via the
- * same `getDefaultProjectIds` export callers already use.
+ * provided one, otherwise undefined. No longer falls back to a configured
+ * default (scoped or global config) — silently picking one of several
+ * scoped projects for a mutation risked writing to the wrong one, so callers
+ * must now require --project explicitly (see projectRequiredError).
  */
-export function resolveDefaultProjectId(
-  explicitProjectId: string | undefined,
-  getDefaultIds: () => string[] | undefined
-): string | undefined {
-  if (explicitProjectId !== undefined) return explicitProjectId;
-  const defaultProjectIds = getDefaultIds();
-  return defaultProjectIds && defaultProjectIds.length > 0 ? defaultProjectIds[0] : undefined;
+export function resolveDefaultProjectId(explicitProjectId: string | undefined): string | undefined {
+  return explicitProjectId;
 }
 
 export function resolveProject(input: string, client: LinearClient): ResultAsync<string, CliError> {

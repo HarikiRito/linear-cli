@@ -8,7 +8,6 @@ import { readStdin } from '../../../lib/stdin.js';
 import { attachIfNonImage, type FileAttachResult, uploadAndClassify } from '../../../lib/upload.js';
 import { type IssueResult, renderIssue } from '../shared/renderIssue.js';
 import {
-  getDefaultProjectIds,
   resolveAssignee,
   resolveCycle,
   resolveDefaultProjectId,
@@ -64,16 +63,16 @@ async function resolveAndCreate(
   if (opts.parent !== undefined) input.parentId = opts.parent;
   if (opts.dueDate !== undefined) input.dueDate = opts.dueDate;
 
-  // Resolve project first — milestone depends on projectId. Explicit --project
-  // always wins; when omitted, fall back to the first configured default
-  // project (deterministic, no prompt) — see resolveDefaultProjectId().
+  // Resolve project first — milestone depends on projectId. --project is
+  // optional for issue creation; when omitted, no project is set (no default
+  // project fallback — see resolveDefaultProjectId()).
   let explicitProjectId: string | undefined;
   if (opts.project !== undefined) {
     const r = await resolveProject(opts.project, client);
     if (r.isErr()) throw r.error;
     explicitProjectId = r.value;
   }
-  const projectId = resolveDefaultProjectId(explicitProjectId, getDefaultProjectIds);
+  const projectId = resolveDefaultProjectId(explicitProjectId);
   if (projectId !== undefined) input.projectId = projectId;
 
   // Milestone validation must precede the parallel batch

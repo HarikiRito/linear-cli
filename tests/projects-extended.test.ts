@@ -139,10 +139,12 @@ describe('projects labels', () => {
     expect(requestFn).not.toHaveBeenCalled();
   });
 
-  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+  it('missing --project but a default project is configured: no fallback, calls exitError', async () => {
     const labelNodes = [{ id: 'label-1', name: 'bug', color: '#ff0000', parent: null }];
     const requestFn = vi.fn().mockResolvedValue(makeProjectLabelsResponse(labelNodes));
+    const exitErrorMock = vi.fn();
     stdMocks(requestFn);
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
     vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
       const actual =
         await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
@@ -152,9 +154,9 @@ describe('projects labels', () => {
 
     await program.parseAsync(['node', 'linear', 'projects', 'labels']);
 
-    expect(requestFn).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ id: PROJ_UUID })
-    );
+    expect(requestFn).not.toHaveBeenCalled();
+    expect(exitErrorMock).toHaveBeenCalled();
+    const errArg = exitErrorMock.mock.calls[0][0] as Error;
+    expect(errArg.message).toBe('--project is required for project labels');
   });
 });

@@ -273,10 +273,12 @@ describe('milestones create', () => {
     expect(exitErrorMock).toHaveBeenCalled();
   });
 
-  it('missing --project but a default project is configured uses first-in-array fallback', async () => {
+  it('missing --project but a default project is configured: no fallback, calls exitError', async () => {
     const createFn = vi.fn().mockResolvedValue(makeMilestonePayload());
     const clientMock = makeClientMock({ createProjectMilestone: createFn });
+    const exitErrorMock = vi.fn();
     stdMocksWithClient(clientMock);
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: exitErrorMock }));
     vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
       const actual =
         await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
@@ -286,7 +288,10 @@ describe('milestones create', () => {
 
     await program.parseAsync(['node', 'linear', 'milestones', 'create', '--name', 'M1']);
 
-    expect(createFn).toHaveBeenCalledWith(expect.objectContaining({ projectId: PROJ_ID }));
+    expect(createFn).not.toHaveBeenCalled();
+    expect(exitErrorMock).toHaveBeenCalled();
+    const errArg = exitErrorMock.mock.calls[0][0] as Error;
+    expect(errArg.message).toBe('--project is required for milestones create');
   });
 
   it('missing --name causes Commander error', async () => {

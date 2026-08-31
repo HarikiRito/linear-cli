@@ -1,6 +1,6 @@
 import { ResultAsync } from 'neverthrow';
 import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
-import { coerceCliError, NotFoundError, ValidationError } from '../../../lib/errors.js';
+import { coerceCliError, NotFoundError } from '../../../lib/errors.js';
 import {
   type ColumnConfig,
   normalizePageInfo,
@@ -10,8 +10,7 @@ import {
 } from '../../../lib/pagination.js';
 import { exitError } from '../../../lib/runner.js';
 import {
-  DEFAULT_PROJECT_REQUIRED_ERROR,
-  getDefaultProjectIds,
+  projectRequiredError,
   resolveDefaultProjectId,
   resolveProject,
 } from '../../issues/shared/resolve.js';
@@ -61,9 +60,8 @@ export async function listProjectLabels(opts: ListProjectLabelsOptions): Promise
   }
   const client = clientResult.value;
 
-  // Explicit --project always wins (id or name, via resolveProject). When
-  // omitted, fall back to the first configured default project (deterministic,
-  // no prompt) — only error when neither is available.
+  // --project is required (id or name, via resolveProject) — no default
+  // project fallback is applied (see resolveDefaultProjectId()).
   let explicitProjectId: string | undefined;
   if (opts.project !== undefined) {
     const resolvedResult = await resolveProject(opts.project, client);
@@ -73,9 +71,9 @@ export async function listProjectLabels(opts: ListProjectLabelsOptions): Promise
     }
     explicitProjectId = resolvedResult.value;
   }
-  const resolvedProjectId = resolveDefaultProjectId(explicitProjectId, getDefaultProjectIds);
+  const resolvedProjectId = resolveDefaultProjectId(explicitProjectId);
   if (resolvedProjectId === undefined) {
-    exitError(new ValidationError(DEFAULT_PROJECT_REQUIRED_ERROR));
+    exitError(projectRequiredError('project labels'));
     return;
   }
   const projectId = resolvedProjectId;
