@@ -4,14 +4,19 @@ import { Result, ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
 import { notifyUpdate } from '../../lib/check-version.js';
 import { buildLinearClient } from '../../lib/client/index.js';
-import type { DefaultTeam } from '../../lib/config-file.js';
+import type { DefaultProject, DefaultTeam } from '../../lib/config-file.js';
 import { toError } from '../../lib/errors.js';
 import { linkProject } from '../keepalive/registry.js';
 import { isKeepaliveInstalled } from '../keepalive/scheduler/index.js';
 import { writeWorkspaceCredential } from './credentials.js';
 import { startOAuthFlow } from './oauth.js';
 import { isOAuthSession, type Session } from './session.js';
-import { mergeGlobalConfig, selectDefaultProjects, selectDefaultTeam } from './team-select.js';
+import {
+  mergeGlobalConfig,
+  persistLinkedProjects,
+  selectDefaultProjects,
+  selectDefaultTeam,
+} from './team-select.js';
 
 export interface AuthenticatedWorkspace {
   workspaceId: string;
@@ -119,9 +124,11 @@ export async function runLoginFlow(): Promise<void> {
 
   // Team + default-project pickers are interactive — only run on a TTY.
   let team: DefaultTeam | undefined;
-  if (process.stdout.isTTY && process.stdin.isTTY) {
+  let projects: DefaultProject[] | undefined;
+  const interactive = process.stdout.isTTY && process.stdin.isTTY;
+  if (interactive) {
     team = await selectDefaultTeam(client);
-    const projects = team ? await selectDefaultProjects(client, team.id) : undefined;
+    projects = team ? await selectDefaultProjects(client, team.id) : undefined;
     if (projects && projects.length > 0) {
       mergeGlobalConfig({ projects });
     }
@@ -132,6 +139,13 @@ export async function runLoginFlow(): Promise<void> {
   const linkResult = await ResultAsync.fromPromise(linkProject(cwd, workspaceId, team), toError);
   if (linkResult.isErr()) {
     console.error(pc.yellow(`Warning: could not link this directory: ${linkResult.error.message}`));
+  }
+
+  // Only persist project scope when the interactive picker actually ran and
+  // resolved a team — a non-interactive login must never silently clear an
+  // existing scope, and there's no picked selection without a team.
+  if (interactive && team) {
+    await persistLinkedProjects(cwd, projects);
   }
 
   console.log(pc.green(`Linked this directory to workspace ${name}.`));

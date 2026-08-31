@@ -9,6 +9,7 @@ import { authenticateWorkspace } from '../auth/login.js';
 import { isApiKeySession, type Session } from '../auth/session.js';
 import {
   mergeGlobalConfig,
+  persistLinkedProjects,
   selectDefaultProjects,
   selectDefaultTeam,
 } from '../auth/team-select.js';
@@ -121,5 +122,7 @@ export async function runWorkspaceSelect(): Promise<void> {
     mergeGlobalConfig({ projects });
   }
   await linkProject(cwd, workspaceId, team);
+  // Always persist — an empty/undefined selection clears a previously scoped one.
+  await persistLinkedProjects(cwd, projects);
   outro(pc.green(`Linked ${cwd} → ${name}${team ? ` (${team.key})` : ''}`));
 }

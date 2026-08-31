@@ -185,6 +185,25 @@ export function mergeGlobalConfig(merge: {
   }
 }
 
+/**
+ * Persist a project selection onto the cwd-linked registry entry —
+ * unconditionally, including an empty/undefined selection, so a previously
+ * scoped selection can be narrowed or cleared entirely by re-running the
+ * picker and choosing nothing. No-op if `root` isn't a linked entry (see
+ * updateEntry). Distinct from mergeGlobalConfig's `projects` handling, which
+ * deliberately never clears an existing global default on an empty pick —
+ * the registry scope and the global default are independent settings.
+ */
+export async function persistLinkedProjects(
+  root: string,
+  projects: DefaultProject[] | undefined
+): Promise<void> {
+  const result = await updateEntry(root, { projects: projects ?? [] });
+  if (result.isErr()) {
+    console.error(pc.yellow(`Warning: could not update registry entry: ${result.error.message}`));
+  }
+}
+
 export async function selectAndPersistTeamAndProjects(
   client: LinearClient,
   target: TeamPersistTarget

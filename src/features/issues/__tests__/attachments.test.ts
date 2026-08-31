@@ -1,6 +1,17 @@
 import { ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+/** node:fs mocks below stub writeFileSync only — readFileSync must still report "no config file" for the unrelated project-scope config read inside resolveIssueIdentifier. */
+function enoentReadFileSync(): never {
+  throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+}
+
+/** config-file.ts uses `import fs from 'node:fs'` (default import) — the mock needs a `default` key too. */
+function fsMock(overrides: Record<string, unknown>): Record<string, unknown> {
+  const mod = { readFileSync: enoentReadFileSync, ...overrides };
+  return { ...mod, default: mod };
+}
+
 function makeAttachmentsResponse(nodes: { id: string; title: string; url: string }[]) {
   return {
     issue: {
@@ -141,7 +152,7 @@ describe('downloadAttachment', () => {
       resolveCredential: vi.fn().mockReturnValue(ok({ type: 'apiKey', value: 'lin_api_key' })),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
-    vi.doMock('node:fs', () => ({ writeFileSync: writeFileSyncFn }));
+    vi.doMock('node:fs', () => fsMock({ writeFileSync: writeFileSyncFn }));
 
     const { downloadAttachment } = await import('../attachments/download.js');
     await downloadAttachment({ issue: 'ENG-1', attachmentId: 'att-1' });
@@ -173,7 +184,7 @@ describe('downloadAttachment', () => {
       resolveCredential: vi.fn().mockReturnValue(ok({ type: 'accessToken', value: 'oauth-token' })),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
-    vi.doMock('node:fs', () => ({ writeFileSync: vi.fn() }));
+    vi.doMock('node:fs', () => fsMock({ writeFileSync: vi.fn() }));
 
     const { downloadAttachment } = await import('../attachments/download.js');
     await downloadAttachment({ issue: 'ENG-1', attachmentId: 'att-1', output: '/tmp/notes.txt' });
@@ -209,7 +220,7 @@ describe('downloadAttachment', () => {
       resolveCredential: vi.fn().mockReturnValue(ok({ type: 'apiKey', value: 'lin_api_key' })),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
-    vi.doMock('node:fs', () => ({ writeFileSync: writeFileSyncFn }));
+    vi.doMock('node:fs', () => fsMock({ writeFileSync: writeFileSyncFn }));
 
     const { downloadAttachment } = await import('../attachments/download.js');
     // lowercase input; resolveIssueIdentifier passes non-numeric input through unchanged
@@ -245,7 +256,7 @@ describe('downloadAttachment', () => {
       resolveCredential: vi.fn().mockReturnValue(ok({ type: 'apiKey', value: 'lin_api_key' })),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
-    vi.doMock('node:fs', () => ({ writeFileSync: writeFileSyncFn }));
+    vi.doMock('node:fs', () => fsMock({ writeFileSync: writeFileSyncFn }));
 
     const { downloadAttachment } = await import('../attachments/download.js');
     await downloadAttachment({ issue: issueUuid, attachmentId: attachment.id });
@@ -268,7 +279,7 @@ describe('downloadAttachment', () => {
       resolveCredential: vi.fn().mockReturnValue(ok({ type: 'apiKey', value: 'lin_api_key' })),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: exitErrorFn }));
-    vi.doMock('node:fs', () => ({ writeFileSync: vi.fn() }));
+    vi.doMock('node:fs', () => fsMock({ writeFileSync: vi.fn() }));
 
     const { downloadAttachment } = await import('../attachments/download.js');
     await downloadAttachment({ issue: 'ENG-1', attachmentId: 'does-not-exist' });
@@ -296,7 +307,7 @@ describe('downloadAttachment', () => {
       resolveCredential: vi.fn().mockReturnValue(ok({ type: 'apiKey', value: 'lin_api_key' })),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: exitErrorFn }));
-    vi.doMock('node:fs', () => ({ writeFileSync: vi.fn() }));
+    vi.doMock('node:fs', () => fsMock({ writeFileSync: vi.fn() }));
 
     const { downloadAttachment } = await import('../attachments/download.js');
     // attachment.id belongs to a different issue than the one requested — must
@@ -330,7 +341,7 @@ describe('downloadAttachment', () => {
       resolveCredential: vi.fn().mockReturnValue(ok({ type: 'apiKey', value: 'lin_api_key' })),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: exitErrorFn }));
-    vi.doMock('node:fs', () => ({ writeFileSync: writeFileSyncFn }));
+    vi.doMock('node:fs', () => fsMock({ writeFileSync: writeFileSyncFn }));
 
     const { downloadAttachment } = await import('../attachments/download.js');
     await downloadAttachment({ issue: 'ENG-1', attachmentId: 'att-1' });

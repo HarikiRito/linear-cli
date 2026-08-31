@@ -2,6 +2,17 @@ import { ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { extractTrustedAssetUrls } from '../assets/download.js';
 
+/** node:fs mocks below stub writeFileSync/mkdirSync only — readFileSync must still report "no config file" for the unrelated project-scope config read inside resolveIssueIdentifier. */
+function enoentReadFileSync(): never {
+  throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+}
+
+/** config-file.ts uses `import fs from 'node:fs'` (default import) — the mock needs a `default` key too. */
+function fsMock(overrides: Record<string, unknown>): Record<string, unknown> {
+  const mod = { readFileSync: enoentReadFileSync, ...overrides };
+  return { ...mod, default: mod };
+}
+
 function makeIssueAssetsResponse(description: string | null, commentBodies: string[]) {
   return {
     issue: {
@@ -77,7 +88,7 @@ describe('downloadIssueAssets', () => {
       resolveCredential: vi.fn().mockReturnValue(ok({ type: 'apiKey', value: 'lin_api_key' })),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
-    vi.doMock('node:fs', () => ({ writeFileSync: writeFileSyncFn, mkdirSync: mkdirSyncFn }));
+    vi.doMock('node:fs', () => fsMock({ writeFileSync: writeFileSyncFn, mkdirSync: mkdirSyncFn }));
 
     const { downloadIssueAssets } = await import('../assets/download.js');
     await downloadIssueAssets({ issue: 'ENG-1' });
@@ -122,7 +133,7 @@ describe('downloadIssueAssets', () => {
       resolveCredential: vi.fn().mockReturnValue(ok({ type: 'apiKey', value: 'lin_api_key' })),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
-    vi.doMock('node:fs', () => ({ writeFileSync: writeFileSyncFn, mkdirSync: mkdirSyncFn }));
+    vi.doMock('node:fs', () => fsMock({ writeFileSync: writeFileSyncFn, mkdirSync: mkdirSyncFn }));
 
     const { downloadIssueAssets } = await import('../assets/download.js');
     await downloadIssueAssets({ issue: 'ENG-1', outputDir: 'out' });
@@ -146,7 +157,7 @@ describe('downloadIssueAssets', () => {
       resolveCredential: vi.fn().mockReturnValue(ok({ type: 'apiKey', value: 'lin_api_key' })),
     }));
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
-    vi.doMock('node:fs', () => ({ writeFileSync: vi.fn(), mkdirSync: vi.fn() }));
+    vi.doMock('node:fs', () => fsMock({ writeFileSync: vi.fn(), mkdirSync: vi.fn() }));
 
     const { downloadIssueAssets } = await import('../assets/download.js');
     await downloadIssueAssets({ issue: 'ENG-1' });

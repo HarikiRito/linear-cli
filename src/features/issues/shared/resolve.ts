@@ -17,7 +17,7 @@ import {
 } from '../../../lib/errors.js';
 import { findProjectRoot } from '../../../lib/scope.js';
 import { getEntry } from '../../keepalive/registry.js';
-import { PROJECT_MILESTONES_QUERY } from './queries.js';
+import { ISSUE_PROJECT_SCOPE_QUERY, PROJECT_MILESTONES_QUERY } from './queries.js';
 
 /**
  * Returns true if the input looks like a Linear UUID or node ID,
@@ -122,6 +122,8 @@ type ScalarConfigKey = 'workspace';
 interface MergedConfigs {
   /** Team bound to the cwd-linked directory (registry entry), if any. */
   linkedTeam: DefaultTeam | null;
+  /** Project selection bound to the cwd-linked directory (registry entry), if any. */
+  linkedProjects: { id: string; name: string }[] | null;
   globalConfig: LinearConfig;
 }
 
@@ -146,6 +148,7 @@ function readMergedConfigs(): MergedConfigs {
 
   const configs: MergedConfigs = {
     linkedTeam: entry?.team ?? null,
+    linkedProjects: entry?.projects ?? null,
     globalConfig: readConfig(globalConfigPath),
   };
   mergedConfigsCache.set(cacheKey, configs);
@@ -196,14 +199,30 @@ export function getDefaultWorkspace(): string | null {
 }
 
 /**
- * Resolve default project IDs (no env var, no API lookup): global config
- * `projects` → undefined. An empty array is treated as unset (falls through
- * to undefined) rather than as an explicit empty selection. `projects`
- * entries are `{id, name}` tables — only the bare `id` is extracted here so
- * this keeps returning the same `string[] | undefined` shape callers relied
- * on before `project_ids` became a structured array of tables.
+ * Resolve the cwd-linked directory's hard project scope (no env var, no API
+ * lookup): registry entry `projects` → undefined. An empty/missing selection
+ * is treated as "no scope" (unlinked dirs and links without a project
+ * selection both fall through to undefined) — existing behavior is
+ * unchanged for those. When non-undefined, callers must treat it as a hard
+ * scope, not just a default (see getDefaultProjectIds and resolveIssueIdentifier).
+ */
+export function getScopedProjectIds(): string[] | undefined {
+  const { linkedProjects } = readMergedConfigs();
+  return linkedProjects && linkedProjects.length > 0 ? linkedProjects.map((p) => p.id) : undefined;
+}
+
+/**
+ * Resolve default project IDs (no env var, no API lookup): cwd-linked
+ * workspace scope → global config `projects` → undefined. An empty array is
+ * treated as unset (falls through) rather than as an explicit empty
+ * selection. `projects` entries are `{id, name}` tables — only the bare `id`
+ * is extracted here so this keeps returning the same `string[] | undefined`
+ * shape callers relied on before `project_ids` became a structured array of
+ * tables.
  */
 export function getDefaultProjectIds(): string[] | undefined {
+  const scoped = getScopedProjectIds();
+  if (scoped) return scoped;
   const { globalConfig } = readMergedConfigs();
   if (globalConfig.projects && globalConfig.projects.length > 0) {
     return globalConfig.projects.map((p) => p.id);
@@ -351,14 +370,10 @@ export function resolveCycle(
 }
 
 /**
- * Resolve an issue identifier:
- * - Bare number (e.g. "123") → look up default team key and return "TEAM-123"
- * - Full identifier (e.g. "ENG-123") or UUID/node ID → passthrough
+ * Expand a bare issue number (e.g. "123") to "TEAM-123" via the default team
+ * key; a full identifier (e.g. "ENG-123") or UUID/node ID passes through.
  */
-export function resolveIssueIdentifier(
-  input: string,
-  client: LinearClient
-): ResultAsync<string, CliError> {
+function expandIssueIdentifier(input: string, client: LinearClient): ResultAsync<string, CliError> {
   if (/^\d+$/.test(input)) {
     const teamId = getDefaultTeamId();
     if (!teamId) {
@@ -381,6 +396,44 @@ export function resolveIssueIdentifier(
     );
   }
   return okAsync(input);
+}
+
+/**
+ * Verify the resolved issue's project is one of the cwd-linked workspace's
+ * scoped projects, reporting NotFoundError('issue', ...) rather than leaking
+ * that an out-of-scope issue exists — same shape as a genuine miss.
+ */
+function assertIssueInScope(
+  resolvedId: string,
+  scopedProjectIds: string[],
+  client: LinearClient
+): ResultAsync<string, CliError> {
+  const requestFn = getRequestFn(client);
+  return ResultAsync.fromPromise(
+    requestFn(ISSUE_PROJECT_SCOPE_QUERY, { id: resolvedId }).then((data) => {
+      if (!data.issue) throw new NotFoundError('issue', resolvedId);
+      return data.issue.project?.id;
+    }),
+    (e) => mapIssueNotFoundError(e, resolvedId)
+  ).andThen((projectId) => {
+    if (projectId && scopedProjectIds.includes(projectId)) return okAsync(resolvedId);
+    return errAsync(new NotFoundError('issue', resolvedId));
+  });
+}
+
+/**
+ * Resolve an issue identifier, then — when the cwd is linked to a workspace
+ * with a project selection — hard-scope it: an identifier resolving to an
+ * issue outside the scoped projects is reported as not found.
+ */
+export function resolveIssueIdentifier(
+  input: string,
+  client: LinearClient
+): ResultAsync<string, CliError> {
+  const resolved = expandIssueIdentifier(input, client);
+  const scopedProjectIds = getScopedProjectIds();
+  if (!scopedProjectIds) return resolved;
+  return resolved.andThen((id) => assertIssueInScope(id, scopedProjectIds, client));
 }
 
 /**

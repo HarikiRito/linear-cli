@@ -11,6 +11,8 @@ export interface RegisteredProject {
   workspace: string;
   /** Team override for this linked dir. */
   team?: { id: string; key: string };
+  /** Default project selection for this linked dir — hard-scopes commands run from it. */
+  projects?: { id: string; name: string }[];
   addedAt: number;
 }
 

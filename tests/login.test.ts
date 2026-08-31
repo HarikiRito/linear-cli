@@ -42,6 +42,7 @@ vi.mock('../src/features/auth/team-select.js', () => ({
   selectDefaultTeam: vi.fn().mockResolvedValue({ id: 'team-1', key: 'ENG' }),
   selectDefaultProjects: vi.fn().mockResolvedValue(undefined),
   mergeGlobalConfig: vi.fn().mockResolvedValue(undefined),
+  persistLinkedProjects: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../src/lib/check-version.js', () => ({
@@ -55,6 +56,7 @@ import { runLoginFlow } from '../src/features/auth/login.js';
 import { startOAuthFlow } from '../src/features/auth/oauth.js';
 import {
   mergeGlobalConfig,
+  persistLinkedProjects,
   selectDefaultProjects,
   selectDefaultTeam,
 } from '../src/features/auth/team-select.js';
@@ -70,6 +72,7 @@ const mockLinkProject = vi.mocked(linkProject);
 const mockSelectDefaultTeam = vi.mocked(selectDefaultTeam);
 const mockSelectDefaultProjects = vi.mocked(selectDefaultProjects);
 const mockMergeGlobalConfig = vi.mocked(mergeGlobalConfig);
+const mockPersistLinkedProjects = vi.mocked(persistLinkedProjects);
 const MockLinearClient = vi.mocked(LinearClient);
 
 const ORG = { id: 'ws-1', name: 'Acme', urlKey: 'acme' };
@@ -153,7 +156,7 @@ describe('runLoginFlow', () => {
     expect(mockLinkProject).toHaveBeenCalledWith(process.cwd(), 'ws-1', undefined);
   });
 
-  it('TTY: auto-links cwd with the picked team, no confirmation prompt, project pick writes global config', async () => {
+  it('TTY: auto-links cwd with the picked team, no confirmation prompt, project pick writes global config AND the registry scope', async () => {
     setTTY(true);
     mockSelect.mockResolvedValue('apikey');
     mockText.mockResolvedValue('lin_api_good_key');
@@ -173,9 +176,26 @@ describe('runLoginFlow', () => {
       id: 'team-1',
       key: 'ENG',
     });
+    // The same selection also hard-scopes this dir via the registry entry.
+    expect(mockPersistLinkedProjects).toHaveBeenCalledWith(process.cwd(), [
+      { id: 'proj-1', name: 'Mobile' },
+    ]);
   });
 
-  it('TTY: skipped team pick still auto-links cwd without a team', async () => {
+  it('TTY: an empty project selection still persists (clears) the registry scope', async () => {
+    setTTY(true);
+    mockSelect.mockResolvedValue('apikey');
+    mockText.mockResolvedValue('lin_api_good_key');
+    mockSelectDefaultTeam.mockResolvedValue({ id: 'team-1', key: 'ENG' });
+    mockSelectDefaultProjects.mockResolvedValue(undefined);
+
+    await runLoginFlow();
+
+    expect(mockMergeGlobalConfig).not.toHaveBeenCalled();
+    expect(mockPersistLinkedProjects).toHaveBeenCalledWith(process.cwd(), undefined);
+  });
+
+  it('TTY: skipped team pick still auto-links cwd without a team, and never touches registry scope', async () => {
     setTTY(true);
     mockSelect.mockResolvedValue('apikey');
     mockText.mockResolvedValue('lin_api_good_key');
@@ -187,6 +207,16 @@ describe('runLoginFlow', () => {
     expect(mockSelectDefaultProjects).not.toHaveBeenCalled();
     expect(mockMergeGlobalConfig).not.toHaveBeenCalled();
     expect(mockLinkProject).toHaveBeenCalledWith(process.cwd(), 'ws-1', undefined);
+    expect(mockPersistLinkedProjects).not.toHaveBeenCalled();
+  });
+
+  it('non-TTY: never touches the registry project scope', async () => {
+    mockSelect.mockResolvedValue('apikey');
+    mockText.mockResolvedValue('lin_api_good_key');
+
+    await runLoginFlow();
+
+    expect(mockPersistLinkedProjects).not.toHaveBeenCalled();
   });
 
   it('OAuth flow failure → process.exit(1), nothing written', async () => {
