@@ -51,7 +51,7 @@ function stateSuffix(state: WorkspaceInfo['state']): string {
  */
 export async function runWorkspaceSelect(opts: WorkspaceSelectOptions = {}): Promise<void> {
   const hasFlags = Boolean(
-    opts.workspace || opts.team || opts.projects || opts.allProjects || opts.yes
+    opts.workspace || opts.team || opts.projects || opts.allProjects || opts.yes || opts.plain
   );
   if (shouldRunInteractive(hasFlags)) {
     return runWorkspaceSelectInteractive();
