@@ -18,6 +18,16 @@ export const IssueFieldsFragment = graphql(`
         name
       }
     }
+    url
+    project {
+      id
+      name
+    }
+    parent {
+      id
+      identifier
+      title
+    }
     relations {
       nodes {
         type

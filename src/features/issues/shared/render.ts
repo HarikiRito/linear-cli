@@ -28,6 +28,9 @@ export interface IssueNode {
   trashed?: boolean | null;
   archivedAt?: string | null;
   labels?: { nodes: { name: string }[] } | null;
+  url?: string | null;
+  project?: { name: string } | null;
+  parent?: { identifier: string } | null;
   relations?: { nodes: { type: string; relatedIssue?: { identifier: string } | null }[] } | null;
   inverseRelations?: { nodes: { type: string; issue?: { identifier: string } | null }[] } | null;
 }
@@ -42,6 +45,9 @@ export interface IssueRow {
   trashed: boolean;
   archivedAt: string | null;
   labels: string[];
+  url: string | null;
+  project: string | null;
+  parent: string | null;
   blockedBy: string[];
   blocking: string[];
 }
@@ -76,6 +82,9 @@ export function toIssueRows(nodes: IssueNode[]): IssueRow[] {
     trashed: n.trashed ?? false,
     archivedAt: n.archivedAt ?? null,
     labels: (n.labels?.nodes ?? []).map((l) => l.name),
+    url: n.url ?? null,
+    project: n.project?.name ?? null,
+    parent: n.parent?.identifier ?? null,
     blocking: (n.relations?.nodes ?? [])
       .filter((r) => r.type === 'blocks')
       .map((r) => r.relatedIssue?.identifier ?? '?'),
@@ -97,6 +106,9 @@ function issuePlainFields(row: IssueRow): PlainField[] {
     { key: 'priority', value: String(row.priority) },
     { key: 'assignee', value: row.assignee },
     { key: 'labels', value: row.labels },
+    { key: 'project', value: row.project },
+    { key: 'url', value: row.url },
+    { key: 'parent', value: row.parent },
     { key: 'blockedBy', value: row.blockedBy },
     { key: 'blocking', value: row.blocking },
   ];

@@ -1,8 +1,8 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RateLimitError } from '../src/lib/errors.js';
-import type { RequestFn } from '../src/lib/pagination.js';
-import { fetchPaged } from '../src/lib/pagination.js';
+import type { ColumnConfig, RequestFn } from '../src/lib/pagination.js';
+import { fetchPaged, renderPaged } from '../src/lib/pagination.js';
 
 // Minimal stub document — only needs to satisfy the TypedDocumentNode structural type.
 // The `definitions: []` body is intentionally empty; tests mock requestFn so the doc
@@ -98,5 +98,49 @@ describe('fetchPaged --all typed error propagation', () => {
     expect(data.rows.map((r) => r.id)).toEqual(['r1', 'r2', 'r3']);
     expect(data.pageInfo.hasNextPage).toBe(false);
     expect(callCount).toBe(2);
+  });
+});
+
+describe('renderPaged --plain next-page cursor (H-635)', () => {
+  interface Row {
+    id: string;
+  }
+
+  const columns: ColumnConfig<Row> = {
+    headers: ['ID'],
+    toRow: (r) => [r.id],
+    plainType: 'Item',
+    plainPrimaryId: (r) => r.id,
+    toPlainFields: () => [],
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('prints nextCursor line in plain mode when a next page exists', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    renderPaged(
+      { rows: [{ id: 'r1' }], pageInfo: { hasNextPage: true, endCursor: 'cur-abc' } },
+      true,
+      columns
+    );
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('nextCursor: cur-abc');
+  });
+
+  it('omits nextCursor line in plain mode when there is no next page', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    renderPaged(
+      { rows: [{ id: 'r1' }], pageInfo: { hasNextPage: false, endCursor: null } },
+      true,
+      columns
+    );
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).not.toContain('nextCursor:');
   });
 });

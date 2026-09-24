@@ -156,6 +156,9 @@ export function renderPaged<TRow>(
       fields: toPlainFields(r),
     }));
     console.log(renderPlainList(plainType, records));
+    if (pageInfo.hasNextPage && pageInfo.endCursor) {
+      console.log(`nextCursor: ${pageInfo.endCursor}`);
+    }
     return;
   }
 
