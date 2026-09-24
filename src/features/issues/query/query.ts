@@ -8,7 +8,7 @@ import {
 } from '../shared/filters.js';
 import { fetchIssues, runAndRender } from '../shared/render.js';
 import { getDefaultProjectIds, resolveProject } from '../shared/resolve.js';
-import { buildStateFilter } from '../shared/stateFilter.js';
+import { buildStateFilter, validateStateTokens } from '../shared/stateFilter.js';
 import { SEARCH_ISSUES_QUERY } from './queries.js';
 import { filterByTermRelevance } from './relevance.js';
 
@@ -26,6 +26,14 @@ export interface QueryOptions {
 }
 
 export async function queryIssues(opts: QueryOptions): Promise<void> {
+  if (!opts.allStates) {
+    const validation = validateStateTokens(opts.states);
+    if (validation.isErr()) {
+      exitError(validation.error);
+      return;
+    }
+  }
+
   const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);

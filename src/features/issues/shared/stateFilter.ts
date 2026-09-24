@@ -8,6 +8,9 @@
  *   { or: [{ state: { name: { eqIgnoreCase: 'todo' } } }, { state: { name: { eqIgnoreCase: 'in progress' } } }] }
  */
 
+import { err, ok, type Result } from 'neverthrow';
+import { ValidationError } from '../../../lib/errors.js';
+
 export interface StateFilterClause {
   state: { name: { eqIgnoreCase: string } };
 }
@@ -43,4 +46,20 @@ export const KNOWN_STATE_TOKENS = [
 export function findUnknownStateTokens(tokens: string[]): string[] {
   const known = new Set<string>(KNOWN_STATE_TOKENS);
   return tokens.filter((token) => !known.has(token));
+}
+
+/**
+ * Validates --state tokens against KNOWN_STATE_TOKENS. Callers should run this
+ * before any client/API work so invalid input fails fast (see H-634).
+ */
+export function validateStateTokens(tokens: string[]): Result<void, ValidationError> {
+  const unknownTokens = findUnknownStateTokens(tokens);
+  if (unknownTokens.length > 0) {
+    return err(
+      new ValidationError(
+        `Unknown --state token(s): ${unknownTokens.join(', ')}. Valid tokens: ${KNOWN_STATE_TOKENS.join(', ')}`
+      )
+    );
+  }
+  return ok(undefined);
 }
