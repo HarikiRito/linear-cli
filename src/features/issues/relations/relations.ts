@@ -77,23 +77,23 @@ export async function listRelations(opts: RelationsOptions): Promise<void> {
 
       const rows: RelationRow[] = [];
 
-      // Parent
+      // Parent (queried issue is the sub-issue of this record)
       if (issue.parent) {
         rows.push({
           recordId: '(parent)',
           type: 'parent',
-          direction: 'parent-of',
+          direction: 'sub-issue-of',
           otherIdentifier: issue.parent.identifier,
           otherTitle: issue.parent.title,
         });
       }
 
-      // Children
+      // Children (queried issue is the parent of this record)
       for (const child of issue.children.nodes) {
         rows.push({
           recordId: '(child)',
           type: 'parent',
-          direction: 'sub-issue-of',
+          direction: 'parent-of',
           otherIdentifier: child.identifier,
           otherTitle: child.title,
         });

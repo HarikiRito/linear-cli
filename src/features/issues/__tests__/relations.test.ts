@@ -1,6 +1,18 @@
 import { ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+/** readFileSync must report "no config file" so resolveIssueIdentifier's project-scope read is a no-op (see attachments.test.ts). */
+function enoentReadFileSync(): never {
+  throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+}
+
+function mockNoConfigFs(): void {
+  vi.doMock('node:fs', () => {
+    const mod = { readFileSync: enoentReadFileSync };
+    return { ...mod, default: mod };
+  });
+}
+
 function makeRelationsResponse() {
   return {
     issue: {
@@ -55,6 +67,7 @@ describe('listRelations', () => {
       }),
       printTable: vi.fn(),
     }));
+    mockNoConfigFs();
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const { listRelations } = await import('../relations/relations.js');
@@ -74,6 +87,39 @@ describe('listRelations', () => {
     expect(flat).toContain('ENG-4');
   });
 
+  it("direction describes the queried issue's own role, not the listed issue's", async () => {
+    const requestFn = vi.fn().mockResolvedValue(makeRelationsResponse());
+    const capturedRows: string[][] = [];
+
+    vi.doMock('../../../lib/client/index.js', () => ({
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(requestFn),
+    }));
+    vi.doMock('../../../lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((_h: string[], rows: string[][]) => {
+        capturedRows.push(...rows);
+        return '';
+      }),
+      printTable: vi.fn(),
+    }));
+    mockNoConfigFs();
+    vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const { listRelations } = await import('../relations/relations.js');
+    await listRelations({ id: 'ENG-1', plain: false });
+
+    // queried issue (ENG-1) has parent ENG-0 -> ENG-1 is the sub-issue
+    expect(capturedRows).toContainEqual([
+      '(parent)',
+      'parent',
+      'sub-issue-of',
+      'ENG-0',
+      'Parent Issue',
+    ]);
+    // queried issue (ENG-1) has child ENG-2 -> ENG-1 is the parent
+    expect(capturedRows).toContainEqual(['(child)', 'parent', 'parent-of', 'ENG-2', 'Child Issue']);
+  });
+
   it('--plain mode calls console.log with plain output', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeRelationsResponse());
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -86,6 +132,7 @@ describe('listRelations', () => {
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),
     }));
+    mockNoConfigFs();
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const { listRelations } = await import('../relations/relations.js');
@@ -117,6 +164,7 @@ describe('listRelations', () => {
       prettyTable: vi.fn().mockReturnValue(''),
       printTable: vi.fn(),
     }));
+    mockNoConfigFs();
     vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
 
     const { listRelations } = await import('../relations/relations.js');
