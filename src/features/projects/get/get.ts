@@ -77,6 +77,7 @@ export async function getProject(opts: GetProjectOptions): Promise<void> {
 function renderProjectDetail(project: ProjectDetail, plain: boolean): void {
   if (plain) {
     const fields: PlainField[] = [
+      { key: 'id', value: project.id },
       { key: 'state', value: project.state },
       { key: 'lead', value: project.lead?.displayName ?? null },
       { key: 'startDate', value: project.startDate },
@@ -91,6 +92,7 @@ function renderProjectDetail(project: ProjectDetail, plain: boolean): void {
   }
 
   const rows: [string, string][] = [
+    ['ID', project.id],
     ['Name', project.name],
     ['State', project.state],
     ['Lead', project.lead?.displayName ?? ''],

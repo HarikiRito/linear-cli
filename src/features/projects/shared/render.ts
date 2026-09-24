@@ -28,12 +28,15 @@ export function toProjectRows(nodes: Project[]): ProjectRow[] {
 }
 
 function projectPlainFields(p: ProjectRow): PlainField[] {
-  return [{ key: 'state', value: p.state }];
+  return [
+    { key: 'id', value: p.id },
+    { key: 'state', value: p.state },
+  ];
 }
 
 const PROJECT_COLUMNS: ColumnConfig<ProjectRow> = {
-  headers: ['Name', 'State'],
-  toRow: (p) => [p.name, p.state],
+  headers: ['ID', 'Name', 'State'],
+  toRow: (p) => [p.id, p.name, p.state],
   plainType: 'Project',
   plainPrimaryId: (p) => p.name,
   toPlainFields: projectPlainFields,

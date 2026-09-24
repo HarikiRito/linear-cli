@@ -54,7 +54,7 @@ async function buildProgram() {
   const { registerProjects } = await import('../src/features/projects/command.js');
   const { Command } = await import('commander');
   const program = new Command();
-  program.exitOverride();
+  program.option('--plain', 'Output as plain key:value text (agent-friendly)').exitOverride();
   registerProjects(program);
   return program;
 }
@@ -92,6 +92,48 @@ describe('projects get', () => {
     await program.parseAsync(['node', 'linear', 'projects', 'get', PROJ_UUID]);
 
     expect(exitErrorMock).toHaveBeenCalled();
+  });
+
+  it('--plain includes the project id field', async () => {
+    const requestFn = vi.fn().mockResolvedValue(makeProjectDetailResponse());
+    stdMocks(requestFn);
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'projects', 'get', PROJ_UUID, '--plain']);
+
+    const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(output).toContain('Project: My Project');
+    expect(output).toContain(`id: ${PROJ_UUID}`);
+
+    consoleSpy.mockRestore();
+  });
+
+  it('table output includes an ID row', async () => {
+    const requestFn = vi.fn().mockResolvedValue(makeProjectDetailResponse());
+
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(requestFn),
+    }));
+    const tableCalls: unknown[] = [];
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((headers: string[], rows: string[][]) => {
+        tableCalls.push({ headers, rows });
+        return 'TABLE';
+      }),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'projects', 'get', PROJ_UUID]);
+
+    const call = tableCalls[0] as { headers: string[]; rows: [string, string][] };
+    expect(call.headers).toEqual(['Field', 'Value']);
+    expect(call.rows).toContainEqual(['ID', PROJ_UUID]);
   });
 });
 
