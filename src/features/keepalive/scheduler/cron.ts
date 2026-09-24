@@ -46,7 +46,7 @@ function matchesSchedule(line: string, nodePath: string, cliPath: string): boole
  * empty object for lines we can't confidently parse (e.g. unquoted, hand-edited).
  */
 function parseScheduleTokens(line: string): { nodePath?: string; cliPath?: string } {
-  const tokens = line.trim().split(/\s+/);
+  const tokens = line.trim().match(/(?:[^\s"]+|"[^"]*")+/g) ?? [];
   const unquote = (t: string | undefined): string | undefined =>
     t !== undefined && t.length >= 2 && t.startsWith('"') && t.endsWith('"')
       ? t.slice(1, -1)
