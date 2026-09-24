@@ -1,3 +1,5 @@
+import { CommanderError } from 'commander';
+
 /**
  * Centralized error exit helper.
  * Prints the error message to stderr and sets process.exitCode = 1.
@@ -13,20 +15,16 @@ export function exitError(e: { message: string }): void {
  * wrote "error: ..." for parser failures — only propagate the exit code, don't reprint.
  */
 export function handleParseError(err: unknown): void {
-  if (err instanceof Error && 'code' in err) {
-    const code = (err as { code: unknown }).code;
-    if (typeof code === 'string' && code.startsWith('commander.')) {
-      if (
-        code === 'commander.helpDisplayed' ||
-        code === 'commander.help' ||
-        code === 'commander.version'
-      ) {
-        return; // exit 0
-      }
-      const exitCode = (err as { exitCode?: unknown }).exitCode;
-      process.exitCode = typeof exitCode === 'number' ? exitCode : 1;
-      return;
+  if (err instanceof CommanderError) {
+    if (
+      err.code === 'commander.helpDisplayed' ||
+      err.code === 'commander.help' ||
+      err.code === 'commander.version'
+    ) {
+      return; // exit 0
     }
+    process.exitCode = err.exitCode;
+    return;
   }
   const message = err instanceof Error ? err.message : String(err);
   console.error(`Error: ${message}`);
