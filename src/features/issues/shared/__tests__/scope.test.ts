@@ -166,7 +166,7 @@ describe('workspace project scoping', () => {
       expect(result._unsafeUnwrap()).toBe('ENG-1');
     });
 
-    it('linked+scoped: reports NotFoundError for an issue outside the scoped projects', async () => {
+    it('linked+scoped: reports ScopeError, naming the scope, for an issue outside the scoped projects', async () => {
       await linkProject(tmpEnv.projectDir, 'ws-1');
       await updateEntry(tmpEnv.projectDir, { projects: [{ id: 'p1', name: 'Scoped' }] });
       process.cwd = () => tmpEnv.projectDir;
@@ -178,6 +178,27 @@ describe('workspace project scoping', () => {
 
       const { resolveIssueIdentifier } = await import('../resolve.js');
       const result = await resolveIssueIdentifier('OTHER-1', {} as never);
+
+      expect(result.isErr()).toBe(true);
+      const error = result._unsafeUnwrapErr();
+      expect(error.name).toBe('ScopeError');
+      expect(error.message).toBe(
+        "issue 'OTHER-1' is outside this directory's project scope (Scoped); pass --project or run from an unscoped directory"
+      );
+    });
+
+    it('linked+scoped: still reports NotFoundError for an issue that genuinely does not exist', async () => {
+      await linkProject(tmpEnv.projectDir, 'ws-1');
+      await updateEntry(tmpEnv.projectDir, { projects: [{ id: 'p1', name: 'Scoped' }] });
+      process.cwd = () => tmpEnv.projectDir;
+
+      const requestFn = vi.fn().mockResolvedValue({ issue: null });
+      vi.doMock('../../../../lib/client/index.js', () => ({
+        getRequestFn: vi.fn().mockReturnValue(requestFn),
+      }));
+
+      const { resolveIssueIdentifier } = await import('../resolve.js');
+      const result = await resolveIssueIdentifier('MISSING-1', {} as never);
 
       expect(result.isErr()).toBe(true);
       expect(result._unsafeUnwrapErr().name).toBe('NotFoundError');

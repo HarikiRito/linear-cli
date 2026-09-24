@@ -277,6 +277,94 @@ describe('issues create', () => {
     expect(createIssueFn).toHaveBeenCalledWith(expect.objectContaining({ projectId: uuid }));
     expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
   });
+
+  it('--related-to that fails to resolve (e.g. out of scope) sets exit code 1 and warns "relation not created"', async () => {
+    const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'eng' }] });
+    const createIssueRelationFn = vi.fn();
+    const clientMock = makeClientMock({
+      createIssue: createIssueFn,
+      teams: teamsFn,
+      createIssueRelation: createIssueRelationFn,
+    });
+    stdMocks(clientMock);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const { errAsync } = await vi.importActual<typeof import('neverthrow')>('neverthrow');
+      const { ScopeError } =
+        await vi.importActual<typeof import('../src/lib/errors.js')>('../src/lib/errors.js');
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return {
+        ...actual,
+        resolveIssueIdentifier: vi
+          .fn()
+          .mockReturnValue(errAsync(new ScopeError('issue', 'OTHER-1', 'Scoped Project'))),
+      };
+    });
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const program = await buildProgram();
+
+    const uuid = '55555555-5555-5555-5555-555555555555';
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'create',
+      '--title',
+      'T',
+      '--team',
+      'eng',
+      '--project',
+      uuid,
+      '--related-to',
+      'OTHER-1',
+    ]);
+
+    expect(createIssueRelationFn).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('relation not created'));
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('--related-to that resolves and creates successfully leaves exit code untouched', async () => {
+    const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'eng' }] });
+    const createIssueRelationFn = vi.fn().mockResolvedValue({});
+    const clientMock = makeClientMock({
+      createIssue: createIssueFn,
+      teams: teamsFn,
+      createIssueRelation: createIssueRelationFn,
+    });
+    stdMocks(clientMock);
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const { okAsync } = await vi.importActual<typeof import('neverthrow')>('neverthrow');
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      return {
+        ...actual,
+        resolveIssueIdentifier: vi.fn().mockReturnValue(okAsync('related-uuid')),
+      };
+    });
+    const program = await buildProgram();
+
+    const uuid = '66666666-6666-6666-6666-666666666666';
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'create',
+      '--title',
+      'T',
+      '--team',
+      'eng',
+      '--project',
+      uuid,
+      '--related-to',
+      'OTHER-2',
+    ]);
+
+    expect(createIssueRelationFn).toHaveBeenCalledOnce();
+    expect(process.exitCode).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
