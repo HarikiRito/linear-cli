@@ -75,7 +75,7 @@ List commands also accept: `--limit <n>` (default 50), `--after <cursor>`, `--al
 
 | Command | Description |
 |---|---|
-| `linear issues list` | List issues. `--team`, `--state <tokens>` (comma-sep snake_case, e.g. `todo,in_progress,dev_review`; default: `todo,in_progress,dev_review`), `--all-states` |
+| `linear issues list` | List issues. `--team`, `--state <tokens>` (comma-sep snake_case, e.g. `todo,in_progress,in_review`; default: `todo,in_progress,in_review`), `--all-states` |
 | `linear issues get <id>` | Full issue detail. Accepts `ENG-123`, bare number, or UUID |
 | `linear issues me` | Issues assigned to you. `--state`, `--all-states` |
 | `linear issues query <term>` | Search issues by text. `--state`, `--all-states` |
