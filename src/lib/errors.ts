@@ -43,8 +43,8 @@ export class ValidationError extends Error {
 
 export class NotFoundError extends Error {
   readonly kind = 'NotFoundError' as const;
-  constructor(entityType: string, value: string) {
-    super(`${entityType} '${value}' not found`);
+  constructor(entityType: string, value: string, hint?: string) {
+    super(`${entityType} '${value}' not found${hint ? ` — valid: ${hint}` : ''}`);
     this.name = 'NotFoundError';
   }
 }
