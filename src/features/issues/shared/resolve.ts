@@ -441,14 +441,20 @@ function assertIssueInScope(
  * with a project selection — hard-scope it: out-of-scope reports ScopeError
  * (not a generic not-found). When `widenProject` (a command's --project
  * name-or-id) is given, the effective scope is the dir's scoped projects
- * UNION that project — see H-646 "one consistent rule". Explicit --project on
- * list/create's own project field is a separate, intentional override — see
+ * UNION that project — see H-646 "one consistent rule". `widenProjectLabel`
+ * overrides what's shown in the ScopeError message, for callers that pass an
+ * already-resolved UUID as `widenProject` (e.g. batch-update, to avoid
+ * re-resolving the same --project name once per issue) but still want the
+ * user's original --project text in the error rather than the UUID —
+ * defaults to `widenProject` itself. Explicit --project on list/create's own
+ * project field is a separate, intentional override — see
  * resolveDefaultProjectId.
  */
 export function resolveIssueIdentifier(
   input: string,
   client: LinearClient,
-  widenProject?: string
+  widenProject?: string,
+  widenProjectLabel: string | undefined = widenProject
 ): ResultAsync<string, CliError> {
   const resolved = expandIssueIdentifier(input, client);
   const scopedProjectIds = getScopedProjectIds();
@@ -458,7 +464,7 @@ export function resolveIssueIdentifier(
   }
   return resolved.andThen((id) =>
     resolveProject(widenProject, client).andThen((widenedProjectId) =>
-      assertIssueInScope(id, [...scopedProjectIds, widenedProjectId], client, widenProject)
+      assertIssueInScope(id, [...scopedProjectIds, widenedProjectId], client, widenProjectLabel)
     )
   );
 }

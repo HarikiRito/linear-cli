@@ -264,5 +264,34 @@ describe('workspace project scoping', () => {
         `issue 'OTHER-1' is outside this directory's project scope (Scoped) and outside --project '${WIDENED_PROJECT_UUID}'`
       );
     });
+
+    // H-646 review: batch-update passes an already-resolved UUID as widenProject
+    // (to avoid re-resolving the same --project name once per issue) but must
+    // still show the user's original --project text, not the UUID, in the error.
+    it('widened via --project: widenProjectLabel overrides the ScopeError text shown for widenProject', async () => {
+      await linkProject(tmpEnv.projectDir, 'ws-1');
+      await updateEntry(tmpEnv.projectDir, { projects: [{ id: 'p1', name: 'Scoped' }] });
+      process.cwd = () => tmpEnv.projectDir;
+
+      const requestFn = vi.fn().mockResolvedValue({ issue: { project: { id: 'unrelated' } } });
+      vi.doMock('../../../../lib/client/index.js', () => ({
+        getRequestFn: vi.fn().mockReturnValue(requestFn),
+      }));
+
+      const { resolveIssueIdentifier } = await import('../resolve.js');
+      const result = await resolveIssueIdentifier(
+        'OTHER-1',
+        {} as never,
+        WIDENED_PROJECT_UUID,
+        'Linear CLI'
+      );
+
+      expect(result.isErr()).toBe(true);
+      const error = result._unsafeUnwrapErr();
+      expect(error.message).toBe(
+        "issue 'OTHER-1' is outside this directory's project scope (Scoped) and outside --project 'Linear CLI'"
+      );
+      expect(error.message).not.toContain(WIDENED_PROJECT_UUID);
+    });
   });
 });
