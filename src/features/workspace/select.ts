@@ -232,11 +232,11 @@ export async function runWorkspaceSelectNonInteractive(
     projects = projResult.value;
   }
 
+  await linkProject(cwd, workspaceId, team);
+  await persistLinkedProjects(cwd, projects);
   if (projects && projects.length > 0) {
     mergeGlobalConfig({ projects });
   }
-  await linkProject(cwd, workspaceId, team);
-  await persistLinkedProjects(cwd, projects);
 
   if (opts.plain) {
     // Ticket-mandated exact line set (no type header) — not renderPlainRecord.
