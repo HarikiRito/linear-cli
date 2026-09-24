@@ -58,6 +58,7 @@ export interface RemindOptions {
   issue: string;
   when: string;
   plain?: boolean;
+  project?: string;
 }
 
 export async function remindIssue(opts: RemindOptions): Promise<void> {
@@ -78,7 +79,7 @@ export async function remindIssue(opts: RemindOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.issue, client);
+  const idResult = await resolveIssueIdentifier(opts.issue, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

@@ -9,7 +9,10 @@ export function registerCreateCommand(issues: Command): void {
     .requiredOption('--title <text>', 'Issue title')
     .requiredOption('--team <name-or-id>', 'Team name or ID')
     .option('--description <text>', 'Issue description (use - to read from stdin)')
-    .option('--project <name-or-id>', 'Project name or ID (required)')
+    .option(
+      '--project <name-or-id>',
+      "Project name or ID (required); also widens this directory's scope to include it when resolving --related-to/--blocks/--blocked-by/--duplicate-of targets"
+    )
     .option('--milestone <name-or-id>', 'Milestone name or ID (requires --project)')
     .option('--assignee <name-or-id>', 'Assignee name or ID')
     .option('--labels <labels>', 'Comma-separated label names or IDs')

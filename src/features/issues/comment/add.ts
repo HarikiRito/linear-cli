@@ -19,6 +19,7 @@ export interface AddCommentOptions {
   body: string;
   plain: boolean;
   file?: string;
+  project?: string;
 }
 
 export async function addComment(opts: AddCommentOptions): Promise<void> {
@@ -33,7 +34,7 @@ export async function addComment(opts: AddCommentOptions): Promise<void> {
 
   // Resolve bare issue numbers (e.g. "153") via the default team, same as other
   // issue commands (get/update) — see H-163. Full identifiers/UUIDs pass through.
-  const idResult = await resolveIssueIdentifier(opts.issueId, client);
+  const idResult = await resolveIssueIdentifier(opts.issueId, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

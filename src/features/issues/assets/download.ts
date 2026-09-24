@@ -15,6 +15,7 @@ export interface DownloadIssueAssetsOptions {
   token?: string;
   issue: string;
   outputDir?: string;
+  project?: string;
 }
 
 // Any http(s) URL token embedded in markdown (image/link syntax, angle-bracket
@@ -67,7 +68,7 @@ export async function downloadIssueAssets(opts: DownloadIssueAssetsOptions): Pro
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.issue, client);
+  const idResult = await resolveIssueIdentifier(opts.issue, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

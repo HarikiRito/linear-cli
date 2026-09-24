@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, isPlain } from '../../../lib/commandOptions.js';
+import { addAuthOptions, addProjectScopeOption, isPlain } from '../../../lib/commandOptions.js';
 import { addComment } from './add.js';
 import { deleteComment } from './delete.js';
 import { listComments } from './list.js';
@@ -16,15 +16,17 @@ export function registerCommentCommand(issues: Command): void {
     comment.help();
   });
 
-  const listCmd = addAuthOptions(
-    comment.command('list <issue>').description('List comments on an issue')
-  )
+  const listSubCmd = comment
+    .command('list <issue>')
+    .description('List comments on an issue')
     .option('--limit <n>', 'Number of comments per page (default: 50)', '50')
     .option('--after <cursor>', 'Fetch the next page starting after this cursor');
+  addProjectScopeOption(listSubCmd);
+  const listCmd = addAuthOptions(listSubCmd);
   listCmd.action(
     async (
       issue: string,
-      opts: { apiKey?: string; token?: string; limit: string; after?: string }
+      opts: { apiKey?: string; token?: string; limit: string; after?: string; project?: string }
     ) => {
       await listComments({
         apiKey: opts.apiKey,
@@ -33,24 +35,25 @@ export function registerCommentCommand(issues: Command): void {
         limit: Math.max(1, Math.min(250, Number(opts.limit) || 50)),
         after: opts.after,
         plain: isPlain(listCmd),
+        project: opts.project,
       });
     }
   );
 
-  const addCmd = addAuthOptions(
-    comment
-      .command('add <issue>')
-      .description('Add a comment to an issue')
-      .requiredOption('--body <text>', 'Comment body (use - to read from stdin)')
-      .option(
-        '--file <path>',
-        'Local file to upload; images are embedded inline in the comment body, other file types are attached to the resource tab'
-      )
-  );
+  const addSubCmd = comment
+    .command('add <issue>')
+    .description('Add a comment to an issue')
+    .requiredOption('--body <text>', 'Comment body (use - to read from stdin)')
+    .option(
+      '--file <path>',
+      'Local file to upload; images are embedded inline in the comment body, other file types are attached to the resource tab'
+    );
+  addProjectScopeOption(addSubCmd);
+  const addCmd = addAuthOptions(addSubCmd);
   addCmd.action(
     async (
       issue: string,
-      opts: { body: string; apiKey?: string; token?: string; file?: string }
+      opts: { body: string; apiKey?: string; token?: string; file?: string; project?: string }
     ) => {
       await addComment({
         apiKey: opts.apiKey,
@@ -59,6 +62,7 @@ export function registerCommentCommand(issues: Command): void {
         body: opts.body,
         plain: isPlain(addCmd),
         file: opts.file,
+        project: opts.project,
       });
     }
   );

@@ -45,3 +45,11 @@ export function shouldRunInteractive(hasFlags: boolean): boolean {
   const isTty = Boolean(process.stdout.isTTY && process.stdin.isTTY);
   return isTty && !hasFlags;
 }
+
+/** Register --project for commands that only use it to widen dir scope (see resolveIssueIdentifier), not as a mutation field. */
+export function addProjectScopeOption(cmd: Command): Command {
+  return cmd.option(
+    '--project <name-or-id>',
+    "Project name or ID — widens this directory's scope to include it when resolving the issue id"
+  );
+}

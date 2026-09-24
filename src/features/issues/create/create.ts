@@ -173,7 +173,7 @@ async function createPostRelations(
   for (const rel of relations) {
     const attempt = await ResultAsync.fromPromise(
       (async (): Promise<{ message: string } | { warning: string }> => {
-        const targetResult = await resolveIssueIdentifier(rel.relatedIssue, client);
+        const targetResult = await resolveIssueIdentifier(rel.relatedIssue, client, opts.project);
         if (targetResult.isErr()) {
           return {
             warning: `relation not created — could not resolve issue '${rel.relatedIssue}': ${targetResult.error.message}`,

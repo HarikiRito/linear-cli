@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, isPlain } from '../../../lib/commandOptions.js';
+import { addAuthOptions, addProjectScopeOption, isPlain } from '../../../lib/commandOptions.js';
 import { linkAttachment, unlinkAttachment } from './link.js';
 
 export function registerLinkCommand(issues: Command): void {
@@ -7,12 +7,13 @@ export function registerLinkCommand(issues: Command): void {
     .command('link <issue> <url>')
     .description('Attach a URL to an issue')
     .option('--title <text>', 'Title for the attachment');
+  addProjectScopeOption(cmd);
 
   addAuthOptions(cmd).action(
     async (
       issue: string,
       url: string,
-      opts: { title?: string; apiKey?: string; token?: string }
+      opts: { title?: string; apiKey?: string; token?: string; project?: string }
     ) => {
       await linkAttachment({
         apiKey: opts.apiKey,
@@ -21,6 +22,7 @@ export function registerLinkCommand(issues: Command): void {
         url,
         title: opts.title,
         plain: isPlain(cmd),
+        project: opts.project,
       });
     }
   );

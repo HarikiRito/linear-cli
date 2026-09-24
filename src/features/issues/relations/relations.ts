@@ -12,6 +12,7 @@ export interface RelationsOptions {
   token?: string;
   id: string;
   plain: boolean;
+  project?: string;
 }
 
 interface RelationRow {
@@ -61,7 +62,7 @@ export async function listRelations(opts: RelationsOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.id, client);
+  const idResult = await resolveIssueIdentifier(opts.id, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

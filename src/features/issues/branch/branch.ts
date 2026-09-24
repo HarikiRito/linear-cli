@@ -13,6 +13,7 @@ export interface BranchIssueOptions {
   id: string;
   checkout: boolean;
   plain?: boolean;
+  project?: string;
 }
 
 export async function branchIssue(opts: BranchIssueOptions): Promise<void> {
@@ -23,7 +24,7 @@ export async function branchIssue(opts: BranchIssueOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.id, client);
+  const idResult = await resolveIssueIdentifier(opts.id, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

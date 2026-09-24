@@ -165,7 +165,7 @@ export async function resolveAndUpdate(
   opts: UpdateIssueOptions,
   description: string | undefined
 ): Promise<IssueResult> {
-  const idResult = await resolveIssueIdentifier(opts.id, client);
+  const idResult = await resolveIssueIdentifier(opts.id, client, opts.project);
   if (idResult.isErr()) throw idResult.error;
   const resolvedId = idResult.value;
 
@@ -204,7 +204,7 @@ export async function updateIssue(opts: UpdateIssueOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.id, client);
+  const idResult = await resolveIssueIdentifier(opts.id, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;
