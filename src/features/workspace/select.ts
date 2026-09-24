@@ -149,7 +149,7 @@ export async function runWorkspaceSelectInteractive(): Promise<void> {
  */
 async function findWorkspace(query: string): Promise<WorkspaceInfo> {
   const stored = await listWorkspaceCredentials();
-  if (query in stored) {
+  if (Object.hasOwn(stored, query)) {
     return resolveWorkspaceStatus(query, stored[query]);
   }
 
