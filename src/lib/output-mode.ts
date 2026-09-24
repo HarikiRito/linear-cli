@@ -10,7 +10,8 @@ function isOutputMode(value: string): value is OutputMode {
 
 /** Validate a raw output-mode string; `source` names the origin in the error message. */
 export function parseOutputMode(raw: string, source: string): Result<OutputMode, ValidationError> {
-  const value = raw.trim().toLowerCase();
+  // raw may be non-string at runtime (e.g. TOML `output.default = true`) since config.toml is untyped on read
+  const value = String(raw).trim().toLowerCase();
   if (!isOutputMode(value)) {
     return err(
       new ValidationError(
