@@ -165,8 +165,14 @@ describe('runTeamSelectFlow: dispatch (H-645)', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    if (realStdinTty) Object.defineProperty(process.stdin, 'isTTY', realStdinTty);
-    if (realStdoutTty) Object.defineProperty(process.stdout, 'isTTY', realStdoutTty);
+    Object.defineProperty(process.stdin, 'isTTY', {
+      value: realStdinTty?.value,
+      configurable: true,
+    });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: realStdoutTty?.value,
+      configurable: true,
+    });
   });
 
   it('TTY + no flags runs the interactive flow unchanged', async () => {
