@@ -2,7 +2,7 @@ import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.
 import { exitError } from '../../../lib/runner.js';
 import { buildFilter, type IssueFilterInput } from '../shared/filters.js';
 import { fetchIssues, runAndRender } from '../shared/render.js';
-import { buildStateFilter, type StateFilter } from '../shared/stateFilter.js';
+import { buildStateFilter, type StateFilter, validateStateTokens } from '../shared/stateFilter.js';
 import { ME_ISSUES_QUERY } from './queries.js';
 
 export interface MeOptions {
@@ -17,6 +17,14 @@ export interface MeOptions {
 }
 
 export async function myIssues(opts: MeOptions): Promise<void> {
+  if (!opts.allStates) {
+    const validation = validateStateTokens(opts.states);
+    if (validation.isErr()) {
+      exitError(validation.error);
+      return;
+    }
+  }
+
   // Build filter: isMe base filter merged with optional state filter.
   const meBaseFilter: IssueFilterInput = { assignee: { isMe: { eq: true } } };
   const stateFilter: StateFilter | undefined = opts.allStates

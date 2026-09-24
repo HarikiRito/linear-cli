@@ -1,5 +1,4 @@
 import { getClientWithAuthRetry, getRequestFn } from '../../../lib/client/index.js';
-import { ValidationError } from '../../../lib/errors.js';
 import { exitError } from '../../../lib/runner.js';
 import {
   buildDefaultProjectFilter,
@@ -13,12 +12,7 @@ import {
   looksLikeId,
   resolveProject,
 } from '../shared/resolve.js';
-import {
-  buildStateFilter,
-  findUnknownStateTokens,
-  KNOWN_STATE_TOKENS,
-  type StateFilter,
-} from '../shared/stateFilter.js';
+import { buildStateFilter, type StateFilter, validateStateTokens } from '../shared/stateFilter.js';
 import { LIST_ISSUES_QUERY } from './queries.js';
 
 export interface ListOptions {
@@ -36,6 +30,14 @@ export interface ListOptions {
 }
 
 export async function listIssues(opts: ListOptions): Promise<void> {
+  if (!opts.allStates) {
+    const validation = validateStateTokens(opts.states);
+    if (validation.isErr()) {
+      exitError(validation.error);
+      return;
+    }
+  }
+
   const clientResult = await getClientWithAuthRetry({ apiKey: opts.apiKey, token: opts.token });
   if (clientResult.isErr()) {
     exitError(clientResult.error);
@@ -71,18 +73,6 @@ export async function listIssues(opts: ListOptions): Promise<void> {
     explicitProjectId,
     getDefaultProjectIds
   );
-
-  if (!opts.allStates) {
-    const unknownTokens = findUnknownStateTokens(opts.states);
-    if (unknownTokens.length > 0) {
-      exitError(
-        new ValidationError(
-          `Unknown --state token(s): ${unknownTokens.join(', ')}. Valid tokens: ${KNOWN_STATE_TOKENS.join(', ')}`
-        )
-      );
-      return;
-    }
-  }
 
   const stateFilter: StateFilter | undefined = opts.allStates
     ? undefined

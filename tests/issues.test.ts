@@ -278,10 +278,12 @@ describe('issues list', () => {
     const request = vi.fn().mockResolvedValue(makeListResponse([]));
     stdMocks(request);
     const { exitError } = await import('../src/lib/runner.js');
+    const { getClientWithAuthRetry } = await import('../src/lib/client/index.js');
     const program = await buildProgram();
 
     await program.parseAsync(['node', 'linear', 'issues', 'list', '--state', 'bogus_state']);
 
+    expect(getClientWithAuthRetry).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
     expect(exitError).toHaveBeenCalledOnce();
     const [err] = (exitError as ReturnType<typeof vi.fn>).mock.calls[0] as [{ message: string }];
@@ -718,6 +720,23 @@ describe('issues me', () => {
     expect(json).not.toContain('eqIgnoreCase');
     expect(json).toContain('isMe');
   });
+
+  it('--state with an unknown token errors before any API call', async () => {
+    const request = vi.fn().mockResolvedValue(makeListResponse([]));
+    stdMocks(request);
+    const { exitError } = await import('../src/lib/runner.js');
+    const { getClientWithAuthRetry } = await import('../src/lib/client/index.js');
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'issues', 'me', '--state', 'dev_review']);
+
+    expect(getClientWithAuthRetry).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+    expect(exitError).toHaveBeenCalledOnce();
+    const [err] = (exitError as ReturnType<typeof vi.fn>).mock.calls[0] as [{ message: string }];
+    expect(err.message).toContain('dev_review');
+    expect(err.message).toContain('todo');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -946,6 +965,23 @@ describe('issues query', () => {
     const json = JSON.stringify(vars);
     expect(json).not.toContain('eqIgnoreCase');
     expect(json).toContain('"bug"');
+  });
+
+  it('--state with an unknown token errors before any API call', async () => {
+    const request = vi.fn().mockResolvedValue(makeSearchResponse([]));
+    stdMocks(request);
+    const { exitError } = await import('../src/lib/runner.js');
+    const { getClientWithAuthRetry } = await import('../src/lib/client/index.js');
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--state', 'dev_review']);
+
+    expect(getClientWithAuthRetry).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+    expect(exitError).toHaveBeenCalledOnce();
+    const [err] = (exitError as ReturnType<typeof vi.fn>).mock.calls[0] as [{ message: string }];
+    expect(err.message).toContain('dev_review');
+    expect(err.message).toContain('todo');
   });
 
   it('registers a --project <id-or-name> option', async () => {
