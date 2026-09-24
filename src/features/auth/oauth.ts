@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
-import { ResultAsync } from 'neverthrow';
+import { errAsync, ResultAsync } from 'neverthrow';
 import open from 'open';
 import {
   CALLBACK_PATH,
@@ -176,6 +176,13 @@ export function startOAuthFlow(): ResultAsync<OAuthSession, CliError> {
   );
 }
 
+/**
+ * Refresh an OAuth access token, classifying failures so callers can tell a
+ * dead refresh token (needs full re-auth) apart from a transient failure
+ * (never forces re-auth — see H-642):
+ * - 401, or a body containing `invalid_grant` → AuthError (refresh token dead).
+ * - Any other non-ok status, or a network/parse failure → NetworkError.
+ */
 export function refreshAccessToken(
   refreshToken: string
 ): ResultAsync<{ accessToken: string; refreshToken: string; expiresAt: number }, CliError> {
@@ -192,23 +199,30 @@ export function refreshAccessToken(
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
-    }).then(async (response) => {
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Token refresh failed: ${text}`);
-      }
-      const data = (await response.json()) as {
+    }),
+    (e) => new NetworkError(e instanceof Error ? e.message : String(e))
+  ).andThen((response) => {
+    if (!response.ok) {
+      return ResultAsync.fromPromise(
+        response.text(),
+        (e) => new NetworkError(toError(e).message)
+      ).andThen((text) => {
+        const message = `Token refresh failed: ${text}`;
+        const deadGrant = response.status === 401 || text.toLowerCase().includes('invalid_grant');
+        return errAsync(deadGrant ? new AuthError(message) : new NetworkError(message));
+      });
+    }
+    return ResultAsync.fromPromise(
+      response.json() as Promise<{
         access_token: string;
         refresh_token?: string;
         expires_in: number;
-      };
-      const expiresAt = Date.now() + data.expires_in * 1000;
-      return {
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token ?? refreshToken,
-        expiresAt,
-      };
-    }),
-    (e) => new NetworkError(e instanceof Error ? e.message : String(e))
-  );
+      }>,
+      (e) => new NetworkError(e instanceof Error ? e.message : String(e))
+    ).map((data) => ({
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token ?? refreshToken,
+      expiresAt: Date.now() + data.expires_in * 1000,
+    }));
+  });
 }

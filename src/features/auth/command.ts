@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import { ResultAsync } from 'neverthrow';
+import { isPlain } from '../../lib/commandOptions.js';
 import { toError } from '../../lib/errors.js';
 import { exitError } from '../../lib/runner.js';
 import { runLoginFlow } from './login.js';
@@ -34,10 +35,24 @@ export function registerTeamSelectCommand(program: Command): void {
     team.help();
   });
 
-  team
+  const teamSelect = team
     .command('select')
-    .description('Interactively select a default team and default projects')
-    .action(async () => {
-      await ResultAsync.fromPromise(runTeamSelectFlow(), toError).mapErr((e) => exitError(e));
-    });
+    .description(
+      'Select a default team and default projects. Interactive on a TTY with no flags; pass --team for scripted/non-interactive use.'
+    )
+    .option('--team <key>', 'Team key or name (non-interactive)')
+    .option('--projects <names>', 'Comma-separated default project names (non-interactive)')
+    .option('--all-projects', "Select all of the team's projects as default (non-interactive)");
+
+  teamSelect.action(async (opts) => {
+    await ResultAsync.fromPromise(
+      runTeamSelectFlow({
+        team: opts.team,
+        projects: opts.projects,
+        allProjects: opts.allProjects,
+        plain: isPlain(teamSelect),
+      }),
+      toError
+    ).mapErr((e) => exitError(e));
+  });
 }
