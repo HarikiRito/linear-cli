@@ -881,7 +881,7 @@ describe('issues batch-update', () => {
       'New',
     ]);
 
-    expect(resolveIssueIdentifierMock).toHaveBeenCalledWith('ENG-1', clientMock, uuid);
+    expect(resolveIssueIdentifierMock).toHaveBeenCalledWith('ENG-1', clientMock, uuid, uuid);
   });
 });
 

@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -41,10 +44,31 @@ async function buildProgram() {
 // projects list
 // ---------------------------------------------------------------------------
 describe('projects list', () => {
+  // Isolate output-mode resolution from the machine running the tests: these
+  // tests assert table-mode-specific rendering with no --plain flag, which
+  // silently breaks if ambient LINEAR_OUTPUT/config.toml default to plain.
+  let homeDir: string;
+  let originalHome: string | undefined;
+  let originalOutputEnv: string | undefined;
+
+  beforeEach(() => {
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-projects-home-'));
+    originalHome = process.env.HOME;
+    originalOutputEnv = process.env.LINEAR_OUTPUT;
+    vi.spyOn(os, 'homedir').mockReturnValue(homeDir);
+    process.env.HOME = homeDir;
+    delete process.env.LINEAR_OUTPUT;
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     vi.resetModules();
+    fs.rmSync(homeDir, { recursive: true, force: true });
+    if (originalHome !== undefined) process.env.HOME = originalHome;
+    else delete process.env.HOME;
+    if (originalOutputEnv !== undefined) process.env.LINEAR_OUTPUT = originalOutputEnv;
+    else delete process.env.LINEAR_OUTPUT;
   });
 
   it('makes exactly ONE request call per page (no N+1)', async () => {

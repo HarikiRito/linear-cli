@@ -119,7 +119,9 @@ export async function batchUpdateIssues(opts: BatchUpdateOptions): Promise<void>
     typeof sharedInput.projectId === 'string' ? sharedInput.projectId : undefined;
 
   const results = await runBatchUpdate(ids, async (id): Promise<IssueUpdateResult> => {
-    const idResult = await resolveIssueIdentifier(id, client, widenProjectId);
+    // Pass the already-resolved id for scope-widening (no re-resolve per issue) but
+    // keep the user's raw --project text as the ScopeError label, not the UUID.
+    const idResult = await resolveIssueIdentifier(id, client, widenProjectId, opts.project);
     if (idResult.isErr()) {
       return { ok: false, id, error: idResult.error.message };
     }
