@@ -51,7 +51,10 @@ function looksLikeNodeEntry(p: string): boolean {
  */
 function resolveGlobalCliPath(): string | undefined {
   const which = Result.fromThrowable(
-    () => execSync('which linear', { encoding: 'utf-8' }).trim().split('\n')[0],
+    () =>
+      execSync('which linear', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] })
+        .trim()
+        .split('\n')[0],
     () => undefined
   )().unwrapOr(undefined);
   if (!which) return undefined;
@@ -84,8 +87,9 @@ export function checkSchedulerHealth(): void {
       'warning: keepalive scheduler cron entry points at a missing path — run `linear keepalive install` to fix.'
     )
   );
-  // Self-heal: re-point the cron entry at the path that is actually running right now.
-  getScheduler().install(process.execPath, resolveCliPath());
+  // Self-heal: prefer the stable global binary (same as `keepalive install`) so healing from
+  // a dev checkout or npx cache doesn't re-point cron at a path that disappears later.
+  getScheduler().install(process.execPath, resolveGlobalCliPath() ?? resolveCliPath());
 }
 
 interface WorkspaceStatusLine {
