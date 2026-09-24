@@ -46,8 +46,10 @@ function stateSuffix(state: WorkspaceInfo['state']): string {
  *
  * Runs interactively only on a TTY with no flags at all — matching the
  * pre-H-645 behavior exactly. Any flag, or a non-TTY stdin, runs the
- * non-interactive path instead (see H-645): it never prompts and never opens
- * a browser, failing fast with a usage error when --workspace is missing.
+ * non-interactive path instead (see H-645): it never opens a browser and
+ * never prompts when stdin is not a TTY, failing fast with a usage error
+ * when --workspace is missing (a TTY without --yes may still ask to confirm
+ * replacing an existing link).
  */
 export async function runWorkspaceSelect(opts: WorkspaceSelectOptions = {}): Promise<void> {
   const hasFlags = Boolean(
@@ -162,7 +164,7 @@ async function findWorkspace(query: string): Promise<WorkspaceInfo> {
   );
   if (matches.length === 0) {
     const valid = candidates.map((w) => `${w.name} (${w.urlKey || w.id})`).join(', ');
-    throw new NotFoundError('workspace', valid ? `${query} — valid: ${valid}` : query);
+    throw new NotFoundError('workspace', query, valid || undefined);
   }
   if (matches.length > 1) {
     throw new AmbiguousMatchError('workspace', query, matches);

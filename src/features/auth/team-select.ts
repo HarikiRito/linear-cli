@@ -256,7 +256,7 @@ export function resolveTeamByKeyOrName(
     );
     if (matches.length === 0) {
       const valid = teams.map((t) => `${t.name} (${t.key})`).join(', ');
-      return errAsync(new NotFoundError('team', valid ? `${input} — valid: ${valid}` : input));
+      return errAsync(new NotFoundError('team', input, valid || undefined));
     }
     if (matches.length > 1) {
       return errAsync(new AmbiguousMatchError('team', input, matches));
@@ -296,7 +296,7 @@ export function resolveTeamProjectsByName(
       const matches = projects.filter((p) => p.name.toLowerCase() === lower);
       if (matches.length === 0) {
         const valid = projects.map((p) => p.name).join(', ');
-        return errAsync(new NotFoundError('project', valid ? `${name} — valid: ${valid}` : name));
+        return errAsync(new NotFoundError('project', name, valid || undefined));
       }
       if (matches.length > 1) {
         return errAsync(new AmbiguousMatchError('project', name, matches));
