@@ -32,7 +32,7 @@ async function buildProgram() {
   const { registerProjects } = await import('../src/features/projects/command.js');
   const { Command } = await import('commander');
   const program = new Command();
-  program.exitOverride();
+  program.option('--plain', 'Output as plain key:value text (agent-friendly)').exitOverride();
   registerProjects(program);
   return program;
 }
@@ -130,6 +130,47 @@ describe('projects list', () => {
     await program.parseAsync(['node', 'linear', 'projects', 'list', '--all']);
 
     expect(projectsFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('--plain includes the project id field', async () => {
+    const projectsFn = vi
+      .fn()
+      .mockResolvedValue(makeConn([makeProjectNode('proj-uuid-1', 'Alpha', 'started')]));
+    stdMocks(projectsFn);
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'projects', 'list', '--plain']);
+
+    const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(output).toContain('Project: Alpha');
+    expect(output).toContain('id: proj-uuid-1');
+
+    consoleSpy.mockRestore();
+  });
+
+  it('table output includes an ID column', async () => {
+    const projectsFn = vi
+      .fn()
+      .mockResolvedValue(makeConn([makeProjectNode('proj-uuid-1', 'Alpha', 'started')]));
+    stdMocks(projectsFn);
+
+    const tableCalls: unknown[] = [];
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockImplementation((headers: string[], rows: string[][]) => {
+        tableCalls.push({ headers, rows });
+        return 'TABLE';
+      }),
+      printTable: vi.fn(),
+    }));
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'projects', 'list']);
+
+    expect(tableCalls).toEqual([
+      { headers: ['ID', 'Name', 'State'], rows: [['proj-uuid-1', 'Alpha', 'started']] },
+    ]);
   });
 });
 
