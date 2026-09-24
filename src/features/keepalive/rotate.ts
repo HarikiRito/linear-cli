@@ -4,7 +4,8 @@ import { ok, Result, ResultAsync } from 'neverthrow';
 import {
   getWorkspaceLockPath,
   KEEPALIVE_BACKOFF_MS,
-  KEEPALIVE_INTERVAL_MS,
+  KEEPALIVE_EXPIRY_MARGIN_MS,
+  KEEPALIVE_LOG_MAX_BYTES,
 } from '../../lib/config.js';
 import { toError } from '../../lib/errors.js';
 import {
@@ -14,6 +15,7 @@ import {
 } from '../auth/credentials.js';
 import { refreshAccessToken } from '../auth/oauth.js';
 import { isOAuthSession, type OAuthSession } from '../auth/session.js';
+import { writeKeepaliveRunStatus } from './run-status.js';
 import { getLogPath } from './scheduler/index.js';
 import {
   clearWorkspaceBackoff,
@@ -21,6 +23,11 @@ import {
   readWorkspaceState,
   updateWorkspaceState,
 } from './state.js';
+
+/** True once the access token has less than KEEPALIVE_EXPIRY_MARGIN_MS of life left. */
+function isDueForRotation(expiresAt: number): boolean {
+  return expiresAt - Date.now() <= KEEPALIVE_EXPIRY_MARGIN_MS;
+}
 
 export interface RotationSummary {
   checked: number;
@@ -37,10 +44,30 @@ export interface KeepaliveCycleOptions {
 /** A lock older than this (or with a dead PID) is considered stale. */
 const LOCK_STALE_MS = 30 * 60 * 1000;
 
+/** Once the log exceeds the cap, drop the older half (by line) rather than let it grow unbounded. */
+function rotateLogIfOversized(logPath: string): void {
+  const stat = Result.fromThrowable(
+    () => fs.statSync(logPath),
+    () => undefined
+  )().unwrapOr(undefined);
+  if (!stat || stat.size < KEEPALIVE_LOG_MAX_BYTES) return;
+  const content = Result.fromThrowable(
+    () => fs.readFileSync(logPath, 'utf-8'),
+    () => undefined
+  )().unwrapOr('');
+  const lines = content.split('\n');
+  const kept = lines.slice(Math.floor(lines.length / 2)).join('\n');
+  void Result.fromThrowable(
+    () => fs.writeFileSync(logPath, kept, { encoding: 'utf-8', mode: 0o600 }),
+    toError
+  )();
+}
+
 function appendLog(line: string): void {
   void Result.fromThrowable(() => {
     const p = getLogPath();
     fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
+    rotateLogIfOversized(p);
     fs.appendFileSync(p, `[${new Date().toISOString()}] ${line}\n`, {
       encoding: 'utf-8',
       mode: 0o600,
@@ -164,8 +191,7 @@ async function rotateWorkspace(workspaceId: string, summary: RotationSummary): P
     return;
   }
 
-  const last = session.lastRefreshAt ?? 0;
-  if (Date.now() - last < KEEPALIVE_INTERVAL_MS) {
+  if (!isDueForRotation(session.expiresAt)) {
     summary.skipped++;
     return;
   }
@@ -199,7 +225,7 @@ async function rotateWorkspace(workspaceId: string, summary: RotationSummary): P
       }
       return;
     }
-    if (Date.now() - (fresh.lastRefreshAt ?? 0) < KEEPALIVE_INTERVAL_MS) {
+    if (!isDueForRotation(fresh.expiresAt)) {
       if (backoff.invalidGrantTier !== undefined) {
         // rotated elsewhere — backoff moot
         await foldStateWrite(
@@ -278,5 +304,12 @@ export async function runKeepaliveCycle(
     summary.checked++;
     await rotateWorkspace(workspaceId, summary);
   }
+  await writeKeepaliveRunStatus({
+    lastRunAt: Date.now(),
+    result: summary.failed > 0 ? 'error' : 'ok',
+    checked: summary.checked,
+    rotated: summary.rotated,
+    failed: summary.failed,
+  });
   return ok(summary);
 }

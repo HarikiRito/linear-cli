@@ -2,14 +2,20 @@ import { execSync } from 'node:child_process';
 import { ok, Result } from 'neverthrow';
 import { KEEPALIVE_POLL_CRON } from '../../../lib/config.js';
 import { toError } from '../../../lib/errors.js';
-import { getLogPath, type KeepaliveScheduler } from './index.js';
+import { getLogPath, type KeepaliveScheduler, type SchedulerStatus } from './index.js';
 
 export const KEEPALIVE_CRON_MARKER = '# linear-cli keepalive';
 
-/** crontab -l; a missing crontab (exit != 0) reads as empty. */
+/**
+ * crontab -l; a missing crontab (exit != 0) reads as empty. Now called on
+ * every CLI invocation (see checkSchedulerHealth), so stderr is explicitly
+ * suppressed — execSync otherwise inherits it, leaking "no crontab for
+ * <user>" onto every command's output on machines with no crontab configured.
+ */
 function readCrontab(): string {
   return Result.fromThrowable(
-    () => execSync('crontab -l', { encoding: 'utf-8' }).toString(),
+    () =>
+      execSync('crontab -l', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).toString(),
     () => undefined
   )().unwrapOr('');
 }
@@ -32,6 +38,20 @@ function scheduleLine(nodePath: string, cliPath: string): string {
 function matchesSchedule(line: string, nodePath: string, cliPath: string): boolean {
   const tokens = line.trim().split(/\s+/);
   return tokens.includes(`"${nodePath}"`) && tokens.includes(`"${cliPath}"`);
+}
+
+/**
+ * Pull the quoted nodePath + cliPath tokens out of a schedule line, if present
+ * in the expected `<5 cron fields> "<node>" "<cli>" ...` shape. Returns an
+ * empty object for lines we can't confidently parse (e.g. unquoted, hand-edited).
+ */
+function parseScheduleTokens(line: string): { nodePath?: string; cliPath?: string } {
+  const tokens = line.trim().split(/\s+/);
+  const unquote = (t: string | undefined): string | undefined =>
+    t !== undefined && t.length >= 2 && t.startsWith('"') && t.endsWith('"')
+      ? t.slice(1, -1)
+      : undefined;
+  return { nodePath: unquote(tokens[5]), cliPath: unquote(tokens[6]) };
 }
 
 /** Strip the marker + schedule-line block; keeps all other crontab content. */
@@ -85,11 +105,11 @@ export class CronBackend implements KeepaliveScheduler {
     return writeCrontab(removeKeepaliveBlock(current));
   }
 
-  status(): Result<{ installed: boolean; detail: string }, Error> {
+  status(): Result<SchedulerStatus, Error> {
     const lines = readCrontab().split('\n');
     const idx = lines.findIndex((l) => l.trim() === KEEPALIVE_CRON_MARKER);
     if (idx === -1) return ok({ installed: false, detail: 'not installed' });
     const schedule = lines[idx + 1]?.trim() ?? '';
-    return ok({ installed: true, detail: schedule });
+    return ok({ installed: true, detail: schedule, ...parseScheduleTokens(schedule) });
   }
 }

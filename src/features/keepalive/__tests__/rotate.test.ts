@@ -48,7 +48,7 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     fs.rmSync(projDir, { recursive: true, force: true });
   });
 
-  /** Write a due-by-default OAuth workspace credential. */
+  /** Write a due-by-default OAuth workspace credential (expiresAt within the 2h rotation margin). */
   async function seedOAuthSession(
     workspaceId = 'ws-1',
     overrides: Partial<Parameters<typeof writeWorkspaceCredential>[1]> = {}
@@ -56,8 +56,8 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     const session = {
       accessToken: 'old-at',
       refreshToken: 'old-rt',
-      expiresAt: Date.now() + 3600_000,
-      lastRefreshAt: Date.now() - 25 * 3600_000, // 25h old → due
+      expiresAt: Date.now() + 3600_000, // 1h left — within the 2h margin → due
+      lastRefreshAt: Date.now() - 25 * 3600_000,
       ...overrides,
     };
     await writeWorkspaceCredential(workspaceId, session);
@@ -69,8 +69,11 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     return result.value;
   }
 
-  it('skips rotation when last refresh is < 24h old (no network call)', async () => {
-    await seedOAuthSession('ws-1', { lastRefreshAt: Date.now() });
+  it('skips rotation when the access token has more than 2h left (no network call)', async () => {
+    await seedOAuthSession('ws-1', {
+      expiresAt: Date.now() + 25 * 3600_000,
+      lastRefreshAt: Date.now(),
+    });
 
     const summary = await runCycle();
 
@@ -78,7 +81,7 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     expect(mockRefresh).not.toHaveBeenCalled();
   });
 
-  it('rotates when last refresh is >= 24h old and persists via the workspace credential', async () => {
+  it('rotates when the access token has <= 2h left and persists via the workspace credential', async () => {
     const before = Date.now();
     mockRefresh.mockResolvedValue(
       ok({ accessToken: 'new-at', refreshToken: 'new-rt', expiresAt: before + 3600_000 })
@@ -96,11 +99,11 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     expect(fs.existsSync(lockPath('ws-1'))).toBe(false);
   });
 
-  it('treats a missing lastRefreshAt as 0 (due immediately)', async () => {
+  it('rotates immediately when the access token is already expired', async () => {
     mockRefresh.mockResolvedValue(
       ok({ accessToken: 'new-at', refreshToken: 'new-rt', expiresAt: Date.now() + 3600_000 })
     );
-    await seedOAuthSession('ws-1', { lastRefreshAt: undefined });
+    await seedOAuthSession('ws-1', { expiresAt: Date.now() - 1000, lastRefreshAt: undefined });
 
     const summary = await runCycle();
 
@@ -259,10 +262,10 @@ describe('keepalive rotation cycle (per-workspace)', () => {
   it('TOCTOU: re-read after lock shows a fresh session → skip and release lock', async () => {
     await seedOAuthSession();
     const fresh = {
-      accessToken: 'old-at',
-      refreshToken: 'old-rt',
-      expiresAt: Date.now() + 3600_000,
-      lastRefreshAt: Date.now(), // refreshed elsewhere
+      accessToken: 'new-at',
+      refreshToken: 'new-rt',
+      expiresAt: Date.now() + 25 * 3600_000, // rotated elsewhere — full lifetime restored
+      lastRefreshAt: Date.now(),
     };
     // First read (pre-lock) sees the due session; post-lock read sees the fresh one.
     const credMod = await import('../../auth/credentials.js');
@@ -322,5 +325,45 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     expect(await readWorkspaceCredential('ws-2')).toMatchObject({ accessToken: 'new-at' });
     const log = fs.readFileSync(path.join(tmpHome, 'keepalive.log'), 'utf-8');
     expect(log).toContain('backoff state');
+  });
+
+  it('writes a run-status file after every cycle, ok on success and error on any failure', async () => {
+    mockRefresh.mockResolvedValue(
+      ok({ accessToken: 'new-at', refreshToken: 'new-rt', expiresAt: Date.now() + 3600_000 })
+    );
+    await seedOAuthSession();
+    const before = Date.now();
+
+    await runCycle();
+
+    const { readKeepaliveRunStatus } = await import('../run-status.js');
+    const okStatus = await readKeepaliveRunStatus();
+    expect(okStatus).toMatchObject({ result: 'ok', checked: 1, rotated: 1, failed: 0 });
+    expect(okStatus?.lastRunAt).toBeGreaterThanOrEqual(before);
+
+    mockRefresh.mockResolvedValue(err(new NetworkError('network down')));
+    await seedOAuthSession('ws-1', { expiresAt: Date.now() + 3600_000, lastRefreshAt: undefined });
+
+    await runCycle();
+
+    const errorStatus = await readKeepaliveRunStatus();
+    expect(errorStatus).toMatchObject({ result: 'error', failed: 1 });
+  });
+
+  it('caps keepalive.log growth by dropping the older half once it exceeds the size cap', async () => {
+    const logPath = path.join(tmpHome, 'keepalive.log');
+    fs.mkdirSync(tmpHome, { recursive: true });
+    // Seed an oversized log (well past the 1MB cap) before the cycle appends its own line.
+    const oldLine = `${'x'.repeat(200)}\n`;
+    fs.writeFileSync(logPath, oldLine.repeat(6000)); // ~1.2MB
+    mockRefresh.mockResolvedValue(err(new NetworkError('network down')));
+    await seedOAuthSession();
+
+    await runCycle();
+
+    const sizeAfter = fs.statSync(logPath).size;
+    expect(sizeAfter).toBeLessThan(oldLine.repeat(6000).length);
+    const content = fs.readFileSync(logPath, 'utf-8');
+    expect(content).toContain('network down'); // the newly appended line survives
   });
 });
