@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { ResultAsync } from 'neverthrow';
-import { isPlain } from '../../lib/commandOptions.js';
+import { hasExplicitOutputFlag, isPlain } from '../../lib/commandOptions.js';
 import { toError } from '../../lib/errors.js';
 import { exitError } from '../../lib/runner.js';
 import { runWorkspaceList } from './list.js';
@@ -36,6 +36,7 @@ export function registerWorkspaceCommand(program: Command): void {
         allProjects: opts.allProjects,
         yes: opts.yes,
         plain: isPlain(select),
+        explicitOutputFlag: hasExplicitOutputFlag(select),
       }),
       toError
     ).mapErr((e) => exitError(e));

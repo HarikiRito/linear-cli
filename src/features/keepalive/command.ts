@@ -50,9 +50,11 @@ function looksLikeNodeEntry(p: string): boolean {
  * resolved path isn't actually a node-runnable entry point (see looksLikeNodeEntry).
  */
 function resolveGlobalCliPath(): string | undefined {
+  // `which` doesn't exist on Windows — `where` is the platform equivalent.
+  const lookupCmd = process.platform === 'win32' ? 'where linear' : 'which linear';
   const which = Result.fromThrowable(
     () =>
-      execSync('which linear', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] })
+      execSync(lookupCmd, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] })
         .trim()
         .split('\n')[0],
     () => undefined

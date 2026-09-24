@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { ResultAsync } from 'neverthrow';
-import { isPlain } from '../../lib/commandOptions.js';
+import { hasExplicitOutputFlag, isPlain } from '../../lib/commandOptions.js';
 import { toError } from '../../lib/errors.js';
 import { exitError } from '../../lib/runner.js';
 import { runLoginFlow } from './login.js';
@@ -51,6 +51,7 @@ export function registerTeamSelectCommand(program: Command): void {
         projects: opts.projects,
         allProjects: opts.allProjects,
         plain: isPlain(teamSelect),
+        explicitOutputFlag: hasExplicitOutputFlag(teamSelect),
       }),
       toError
     ).mapErr((e) => exitError(e));
