@@ -1,4 +1,6 @@
 import type { Command } from 'commander';
+import { getGlobalConfigPath, readConfig } from './config-file.js';
+import { resolveOutputMode } from './output-mode.js';
 
 /** Parse a comma-separated string into a trimmed, non-empty array. */
 export function parseCsv(input: string): string[] {
@@ -15,9 +17,23 @@ export function addAuthOptions(cmd: Command): Command {
     .option('--token <token>', 'Linear access token');
 }
 
-/** Read the global --plain flag (registered once on the root program) from any subcommand. */
+/**
+ * Resolve the effective output mode (registered --plain/--table flags, LINEAR_OUTPUT
+ * env, global config `output.default`) from any subcommand. Precedence: flag > env >
+ * config > built-in default (table). Throws ValidationError for an invalid env/config
+ * value.
+ */
 export function isPlain(cmd: Command): boolean {
-  return !!cmd.optsWithGlobals().plain;
+  const opts = cmd.optsWithGlobals();
+  const config = readConfig(getGlobalConfigPath());
+  const result = resolveOutputMode({
+    plainFlag: !!opts.plain,
+    tableFlag: !!opts.table,
+    env: process.env.LINEAR_OUTPUT,
+    config: config.output?.default,
+  });
+  if (result.isErr()) throw result.error;
+  return result.value === 'plain';
 }
 
 /**

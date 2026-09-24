@@ -39,7 +39,7 @@ Data files (all under `~/.config/.linear/`):
 |---|---|
 | `credentials.json` | Workspace-keyed sessions (OAuth or API key); OAuth tokens auto-refresh |
 | `projects.json` | Directory-link registry: project root → `{workspace, team}` |
-| `config.toml` | Global defaults: `team`, `workspace`, `projects` |
+| `config.toml` | Global defaults: `team`, `workspace`, `projects`, `output.default` |
 | `keepalive-state.json` | Per-workspace keepalive rotation/backoff state |
 | `keepalive/` | Per-workspace rotation locks (`<workspace-id>.lock`) |
 
@@ -52,10 +52,22 @@ Most commands accept these common flags (not repeated per command):
 | Flag | Description |
 |---|---|
 | `--plain` | Output agent-friendly plain key:value text (only relevant fields) |
+| `--table` | Force boxed table output, overriding a plain default from env/config |
 | `--api-key <key>` | Linear API key |
 | `--token <token>` | Linear access token |
 
 List commands also accept: `--limit <n>` (default 50), `--after <cursor>`, `--all` (fetch all pages).
+
+### Default Output Mode
+
+Plain output can be made the default (useful for agents/scripts that always want `--plain`) without passing the flag on every invocation. Resolved in this order:
+
+1. `--plain` / `--table` flags (mutually exclusive)
+2. `LINEAR_OUTPUT` env var (`plain` or `table`)
+3. Global config `[output] default` in `config.toml` (`plain` or `table`)
+4. Built-in default: `table`
+
+An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing the valid values.
 
 ### Global
 

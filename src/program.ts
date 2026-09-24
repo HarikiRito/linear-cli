@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { version } from '../package.json';
 import { registerAssets } from './features/assets/command.js';
 import { registerAuthCommands, registerTeamSelectCommand } from './features/auth/command.js';
@@ -33,7 +33,18 @@ export function createProgram(): Command {
     .name('linear')
     .description('Linear CLI — designed for agent/programmatic use')
     .version(version)
-    .option('--plain', 'Output as plain key:value text (agent-friendly)')
+    .addOption(
+      new Option(
+        '--plain',
+        'Output as plain key:value text (agent-friendly). Default when LINEAR_OUTPUT=plain or config output.default = "plain"'
+      ).conflicts('table')
+    )
+    .addOption(
+      new Option(
+        '--table',
+        'Force table output, overriding LINEAR_OUTPUT/config default'
+      ).conflicts('plain')
+    )
     .exitOverride() // Commander parse errors become thrown exceptions, not process.exit
     .hook('preAction', (_thisCommand, actionCommand) => {
       // H-643: warn + self-heal a broken cron entry on every command except `keepalive` itself.
