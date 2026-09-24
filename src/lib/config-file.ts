@@ -30,6 +30,8 @@ export interface LinearConfig {
    */
   workspace?: string;
   projects?: DefaultProject[];
+  /** Global default output mode, e.g. `{ default: "plain" }`. Validated by lib/output-mode.ts. */
+  output?: { default?: string };
 }
 
 export function getGlobalConfigPath(): string {
