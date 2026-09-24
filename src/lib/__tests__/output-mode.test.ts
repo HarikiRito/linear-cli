@@ -14,6 +14,15 @@ describe('parseOutputMode', () => {
       "Invalid output mode 'json' from LINEAR_OUTPUT env var. Valid values: plain, table"
     );
   });
+
+  it('returns a ValidationError instead of throwing for a non-string raw value (e.g. TOML `output.default = true`)', () => {
+    // config.toml is parsed untyped, so a boolean/number can reach here despite the string type
+    const result = parseOutputMode(true as unknown as string, 'output.default config key');
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().message).toBe(
+      "Invalid output mode 'true' from output.default config key. Valid values: plain, table"
+    );
+  });
 });
 
 describe('resolveOutputMode precedence: flag > env > config > default', () => {

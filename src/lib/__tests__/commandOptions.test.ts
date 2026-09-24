@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Command, Option } from 'commander';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isPlain } from '../commandOptions.js';
 import { getGlobalConfigPath, writeConfig } from '../config-file.js';
 
@@ -34,11 +34,14 @@ describe('isPlain: global output-mode precedence (flag > LINEAR_OUTPUT env > con
     homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-cmdopts-home-'));
     originalHome = process.env.HOME;
     originalEnv = process.env.LINEAR_OUTPUT;
+    // stub os.homedir() directly so isolation holds on Windows too (os.homedir() reads USERPROFILE there, not HOME)
+    vi.spyOn(os, 'homedir').mockReturnValue(homeDir);
     process.env.HOME = homeDir;
     delete process.env.LINEAR_OUTPUT;
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     fs.rmSync(homeDir, { recursive: true, force: true });
     if (originalHome !== undefined) process.env.HOME = originalHome;
     else delete process.env.HOME;
