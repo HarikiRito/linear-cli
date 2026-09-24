@@ -13,6 +13,7 @@ import {
   coerceCliError,
   mapLinearError,
   NotFoundError,
+  ScopeError,
   ValidationError,
 } from '../../../lib/errors.js';
 import { findProjectRoot } from '../../../lib/scope.js';
@@ -409,8 +410,10 @@ function expandIssueIdentifier(input: string, client: LinearClient): ResultAsync
 
 /**
  * Verify the resolved issue's project is one of the cwd-linked workspace's
- * scoped projects, reporting NotFoundError('issue', ...) rather than leaking
- * that an out-of-scope issue exists — same shape as a genuine miss.
+ * scoped projects. An issue that genuinely doesn't exist still reports
+ * NotFoundError; one that exists but sits outside scope reports ScopeError
+ * instead — so callers get a message naming the violation rather than a
+ * misleading "not found" (see H-646).
  */
 function assertIssueInScope(
   resolvedId: string,
@@ -426,14 +429,17 @@ function assertIssueInScope(
     (e) => mapIssueNotFoundError(e, resolvedId)
   ).andThen((projectId) => {
     if (projectId && scopedProjectIds.includes(projectId)) return okAsync(resolvedId);
-    return errAsync(new NotFoundError('issue', resolvedId));
+    const { linkedProjects } = readMergedConfigs();
+    const scopeNames = (linkedProjects ?? []).map((p) => p.name).join(', ');
+    return errAsync(new ScopeError('issue', resolvedId, scopeNames));
   });
 }
 
 /**
  * Resolve an issue identifier, then — when the cwd is linked to a workspace
- * with a project selection — hard-scope it: an identifier resolving to an
- * issue outside the scoped projects is reported as not found.
+ * with a project selection — hard-scope it: out-of-scope reports ScopeError
+ * (not a generic not-found). Explicit --project (list/create) is a separate,
+ * intentional override — see resolveDefaultProjectId.
  */
 export function resolveIssueIdentifier(
   input: string,

@@ -131,12 +131,13 @@ async function resolveAndCreate(
   };
 }
 
+/** Returns true if every requested relation was created; false if any failed. */
 async function createPostRelations(
   client: LinearClient,
   newIssueId: string,
   newIssueIdentifier: string,
   opts: CreateIssueOptions
-): Promise<void> {
+): Promise<boolean> {
   const relations: Array<{
     relatedIssue: string;
     type: LinearDocument.IssueRelationType;
@@ -167,13 +168,15 @@ async function createPostRelations(
     });
   }
 
+  let anyFailure = false;
+
   for (const rel of relations) {
     const attempt = await ResultAsync.fromPromise(
       (async (): Promise<{ message: string } | { warning: string }> => {
         const targetResult = await resolveIssueIdentifier(rel.relatedIssue, client);
         if (targetResult.isErr()) {
           return {
-            warning: `could not resolve issue '${rel.relatedIssue}' for relation: ${targetResult.error.message}`,
+            warning: `relation not created — could not resolve issue '${rel.relatedIssue}': ${targetResult.error.message}`,
           };
         }
         const targetId = targetResult.value;
@@ -188,7 +191,7 @@ async function createPostRelations(
         return { message: `Relation created: ${direction}` };
       })(),
       (err) => ({
-        warning: `failed to create relation to '${rel.relatedIssue}': ${
+        warning: `relation not created — failed to create relation to '${rel.relatedIssue}': ${
           err instanceof Error ? err.message : String(err)
         }`,
       })
@@ -196,15 +199,19 @@ async function createPostRelations(
 
     if (attempt.isErr()) {
       console.error(`Warning: ${attempt.error.warning}`);
+      anyFailure = true;
       continue;
     }
     const outcome = attempt.value;
     if ('warning' in outcome) {
       console.error(`Warning: ${outcome.warning}`);
+      anyFailure = true;
       continue;
     }
     console.log(outcome.message);
   }
+
+  return !anyFailure;
 }
 
 export async function createIssue(opts: CreateIssueOptions): Promise<void> {
@@ -268,6 +275,9 @@ export async function createIssue(opts: CreateIssueOptions): Promise<void> {
 
   const hasRelations = opts.relatedTo || opts.blocks || opts.blockedBy || opts.duplicateOf;
   if (hasRelations) {
-    await createPostRelations(client, issue.id, issue.identifier, opts);
+    const allRelationsCreated = await createPostRelations(client, issue.id, issue.identifier, opts);
+    if (!allRelationsCreated) {
+      process.exitCode = 1;
+    }
   }
 }

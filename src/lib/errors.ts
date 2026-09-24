@@ -49,6 +49,22 @@ export class NotFoundError extends Error {
   }
 }
 
+/**
+ * Raised when an identifier resolves to a real entity that exists, but falls
+ * outside the cwd-linked directory's hard project scope — distinct from
+ * NotFoundError so callers get a message naming the scope violation instead
+ * of a misleading "not found" (see H-646).
+ */
+export class ScopeError extends Error {
+  readonly kind = 'ScopeError' as const;
+  constructor(entityType: string, value: string, scopeNames: string) {
+    super(
+      `${entityType} '${value}' is outside this directory's project scope (${scopeNames}); pass --project or run from an unscoped directory`
+    );
+    this.name = 'ScopeError';
+  }
+}
+
 export class AmbiguousMatchError extends Error {
   readonly kind = 'AmbiguousMatchError' as const;
   constructor(
@@ -83,6 +99,7 @@ export type CliError =
   | AuthError
   | ValidationError
   | NotFoundError
+  | ScopeError
   | AmbiguousMatchError;
 
 /**
