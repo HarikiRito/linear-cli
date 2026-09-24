@@ -66,6 +66,7 @@ export function renderProjectResult(p: ProjectResult, plain: boolean): void {
     return;
   }
   const rows: [string, string][] = [
+    ['ID', p.id],
     ['Name', p.name],
     ['State', p.state],
     ['URL', p.url],
