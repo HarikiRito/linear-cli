@@ -10,7 +10,14 @@ vi.mock('@clack/prompts', () => ({
 
 import { isCancel, multiselect, select } from '@clack/prompts';
 import { getEntry, linkProject } from '../../keepalive/registry.js';
-import { persistLinkedProjects, selectDefaultProjects, selectDefaultTeam } from '../team-select.js';
+import {
+  persistLinkedProjects,
+  resolveAllTeamProjects,
+  resolveTeamByKeyOrName,
+  resolveTeamProjectsByName,
+  selectDefaultProjects,
+  selectDefaultTeam,
+} from '../team-select.js';
 
 const mockSelect = vi.mocked(select);
 const mockMultiselect = vi.mocked(multiselect);
@@ -205,5 +212,84 @@ describe('persistLinkedProjects', () => {
   it('is a no-op when the directory is not a linked registry entry', async () => {
     await persistLinkedProjects(tmpEnv.projectDir, [{ id: 'proj-1', name: 'X' }]);
     expect(getEntry(tmpEnv.projectDir)).toBeUndefined();
+  });
+});
+
+describe('resolveTeamByKeyOrName (H-645: non-interactive --team)', () => {
+  it('matches by key case-insensitively', async () => {
+    const client = mockClient([ENGINEERING, PLATFORM], []);
+
+    const result = await resolveTeamByKeyOrName('eng', client);
+
+    expect(result._unsafeUnwrap()).toEqual({ id: 'team-1', key: 'ENG' });
+  });
+
+  it('matches by name case-insensitively', async () => {
+    const client = mockClient([ENGINEERING, PLATFORM], []);
+
+    const result = await resolveTeamByKeyOrName('platform', client);
+
+    expect(result._unsafeUnwrap()).toEqual({ id: 'team-2', key: 'PROD' });
+  });
+
+  it('returns NotFoundError listing valid choices when nothing matches', async () => {
+    const client = mockClient([ENGINEERING, PLATFORM], []);
+
+    const result = await resolveTeamByKeyOrName('bogus', client);
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().message).toContain('Engineering (ENG)');
+    expect(result._unsafeUnwrapErr().message).toContain('Platform (PROD)');
+  });
+});
+
+describe('resolveTeamProjectsByName (H-645: non-interactive --projects)', () => {
+  it('resolves each requested name scoped to the team', async () => {
+    const client = mockClient([ENGINEERING], [WEBSITE, MOBILE]);
+
+    const result = await resolveTeamProjectsByName('team-1', ['Website', 'mobile'], client);
+
+    expect(result._unsafeUnwrap()).toEqual([
+      { id: 'proj-1', name: 'Website' },
+      { id: 'proj-2', name: 'Mobile' },
+    ]);
+  });
+
+  it('returns NotFoundError listing valid project names for an unmatched name', async () => {
+    const client = mockClient([ENGINEERING], [WEBSITE, MOBILE]);
+
+    const result = await resolveTeamProjectsByName('team-1', ['Nope'], client);
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().message).toContain('Website, Mobile');
+  });
+
+  it('returns an empty array without fetching when no names are requested', async () => {
+    const client = mockClient([ENGINEERING], [WEBSITE, MOBILE]);
+
+    const result = await resolveTeamProjectsByName('team-1', [], client);
+
+    expect(result._unsafeUnwrap()).toEqual([]);
+  });
+});
+
+describe('resolveAllTeamProjects (H-645: non-interactive --all-projects)', () => {
+  it('returns every project on the team', async () => {
+    const client = mockClient([ENGINEERING], [WEBSITE, MOBILE]);
+
+    const result = await resolveAllTeamProjects('team-1', client);
+
+    expect(result._unsafeUnwrap()).toEqual([
+      { id: 'proj-1', name: 'Website' },
+      { id: 'proj-2', name: 'Mobile' },
+    ]);
+  });
+
+  it('returns an empty array when the team has no projects', async () => {
+    const client = mockClient([ENGINEERING], []);
+
+    const result = await resolveAllTeamProjects('team-1', client);
+
+    expect(result._unsafeUnwrap()).toEqual([]);
   });
 });

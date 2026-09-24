@@ -40,7 +40,7 @@ export interface ResolveOptions {
  * expired. Rotated tokens are written back to the workspace credential the
  * session came from (no cross-writing).
  */
-function resolveSessionWithRefresh(
+export function resolveSessionWithRefresh(
   session: Session,
   workspaceId: string,
   forceRefresh?: boolean

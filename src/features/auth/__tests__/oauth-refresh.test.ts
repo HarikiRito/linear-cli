@@ -49,9 +49,10 @@ const mockGetEntry = vi.mocked(getEntry);
 // Helpers
 // ---------------------------------------------------------------------------
 
-function mockFetch(body: Record<string, unknown>, ok = true): void {
+function mockFetch(body: Record<string, unknown>, ok = true, status = ok ? 200 : 400): void {
   global.fetch = vi.fn().mockResolvedValue({
     ok,
+    status,
     text: () => Promise.resolve(JSON.stringify(body)),
     json: () => Promise.resolve(body),
   });
@@ -94,6 +95,40 @@ describe('refreshAccessToken', () => {
 
     const result = await refreshAccessToken('bad-rt');
     expect(result.isErr()).toBe(true);
+  });
+
+  // H-642: a dead refresh token must be distinguishable from a transient failure,
+  // so callers never force full re-auth on e.g. a network blip.
+  it('classifies a 401 response as AuthError (refresh token dead)', async () => {
+    mockFetch({ error: 'unauthorized' }, false, 401);
+
+    const result = await refreshAccessToken('bad-rt');
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().kind).toBe('AuthError');
+  });
+
+  it('classifies an invalid_grant body as AuthError regardless of status code', async () => {
+    mockFetch({ error: 'invalid_grant' }, false, 400);
+
+    const result = await refreshAccessToken('bad-rt');
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().kind).toBe('AuthError');
+  });
+
+  it('classifies a non-auth failure (e.g. 500) as NetworkError — never forces re-auth', async () => {
+    mockFetch({ error: 'internal_error' }, false, 500);
+
+    const result = await refreshAccessToken('some-rt');
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().kind).toBe('NetworkError');
+  });
+
+  it('classifies a network exception as NetworkError', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('fetch failed'));
+
+    const result = await refreshAccessToken('some-rt');
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().kind).toBe('NetworkError');
   });
 });
 

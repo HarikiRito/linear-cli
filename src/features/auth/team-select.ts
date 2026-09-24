@@ -1,6 +1,6 @@
 import { isCancel, multiselect, select } from '@clack/prompts';
 import type { LinearClient } from '@linear/sdk';
-import { Result, ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, Result, ResultAsync } from 'neverthrow';
 import pc from 'picocolors';
 import {
   type DefaultProject,
@@ -10,7 +10,13 @@ import {
   readConfig,
   writeConfig,
 } from '../../lib/config-file.js';
-import { toError } from '../../lib/errors.js';
+import {
+  AmbiguousMatchError,
+  type CliError,
+  mapLinearError,
+  NotFoundError,
+  toError,
+} from '../../lib/errors.js';
 import { updateEntry } from '../keepalive/registry.js';
 
 /**
@@ -226,4 +232,87 @@ export async function selectAndPersistTeamAndProjects(
   }
 
   mergeGlobalConfig(target.type === 'global' ? { team, projects } : { projects });
+}
+
+/**
+ * Non-interactive counterpart to selectDefaultTeam: exact case-insensitive
+ * match on key or name. Zero matches → NotFoundError listing the valid
+ * choices; 2+ matches → AmbiguousMatchError (see H-645).
+ */
+export function resolveTeamByKeyOrName(
+  input: string,
+  client: LinearClient
+): ResultAsync<DefaultTeam, CliError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const c = await client.teams();
+      return c.nodes;
+    })(),
+    (e) => mapLinearError(e)
+  ).andThen((teams) => {
+    const lower = input.toLowerCase();
+    const matches = teams.filter(
+      (t) => t.key.toLowerCase() === lower || t.name.toLowerCase() === lower
+    );
+    if (matches.length === 0) {
+      const valid = teams.map((t) => `${t.name} (${t.key})`).join(', ');
+      return errAsync(new NotFoundError('team', valid ? `${input} — valid: ${valid}` : input));
+    }
+    if (matches.length > 1) {
+      return errAsync(new AmbiguousMatchError('team', input, matches));
+    }
+    const t = matches[0];
+    return okAsync({ id: t.id, key: t.key });
+  });
+}
+
+async function fetchTeamProjects(
+  teamId: string,
+  client: LinearClient
+): Promise<{ id: string; name: string }[]> {
+  const team = await client.team(teamId);
+  const c = await team.projects();
+  return c.nodes;
+}
+
+/**
+ * Non-interactive counterpart to selectDefaultProjects: exact case-insensitive
+ * match per requested name, scoped to the team. Any unmatched name →
+ * NotFoundError listing the team's valid project names; an ambiguous name →
+ * AmbiguousMatchError (see H-645).
+ */
+export function resolveTeamProjectsByName(
+  teamId: string,
+  names: string[],
+  client: LinearClient
+): ResultAsync<DefaultProject[], CliError> {
+  if (names.length === 0) return okAsync([]);
+  return ResultAsync.fromPromise(fetchTeamProjects(teamId, client), (e) =>
+    mapLinearError(e)
+  ).andThen((projects) => {
+    const results: DefaultProject[] = [];
+    for (const name of names) {
+      const lower = name.toLowerCase();
+      const matches = projects.filter((p) => p.name.toLowerCase() === lower);
+      if (matches.length === 0) {
+        const valid = projects.map((p) => p.name).join(', ');
+        return errAsync(new NotFoundError('project', valid ? `${name} — valid: ${valid}` : name));
+      }
+      if (matches.length > 1) {
+        return errAsync(new AmbiguousMatchError('project', name, matches));
+      }
+      results.push({ id: matches[0].id, name: matches[0].name });
+    }
+    return okAsync(results);
+  });
+}
+
+/** Non-interactive: select every project on the team as the default set (--all-projects). */
+export function resolveAllTeamProjects(
+  teamId: string,
+  client: LinearClient
+): ResultAsync<DefaultProject[], CliError> {
+  return ResultAsync.fromPromise(fetchTeamProjects(teamId, client), (e) => mapLinearError(e)).map(
+    (projects) => projects.map((p) => ({ id: p.id, name: p.name }))
+  );
 }
