@@ -125,6 +125,15 @@ describe('CronBackend', () => {
     expect(written).toHaveLength(0);
   });
 
+  it('crontab -l suppresses child stderr (H-643: now called on every CLI invocation)', () => {
+    new CronBackend().isInstalled();
+
+    expect(mockExecSync).toHaveBeenCalledWith(
+      'crontab -l',
+      expect.objectContaining({ stdio: ['ignore', 'pipe', 'ignore'] })
+    );
+  });
+
   it('isInstalled: false without crontab, true with marker, false without marker', () => {
     expect(new CronBackend().isInstalled()._unsafeUnwrap()).toBe(false);
 
@@ -145,6 +154,20 @@ describe('CronBackend', () => {
     const s = new CronBackend().status()._unsafeUnwrap();
     expect(s.installed).toBe(true);
     expect(s.detail).toContain('keepalive run --quiet');
+  });
+
+  it('status parses quoted nodePath + cliPath out of the schedule line (H-643)', () => {
+    crontab = `${KEEPALIVE_CRON_MARKER}\n*/15 * * * * "/usr/bin/node" "/usr/local/bin/linear" keepalive run --quiet >> "/log" 2>&1\n`;
+    const s = new CronBackend().status()._unsafeUnwrap();
+    expect(s.nodePath).toBe('/usr/bin/node');
+    expect(s.cliPath).toBe('/usr/local/bin/linear');
+  });
+
+  it('status leaves nodePath/cliPath undefined for an unquoted (unparseable) schedule line', () => {
+    crontab = `${KEEPALIVE_CRON_MARKER}\n*/15 * * * * /node /cli keepalive run --quiet >> /log 2>&1\n`;
+    const s = new CronBackend().status()._unsafeUnwrap();
+    expect(s.nodePath).toBeUndefined();
+    expect(s.cliPath).toBeUndefined();
   });
 });
 

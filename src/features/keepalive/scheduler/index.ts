@@ -5,11 +5,19 @@ import { getGlobalConfigDir } from '../../../lib/scope.js';
 import { CronBackend } from './cron.js';
 import { TaskSchedulerBackend } from './taskscheduler.js';
 
+export interface SchedulerStatus {
+  installed: boolean;
+  detail: string;
+  /** Parsed from the schedule entry when recognizable; undefined when the format can't be parsed. */
+  nodePath?: string;
+  cliPath?: string;
+}
+
 export interface KeepaliveScheduler {
   isInstalled(): Result<boolean, Error>;
   install(nodePath: string, cliPath: string): Result<void, Error>;
   uninstall(): Result<void, Error>;
-  status(): Result<{ installed: boolean; detail: string }, Error>;
+  status(): Result<SchedulerStatus, Error>;
 }
 
 export function getScheduler(): KeepaliveScheduler {

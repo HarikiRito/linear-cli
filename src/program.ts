@@ -6,7 +6,7 @@ import { registerWhoami } from './features/auth/whoami.js';
 import { registerCycles } from './features/cycles/command.js';
 import { registerDocuments } from './features/documents/command.js';
 import { registerIssues } from './features/issues/command.js';
-import { registerKeepaliveCommands } from './features/keepalive/command.js';
+import { checkSchedulerHealth, registerKeepaliveCommands } from './features/keepalive/command.js';
 import { registerLabels } from './features/labels/command.js';
 import { registerMilestones } from './features/milestones/command.js';
 import { registerProjects } from './features/projects/command.js';
@@ -16,6 +16,16 @@ import { registerTeams } from './features/teams/command.js';
 import { registerUsers } from './features/users/command.js';
 import { registerWorkspaceCommand } from './features/workspace/command.js';
 
+/** True when `cmd` or any ancestor is the `keepalive` command — avoids self-heal recursing into it. */
+function isKeepaliveCommand(cmd: Command): boolean {
+  let current: Command | null = cmd;
+  while (current) {
+    if (current.name() === 'keepalive') return true;
+    current = current.parent;
+  }
+  return false;
+}
+
 export function createProgram(): Command {
   const program = new Command();
 
@@ -24,7 +34,11 @@ export function createProgram(): Command {
     .description('Linear CLI — designed for agent/programmatic use')
     .version(version)
     .option('--plain', 'Output as plain key:value text (agent-friendly)')
-    .exitOverride(); // Commander parse errors become thrown exceptions, not process.exit
+    .exitOverride() // Commander parse errors become thrown exceptions, not process.exit
+    .hook('preAction', (_thisCommand, actionCommand) => {
+      // H-643: warn + self-heal a broken cron entry on every command except `keepalive` itself.
+      if (!isKeepaliveCommand(actionCommand)) checkSchedulerHealth();
+    });
 
   registerAuthCommands(program);
   registerTeamSelectCommand(program);

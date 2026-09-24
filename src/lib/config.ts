@@ -16,7 +16,12 @@ export const CALLBACK_PATH = '/callback';
 export const CANDIDATE_PORTS = [9876, 9877, 9878] as const;
 
 // Keepalive: automatic refresh-token rotation to keep sessions alive.
-export const KEEPALIVE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+/** Rotate once the access token has less than this much life left. */
+export const KEEPALIVE_EXPIRY_MARGIN_MS = 2 * 60 * 60 * 1000;
+/** A workspace's last successful run older than this reads as STALE in `keepalive status`. */
+export const KEEPALIVE_STATUS_STALE_MS = 60 * 60 * 1000;
+/** Cap keepalive.log growth: once past this size, drop the older half. */
+export const KEEPALIVE_LOG_MAX_BYTES = 1_000_000;
 /** Backoff schedule (ms) for invalid_grant retries; last entry is the cap. */
 export const KEEPALIVE_BACKOFF_MS = [15 * 60_000, 60 * 60_000, 4 * 60 * 60_000, 24 * 60 * 60_000];
 export const KEEPALIVE_POLL_CRON = '*/15 * * * *';
@@ -24,6 +29,7 @@ export const KEEPALIVE_TASK_NAME = 'linear-cli-keepalive';
 /** Subdir under the global config dir holding one lock file per workspace. */
 export const KEEPALIVE_LOCK_DIRNAME = 'keepalive';
 export const KEEPALIVE_LOG_FILE = 'keepalive.log';
+export const KEEPALIVE_RUN_STATUS_FILE = 'keepalive-run-status.json';
 
 export function getKeepaliveLockDir(): string {
   return path.join(getGlobalConfigDir(), KEEPALIVE_LOCK_DIRNAME);
@@ -32,6 +38,10 @@ export function getKeepaliveLockDir(): string {
 /** Per-workspace rotation lock: <config>/keepalive/<workspaceId>.lock */
 export function getWorkspaceLockPath(workspaceId: string): string {
   return path.join(getKeepaliveLockDir(), `${workspaceId}.lock`);
+}
+
+export function getKeepaliveRunStatusPath(): string {
+  return path.join(getGlobalConfigDir(), KEEPALIVE_RUN_STATUS_FILE);
 }
 
 // Hosts Linear itself serves attachment assets from. Only these (and their

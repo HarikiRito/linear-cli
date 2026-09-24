@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { err, ok, Result } from 'neverthrow';
 import { KEEPALIVE_TASK_NAME } from '../../../lib/config.js';
 import { toError } from '../../../lib/errors.js';
-import { getLogPath, type KeepaliveScheduler } from './index.js';
+import { getLogPath, type KeepaliveScheduler, type SchedulerStatus } from './index.js';
 
 const SCHTASKS = 'schtasks.exe';
 
@@ -55,9 +55,11 @@ export class TaskSchedulerBackend implements KeepaliveScheduler {
     });
   }
 
-  status(): Result<{ installed: boolean; detail: string }, Error> {
+  status(): Result<SchedulerStatus, Error> {
     const result = runSchTasks(['/query', '/tn', KEEPALIVE_TASK_NAME]);
     if (result.isErr()) return ok({ installed: false, detail: 'not installed' });
+    // schtasks doesn't round-trip the node/cli paths in a stable, parseable form — path-existence
+    // health checks are unavailable on this backend; `keepalive status` treats them as unknown.
     return ok({ installed: true, detail: result.value.trim() });
   }
 }
