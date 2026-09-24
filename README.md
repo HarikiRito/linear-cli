@@ -87,12 +87,13 @@ An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing
 
 | Command | Description |
 |---|---|
-| `linear issues list` | List issues. `--team`, `--state <tokens>` (comma-sep snake_case, e.g. `todo,in_progress,in_review`; default: `todo,in_progress,in_review`), `--all-states` |
-| `linear issues get <id>` | Full issue detail. Accepts `ENG-123`, bare number, or UUID |
+| `linear issues list` | List issues. `--team`, `--state <tokens>` (comma-sep snake_case, e.g. `todo,in_progress,dev_review`; default: `todo,in_progress,dev_review`), `--all-states` |
+| `linear issues get <id>` | Full issue detail. Accepts `ENG-123`, bare number, or UUID. `--project <name-or-id>` widens the directory's project scope to include it when resolving `<id>` |
 | `linear issues me` | Issues assigned to you. `--state`, `--all-states` |
 | `linear issues query <term>` | Search issues by text. `--state`, `--all-states` |
-| `linear issues create` | Create an issue. Required: `--title <text>`, `--team <name-or-id>`. Optional: `--description <text\|->`, `--project`, `--milestone` (needs `--project`), `--assignee`, `--labels <csv>`, `--state`, `--priority <0-4>` (0=None 1=Urgent 2=High 3=Medium 4=Low), `--estimate`, `--cycle`, `--parent`, `--due-date <YYYY-MM-DD>` |
-| `linear issues update <id>` | Update an issue. Same optional fields as create. `--labels` replaces all. `--state`/`--cycle` resolve correctly only when `--team` is also provided |
+| `linear issues create` | Create an issue. Required: `--title <text>`, `--team <name-or-id>`. Optional: `--description <text\|->`, `--project`, `--milestone` (needs `--project`), `--assignee`, `--labels <csv>`, `--state`, `--priority <0-4>` (0=None 1=Urgent 2=High 3=Medium 4=Low), `--estimate`, `--cycle`, `--parent`, `--due-date <YYYY-MM-DD>`, `--related-to`/`--blocks`/`--blocked-by`/`--duplicate-of` (relation targets; `--project` widens the directory's scope to include them too) |
+| `linear issues update <id>` | Update an issue. Same optional fields as create. `--labels` replaces all. `--state`/`--cycle` resolve correctly only when `--team` is also provided. `--project` also widens the directory's scope to include it when resolving `<id>` |
+| `linear issues batch-update <ids...>` | Update multiple issues at once. Same optional fields as update; `--project` also widens the directory's scope to include it when resolving each id |
 | `linear issues delete <id>` | Move issue to trash. `--yes` skips confirmation |
 
 ### Issue Comments

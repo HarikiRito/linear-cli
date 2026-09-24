@@ -57,10 +57,11 @@ export class NotFoundError extends Error {
  */
 export class ScopeError extends Error {
   readonly kind = 'ScopeError' as const;
-  constructor(entityType: string, value: string, scopeNames: string) {
-    super(
-      `${entityType} '${value}' is outside this directory's project scope (${scopeNames}); pass --project or run from an unscoped directory`
-    );
+  constructor(entityType: string, value: string, scopeNames: string, attemptedProject?: string) {
+    const message = attemptedProject
+      ? `${entityType} '${value}' is outside this directory's project scope (${scopeNames}) and outside --project '${attemptedProject}'`
+      : `${entityType} '${value}' is outside this directory's project scope (${scopeNames}); pass --project or run from an unscoped directory`;
+    super(message);
     this.name = 'ScopeError';
   }
 }

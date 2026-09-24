@@ -113,9 +113,13 @@ export async function batchUpdateIssues(opts: BatchUpdateOptions): Promise<void>
     return;
   }
   const sharedInput = inputResult.value;
+  // Reuse the already-resolved projectId (resolved once above by resolveUpdateInput)
+  // as the scope-widening id — avoids re-resolving --project by name per issue.
+  const widenProjectId =
+    typeof sharedInput.projectId === 'string' ? sharedInput.projectId : undefined;
 
   const results = await runBatchUpdate(ids, async (id): Promise<IssueUpdateResult> => {
-    const idResult = await resolveIssueIdentifier(id, client);
+    const idResult = await resolveIssueIdentifier(id, client, widenProjectId);
     if (idResult.isErr()) {
       return { ok: false, id, error: idResult.error.message };
     }

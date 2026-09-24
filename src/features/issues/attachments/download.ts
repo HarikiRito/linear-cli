@@ -14,6 +14,7 @@ export interface DownloadAttachmentOptions {
   issue: string;
   attachmentId: string;
   output?: string;
+  project?: string;
 }
 
 export async function downloadAttachment(opts: DownloadAttachmentOptions): Promise<void> {
@@ -24,7 +25,7 @@ export async function downloadAttachment(opts: DownloadAttachmentOptions): Promi
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.issue, client);
+  const idResult = await resolveIssueIdentifier(opts.issue, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

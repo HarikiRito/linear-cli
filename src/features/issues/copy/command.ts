@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, isPlain } from '../../../lib/commandOptions.js';
+import { addAuthOptions, addProjectScopeOption, isPlain } from '../../../lib/commandOptions.js';
 import { copyIssue } from './copy.js';
 
 export function registerCopyCommand(issues: Command): void {
@@ -11,11 +11,19 @@ export function registerCopyCommand(issues: Command): void {
     .option('--url', 'Print only the issue URL')
     .option('--id', 'Print only the issue identifier')
     .option('--branch', 'Print only the branch name');
+  addProjectScopeOption(cmd);
 
   addAuthOptions(cmd).action(
     async (
       issue: string,
-      opts: { url?: boolean; id?: boolean; branch?: boolean; apiKey?: string; token?: string }
+      opts: {
+        url?: boolean;
+        id?: boolean;
+        branch?: boolean;
+        apiKey?: string;
+        token?: string;
+        project?: string;
+      }
     ) => {
       await copyIssue({
         apiKey: opts.apiKey,
@@ -25,6 +33,7 @@ export function registerCopyCommand(issues: Command): void {
         identifier: opts.id,
         branch: opts.branch,
         plain: isPlain(cmd),
+        project: opts.project,
       });
     }
   );

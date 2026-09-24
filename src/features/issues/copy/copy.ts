@@ -14,6 +14,7 @@ export interface CopyOptions {
   identifier?: boolean;
   branch?: boolean;
   plain?: boolean;
+  project?: string;
 }
 
 export async function copyIssue(opts: CopyOptions): Promise<void> {
@@ -24,7 +25,7 @@ export async function copyIssue(opts: CopyOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.id, client);
+  const idResult = await resolveIssueIdentifier(opts.id, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

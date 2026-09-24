@@ -10,6 +10,7 @@ export interface SubscribeOptions {
   token?: string;
   issue: string;
   plain?: boolean;
+  project?: string;
 }
 
 async function toggleSubscribe(
@@ -23,7 +24,7 @@ async function toggleSubscribe(
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.issue, client);
+  const idResult = await resolveIssueIdentifier(opts.issue, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

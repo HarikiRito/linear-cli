@@ -366,6 +366,45 @@ describe('issues create', () => {
     expect(createIssueRelationFn).toHaveBeenCalledOnce();
     expect(process.exitCode).toBeUndefined();
   });
+
+  it('--related-to threads --project through to resolveIssueIdentifier, widening scope for the relation target (H-646)', async () => {
+    const createIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const teamsFn = vi.fn().mockResolvedValue({ nodes: [{ id: 'team-uuid', name: 'eng' }] });
+    const createIssueRelationFn = vi.fn().mockResolvedValue({});
+    const clientMock = makeClientMock({
+      createIssue: createIssueFn,
+      teams: teamsFn,
+      createIssueRelation: createIssueRelationFn,
+    });
+    stdMocks(clientMock);
+    const resolveIssueIdentifierMock = vi.fn();
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const { okAsync } = await vi.importActual<typeof import('neverthrow')>('neverthrow');
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      resolveIssueIdentifierMock.mockReturnValue(okAsync('related-uuid'));
+      return { ...actual, resolveIssueIdentifier: resolveIssueIdentifierMock };
+    });
+    const program = await buildProgram();
+
+    const uuid = '77777777-7777-7777-7777-777777777777';
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'create',
+      '--title',
+      'T',
+      '--team',
+      'eng',
+      '--project',
+      uuid,
+      '--related-to',
+      'OTHER-3',
+    ]);
+
+    expect(resolveIssueIdentifierMock).toHaveBeenCalledWith('OTHER-3', clientMock, uuid);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -536,6 +575,36 @@ describe('issues update', () => {
       expect.objectContaining({ projectId: uuid })
     );
     expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
+  });
+
+  it('threads --project through to resolveIssueIdentifier, widening scope for the target issue (H-646)', async () => {
+    const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    stdMocks(clientMock);
+    const resolveIssueIdentifierMock = vi.fn();
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const { okAsync } = await vi.importActual<typeof import('neverthrow')>('neverthrow');
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      resolveIssueIdentifierMock.mockReturnValue(okAsync('ISSUE-1'));
+      return { ...actual, resolveIssueIdentifier: resolveIssueIdentifierMock };
+    });
+    const program = await buildProgram();
+
+    const uuid = '88888888-8888-8888-8888-888888888888';
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'update',
+      'ISSUE-1',
+      '--project',
+      uuid,
+      '--title',
+      'New',
+    ]);
+
+    expect(resolveIssueIdentifierMock).toHaveBeenCalledWith('ISSUE-1', clientMock, uuid);
   });
 });
 
@@ -783,6 +852,36 @@ describe('issues batch-update', () => {
     const [, input] = updateIssueFn.mock.calls[0] as [string, Record<string, unknown>];
     expect(input).toEqual(expect.objectContaining({ projectId: uuid }));
     expect(getDefaultProjectIdsMock).not.toHaveBeenCalled();
+  });
+
+  it('threads --project through to resolveIssueIdentifier for each id, widening scope (H-646)', async () => {
+    const updateIssueFn = vi.fn().mockResolvedValue(makePayloadMock());
+    const clientMock = makeClientMock({ updateIssue: updateIssueFn });
+    stdMocks(clientMock);
+    const resolveIssueIdentifierMock = vi.fn();
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const { okAsync } = await vi.importActual<typeof import('neverthrow')>('neverthrow');
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      resolveIssueIdentifierMock.mockReturnValue(okAsync('ENG-1'));
+      return { ...actual, resolveIssueIdentifier: resolveIssueIdentifierMock };
+    });
+    const program = await buildProgram();
+
+    const uuid = '99999999-9999-9999-9999-999999999999';
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'batch-update',
+      'ENG-1',
+      '--project',
+      uuid,
+      '--title',
+      'New',
+    ]);
+
+    expect(resolveIssueIdentifierMock).toHaveBeenCalledWith('ENG-1', clientMock, uuid);
   });
 });
 

@@ -16,6 +16,7 @@ export interface HistoryOptions {
   token?: string;
   id: string;
   plain: boolean;
+  project?: string;
 }
 
 type HistoryNode = NonNullable<IssueHistoryQuery['issue']>['history']['nodes'][number];
@@ -92,7 +93,7 @@ export async function listHistory(opts: HistoryOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.id, client);
+  const idResult = await resolveIssueIdentifier(opts.id, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

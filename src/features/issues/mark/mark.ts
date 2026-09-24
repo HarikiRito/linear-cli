@@ -25,12 +25,13 @@ export interface MarkOptions {
   issue: string;
   target: string;
   plain?: boolean;
+  project?: string;
 }
 
 async function doMark(client: LinearClient, opts: MarkOptions): Promise<void> {
   const [issueResult, targetResult] = await Promise.all([
-    resolveIssueIdentifier(opts.issue, client),
-    resolveIssueIdentifier(opts.target, client),
+    resolveIssueIdentifier(opts.issue, client, opts.project),
+    resolveIssueIdentifier(opts.target, client, opts.project),
   ]);
   if (issueResult.isErr()) throw issueResult.error;
   if (targetResult.isErr()) throw targetResult.error;

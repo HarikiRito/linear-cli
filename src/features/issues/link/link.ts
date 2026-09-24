@@ -12,6 +12,7 @@ export interface LinkOptions {
   url: string;
   title?: string;
   plain?: boolean;
+  project?: string;
 }
 
 export interface UnlinkOptions {
@@ -29,7 +30,7 @@ export async function linkAttachment(opts: LinkOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.issue, client);
+  const idResult = await resolveIssueIdentifier(opts.issue, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

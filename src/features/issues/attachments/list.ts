@@ -12,6 +12,7 @@ export interface ListAttachmentsOptions {
   token?: string;
   issue: string;
   plain: boolean;
+  project?: string;
 }
 
 export interface AttachmentRow {
@@ -58,7 +59,7 @@ export async function listAttachments(opts: ListAttachmentsOptions): Promise<voi
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.issue, client);
+  const idResult = await resolveIssueIdentifier(opts.issue, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

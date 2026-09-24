@@ -402,4 +402,34 @@ describe('issues get', () => {
 
     consoleSpy.mockRestore();
   });
+
+  // H-646: --project widens the dir scope for resolving <id> (see
+  // resolveIssueIdentifier's widenProject param) — verify it's threaded through.
+  it('threads --project through to resolveIssueIdentifier, widening scope for <id> (H-646)', async () => {
+    const requestFn = vi.fn().mockResolvedValue(makeIssueResponse());
+    vi.doMock('../src/lib/client/index.js', () => ({
+      getClient: vi.fn().mockReturnValue(ok({})),
+      getClientWithAuthRetry: vi.fn().mockReturnValue(ok({})),
+      getRequestFn: vi.fn().mockReturnValue(requestFn),
+    }));
+    vi.doMock('../src/lib/output/table.js', () => ({
+      prettyTable: vi.fn().mockReturnValue(''),
+      printTable: vi.fn(),
+    }));
+    vi.doMock('../src/lib/runner.js', () => ({ exitError: vi.fn() }));
+    const resolveIssueIdentifierMock = vi.fn();
+    vi.doMock('../src/features/issues/shared/resolve.js', async (importOriginal) => {
+      const { okAsync } = await vi.importActual<typeof import('neverthrow')>('neverthrow');
+      const actual =
+        await importOriginal<typeof import('../src/features/issues/shared/resolve.js')>();
+      resolveIssueIdentifierMock.mockReturnValue(okAsync('ENG-42'));
+      return { ...actual, resolveIssueIdentifier: resolveIssueIdentifierMock };
+    });
+
+    const program = await buildProgram();
+    const uuid = '11111111-1111-1111-1111-111111111111';
+    await program.parseAsync(['node', 'linear', 'issues', 'get', 'ENG-42', '--project', uuid]);
+
+    expect(resolveIssueIdentifierMock).toHaveBeenCalledWith('ENG-42', {}, uuid);
+  });
 });

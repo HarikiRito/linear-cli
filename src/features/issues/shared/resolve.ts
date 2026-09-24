@@ -418,7 +418,8 @@ function expandIssueIdentifier(input: string, client: LinearClient): ResultAsync
 function assertIssueInScope(
   resolvedId: string,
   scopedProjectIds: string[],
-  client: LinearClient
+  client: LinearClient,
+  widenedProjectLabel?: string
 ): ResultAsync<string, CliError> {
   const requestFn = getRequestFn(client);
   return ResultAsync.fromPromise(
@@ -431,24 +432,35 @@ function assertIssueInScope(
     if (projectId && scopedProjectIds.includes(projectId)) return okAsync(resolvedId);
     const { linkedProjects } = readMergedConfigs();
     const scopeNames = (linkedProjects ?? []).map((p) => p.name).join(', ');
-    return errAsync(new ScopeError('issue', resolvedId, scopeNames));
+    return errAsync(new ScopeError('issue', resolvedId, scopeNames, widenedProjectLabel));
   });
 }
 
 /**
  * Resolve an issue identifier, then — when the cwd is linked to a workspace
  * with a project selection — hard-scope it: out-of-scope reports ScopeError
- * (not a generic not-found). Explicit --project (list/create) is a separate,
- * intentional override — see resolveDefaultProjectId.
+ * (not a generic not-found). When `widenProject` (a command's --project
+ * name-or-id) is given, the effective scope is the dir's scoped projects
+ * UNION that project — see H-646 "one consistent rule". Explicit --project on
+ * list/create's own project field is a separate, intentional override — see
+ * resolveDefaultProjectId.
  */
 export function resolveIssueIdentifier(
   input: string,
-  client: LinearClient
+  client: LinearClient,
+  widenProject?: string
 ): ResultAsync<string, CliError> {
   const resolved = expandIssueIdentifier(input, client);
   const scopedProjectIds = getScopedProjectIds();
   if (!scopedProjectIds) return resolved;
-  return resolved.andThen((id) => assertIssueInScope(id, scopedProjectIds, client));
+  if (!widenProject) {
+    return resolved.andThen((id) => assertIssueInScope(id, scopedProjectIds, client));
+  }
+  return resolved.andThen((id) =>
+    resolveProject(widenProject, client).andThen((widenedProjectId) =>
+      assertIssueInScope(id, [...scopedProjectIds, widenedProjectId], client, widenProject)
+    )
+  );
 }
 
 /**

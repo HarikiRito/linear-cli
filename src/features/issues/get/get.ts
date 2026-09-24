@@ -15,6 +15,7 @@ export interface GetIssueOptions {
   id: string;
   plain: boolean;
   includeDeleted: boolean;
+  project?: string;
 }
 
 interface AttachmentRow {
@@ -52,7 +53,7 @@ export async function getIssue(opts: GetIssueOptions): Promise<void> {
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.id, client);
+  const idResult = await resolveIssueIdentifier(opts.id, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

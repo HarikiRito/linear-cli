@@ -14,6 +14,7 @@ export interface ListCommentsOptions {
   limit: number;
   after?: string;
   plain: boolean;
+  project?: string;
 }
 
 interface CommentRow {
@@ -51,7 +52,7 @@ export async function listComments(opts: ListCommentsOptions): Promise<void> {
 
   // Resolve bare issue numbers (e.g. "153") via the default team, same as other
   // issue commands (get/update) — see H-163. Full identifiers/UUIDs pass through.
-  const idResult = await resolveIssueIdentifier(opts.issueId, client);
+  const idResult = await resolveIssueIdentifier(opts.issueId, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

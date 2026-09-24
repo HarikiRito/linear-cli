@@ -10,6 +10,7 @@ export interface ArchiveOptions {
   token?: string;
   issue: string;
   plain?: boolean;
+  project?: string;
 }
 
 async function toggleArchive(opts: ArchiveOptions, action: 'archive' | 'unarchive'): Promise<void> {
@@ -20,7 +21,7 @@ async function toggleArchive(opts: ArchiveOptions, action: 'archive' | 'unarchiv
   }
   const client = clientResult.value;
 
-  const idResult = await resolveIssueIdentifier(opts.issue, client);
+  const idResult = await resolveIssueIdentifier(opts.issue, client, opts.project);
   if (idResult.isErr()) {
     exitError(idResult.error);
     return;

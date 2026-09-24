@@ -203,5 +203,66 @@ describe('workspace project scoping', () => {
       expect(result.isErr()).toBe(true);
       expect(result._unsafeUnwrapErr().name).toBe('NotFoundError');
     });
+
+    // H-646: --project widens the effective scope to dir scope UNION the
+    // named project, for every command that threads it through (get/update/
+    // create-relation/etc — see resolveIssueIdentifier's widenProject param).
+    const WIDENED_PROJECT_UUID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+    it('widened via --project: resolves an issue in the named project even though it is outside the dir scope', async () => {
+      await linkProject(tmpEnv.projectDir, 'ws-1');
+      await updateEntry(tmpEnv.projectDir, { projects: [{ id: 'p1', name: 'Scoped' }] });
+      process.cwd = () => tmpEnv.projectDir;
+
+      const requestFn = vi
+        .fn()
+        .mockResolvedValue({ issue: { project: { id: WIDENED_PROJECT_UUID } } });
+      vi.doMock('../../../../lib/client/index.js', () => ({
+        getRequestFn: vi.fn().mockReturnValue(requestFn),
+      }));
+
+      const { resolveIssueIdentifier } = await import('../resolve.js');
+      const result = await resolveIssueIdentifier('OTHER-1', {} as never, WIDENED_PROJECT_UUID);
+
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toBe('OTHER-1');
+    });
+
+    it('widened via --project: still resolves an issue that is in the dir scope (union, not replacement)', async () => {
+      await linkProject(tmpEnv.projectDir, 'ws-1');
+      await updateEntry(tmpEnv.projectDir, { projects: [{ id: 'p1', name: 'Scoped' }] });
+      process.cwd = () => tmpEnv.projectDir;
+
+      const requestFn = vi.fn().mockResolvedValue({ issue: { project: { id: 'p1' } } });
+      vi.doMock('../../../../lib/client/index.js', () => ({
+        getRequestFn: vi.fn().mockReturnValue(requestFn),
+      }));
+
+      const { resolveIssueIdentifier } = await import('../resolve.js');
+      const result = await resolveIssueIdentifier('ENG-1', {} as never, WIDENED_PROJECT_UUID);
+
+      expect(result.isOk()).toBe(true);
+    });
+
+    it('widened via --project: reports ScopeError naming both the dir scope and the given project when the issue is in neither', async () => {
+      await linkProject(tmpEnv.projectDir, 'ws-1');
+      await updateEntry(tmpEnv.projectDir, { projects: [{ id: 'p1', name: 'Scoped' }] });
+      process.cwd = () => tmpEnv.projectDir;
+
+      const requestFn = vi.fn().mockResolvedValue({ issue: { project: { id: 'unrelated' } } });
+      vi.doMock('../../../../lib/client/index.js', () => ({
+        getRequestFn: vi.fn().mockReturnValue(requestFn),
+      }));
+
+      const { resolveIssueIdentifier } = await import('../resolve.js');
+      const result = await resolveIssueIdentifier('OTHER-1', {} as never, WIDENED_PROJECT_UUID);
+
+      expect(result.isErr()).toBe(true);
+      const error = result._unsafeUnwrapErr();
+      expect(error.name).toBe('ScopeError');
+      expect(error.message).toBe(
+        `issue 'OTHER-1' is outside this directory's project scope (Scoped) and outside --project '${WIDENED_PROJECT_UUID}'`
+      );
+    });
   });
 });

@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { addAuthOptions, isPlain } from '../../../lib/commandOptions.js';
+import { addAuthOptions, addProjectScopeOption, isPlain } from '../../../lib/commandOptions.js';
 import { markRelation, VALID_RELATIONS } from './mark.js';
 
 export function registerMarkCommand(issues: Command): void {
@@ -8,13 +8,14 @@ export function registerMarkCommand(issues: Command): void {
     .description(
       `Create a relation between two issues.\n<relation> must be one of: ${VALID_RELATIONS.join(', ')}`
     );
+  addProjectScopeOption(cmd);
 
   addAuthOptions(cmd).action(
     async (
       relation: string,
       issue: string,
       target: string,
-      opts: { apiKey?: string; token?: string }
+      opts: { apiKey?: string; token?: string; project?: string }
     ) => {
       await markRelation({
         apiKey: opts.apiKey,
@@ -23,6 +24,7 @@ export function registerMarkCommand(issues: Command): void {
         issue,
         target,
         plain: isPlain(cmd),
+        project: opts.project,
       });
     }
   );
