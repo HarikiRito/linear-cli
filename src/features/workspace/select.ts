@@ -2,7 +2,7 @@ import { intro, isCancel, outro, select } from '@clack/prompts';
 import type { LinearClient } from '@linear/sdk';
 import pc from 'picocolors';
 import { buildLinearClient } from '../../lib/client/index.js';
-import { parseCsv } from '../../lib/commandOptions.js';
+import { parseCsv, shouldRunInteractive } from '../../lib/commandOptions.js';
 import { confirmDestructive } from '../../lib/confirm.js';
 import {
   AmbiguousMatchError,
@@ -53,8 +53,7 @@ export async function runWorkspaceSelect(opts: WorkspaceSelectOptions = {}): Pro
   const hasFlags = Boolean(
     opts.workspace || opts.team || opts.projects || opts.allProjects || opts.yes
   );
-  const isTty = Boolean(process.stdout.isTTY && process.stdin.isTTY);
-  if (isTty && !hasFlags) {
+  if (shouldRunInteractive(hasFlags)) {
     return runWorkspaceSelectInteractive();
   }
   return runWorkspaceSelectNonInteractive(opts);
