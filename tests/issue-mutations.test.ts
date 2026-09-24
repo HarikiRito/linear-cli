@@ -67,6 +67,7 @@ describe('issues create', () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     vi.resetModules();
+    vi.doUnmock('../src/features/issues/shared/resolve.js');
     process.exitCode = undefined;
   });
 
@@ -375,6 +376,7 @@ describe('issues update', () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     vi.resetModules();
+    vi.doUnmock('../src/features/issues/shared/resolve.js');
     process.exitCode = undefined;
   });
 
@@ -545,6 +547,7 @@ describe('issues batch-update', () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     vi.resetModules();
+    vi.doUnmock('../src/features/issues/shared/resolve.js');
     process.exitCode = undefined;
   });
 
