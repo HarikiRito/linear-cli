@@ -176,7 +176,7 @@ export async function runWorkspaceSelectNonInteractive(
   if (!opts.workspace) {
     throw new ValidationError(
       'Usage: linear workspace select --workspace <id|urlKey|name> [--team <key>] ' +
-        '[--projects <name,...> | --all-projects] [--yes]. ' +
+        '[--projects <name,...> | --all-projects] [--yes] [--plain]. ' +
         '--workspace is required outside an interactive terminal.'
     );
   }
