@@ -65,7 +65,10 @@ export async function listLabels(opts: ListLabelsOptions): Promise<void> {
 
   const requestFn = getRequestFn(client);
 
-  const filter = teamId ? { team: { id: { eq: teamId } } } : undefined;
+  // Workspace-level labels have no team; include them alongside team-scoped ones.
+  const filter = teamId
+    ? { or: [{ team: { id: { eq: teamId } } }, { team: { null: true } }] }
+    : undefined;
 
   const resultAsync = fetchPaged(
     requestFn,

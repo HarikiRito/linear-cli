@@ -76,6 +76,21 @@ describe('labels list', () => {
     expect(JSON.stringify(vars)).toContain('team-uuid');
   });
 
+  it('--team filter includes workspace-level labels (null team) alongside team-scoped ones', async () => {
+    const requestFn = vi.fn().mockResolvedValue(makeLabelsResponse([]));
+    const teamsFn = makeTeamsFn();
+
+    stdMocksWithRequestAndClient(requestFn, { teams: teamsFn });
+
+    const program = await buildProgram();
+    await program.parseAsync(['node', 'linear', 'labels', 'list', '--team', 'ENG']);
+
+    const [, vars] = requestFn.mock.calls[0] as [unknown, Record<string, unknown>];
+    const filter = vars.filter as { or: { team: Record<string, unknown> }[] };
+    expect(filter.or).toContainEqual({ team: { id: { eq: 'team-uuid' } } });
+    expect(filter.or).toContainEqual({ team: { null: true } });
+  });
+
   it('unknown --team calls exitError with NotFoundError', async () => {
     const requestFn = vi.fn().mockResolvedValue(makeLabelsResponse([]));
     const teamsFn = makeTeamsFn([]); // no teams found
