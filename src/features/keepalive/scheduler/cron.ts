@@ -30,13 +30,18 @@ function scheduleLine(nodePath: string, cliPath: string): string {
   return `${KEEPALIVE_POLL_CRON} "${nodePath}" "${cliPath}" keepalive run --quiet >> "${getLogPath()}" 2>&1`;
 }
 
+/** Quote-aware split: keeps `"a b"` as one token instead of breaking on the inner space. */
+function tokenizeScheduleLine(line: string): string[] {
+  return line.trim().match(/(?:[^\s"]+|"[^"]*")+/g) ?? [];
+}
+
 /**
  * True if the schedule line already targets this exact nodePath + cliPath.
  * Token-exact: quoted tokens must equal — guards against substring false
  * matches (e.g. /old/store/linear.js vs /store/linear.js).
  */
 function matchesSchedule(line: string, nodePath: string, cliPath: string): boolean {
-  const tokens: string[] = line.trim().match(/(?:[^\s"]+|"[^"]*")+/g) ?? [];
+  const tokens = tokenizeScheduleLine(line);
   return tokens.includes(`"${nodePath}"`) && tokens.includes(`"${cliPath}"`);
 }
 
@@ -46,7 +51,7 @@ function matchesSchedule(line: string, nodePath: string, cliPath: string): boole
  * empty object for lines we can't confidently parse (e.g. unquoted, hand-edited).
  */
 function parseScheduleTokens(line: string): { nodePath?: string; cliPath?: string } {
-  const tokens = line.trim().match(/(?:[^\s"]+|"[^"]*")+/g) ?? [];
+  const tokens = tokenizeScheduleLine(line);
   const unquote = (t: string | undefined): string | undefined =>
     t !== undefined && t.length >= 2 && t.startsWith('"') && t.endsWith('"')
       ? t.slice(1, -1)
