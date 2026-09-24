@@ -363,6 +363,29 @@ describe('runWorkspaceSelect: dispatch (H-645)', () => {
     expect(mockSelect).not.toHaveBeenCalled();
     expect(mockLinkProject).toHaveBeenCalledWith(expect.any(String), 'ws-1', undefined);
   });
+
+  // H-646 review: `plain` (isPlain(cmd)'s resolved value, which also reflects
+  // LINEAR_OUTPUT/config) must not be conflated with an explicitly-passed
+  // --plain/--table flag for the hasFlags/interactive-dispatch check.
+  it('resolved plain=true from env/config alone (no explicit flag) still runs the interactive picker', async () => {
+    setTty(true);
+    mockSelect.mockResolvedValue('ws-1');
+    mockIsCancel.mockReturnValue(false);
+    mockSelectDefaultTeam.mockResolvedValue(undefined);
+
+    await runWorkspaceSelect({ plain: true });
+
+    expect(mockSelect).toHaveBeenCalled();
+  });
+
+  it('explicit --plain (explicitOutputFlag) still counts as a flag and skips the interactive picker', async () => {
+    setTty(true);
+
+    await expect(runWorkspaceSelect({ plain: true, explicitOutputFlag: true })).rejects.toThrow(
+      /--workspace is required/i
+    );
+    expect(mockSelect).not.toHaveBeenCalled();
+  });
 });
 
 describe('runWorkspaceSelectNonInteractive', () => {

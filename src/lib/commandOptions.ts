@@ -46,6 +46,17 @@ export function shouldRunInteractive(hasFlags: boolean): boolean {
   return isTty && !hasFlags;
 }
 
+/**
+ * Raw --plain/--table exactly as typed on the CLI, ignoring LINEAR_OUTPUT/config —
+ * unlike isPlain(), which also resolves those sources. hasFlags checks (H-645
+ * interactive dispatch) must use this: an env/config-derived output mode is not
+ * a user-passed flag and must not skip the interactive prompt (see H-646 review).
+ */
+export function hasExplicitOutputFlag(cmd: Command): boolean {
+  const opts = cmd.optsWithGlobals();
+  return !!opts.plain || !!opts.table;
+}
+
 /** Register --project for commands that only use it to widen dir scope (see resolveIssueIdentifier), not as a mutation field. */
 export function addProjectScopeOption(cmd: Command): Command {
   return cmd.option(

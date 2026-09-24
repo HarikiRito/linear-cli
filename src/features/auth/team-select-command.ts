@@ -23,6 +23,8 @@ export interface TeamSelectOptions {
   projects?: string;
   allProjects?: boolean;
   plain?: boolean;
+  /** Raw --plain/--table as typed on the CLI — see hasExplicitOutputFlag(). */
+  explicitOutputFlag?: boolean;
 }
 
 /**
@@ -35,7 +37,9 @@ export interface TeamSelectOptions {
  * with a usage error when --team is missing.
  */
 export async function runTeamSelectFlow(opts: TeamSelectOptions = {}): Promise<void> {
-  const hasFlags = Boolean(opts.team || opts.projects || opts.allProjects || opts.plain);
+  const hasFlags = Boolean(
+    opts.team || opts.projects || opts.allProjects || opts.explicitOutputFlag
+  );
   if (shouldRunInteractive(hasFlags)) {
     return runTeamSelectInteractive();
   }

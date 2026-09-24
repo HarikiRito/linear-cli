@@ -205,6 +205,26 @@ describe('runTeamSelectFlow: dispatch (H-645)', () => {
       projects: undefined,
     });
   });
+
+  // H-646 review: `plain` (isPlain(cmd)'s resolved value, which also reflects
+  // LINEAR_OUTPUT/config) must not be conflated with an explicitly-passed
+  // --plain/--table flag for the hasFlags/interactive-dispatch check.
+  it('resolved plain=true from env/config alone (no explicit flag) still runs the interactive flow', async () => {
+    setTty(true);
+
+    await runTeamSelectFlow({ plain: true });
+
+    expect(mockSelectAndPersist).toHaveBeenCalledOnce();
+  });
+
+  it('explicit --plain (explicitOutputFlag) still counts as a flag and skips the interactive flow', async () => {
+    setTty(true);
+
+    await expect(runTeamSelectFlow({ plain: true, explicitOutputFlag: true })).rejects.toThrow(
+      /--team is required/i
+    );
+    expect(mockSelectAndPersist).not.toHaveBeenCalled();
+  });
 });
 
 describe('runTeamSelectNonInteractive', () => {

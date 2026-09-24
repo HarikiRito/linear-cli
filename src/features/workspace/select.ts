@@ -31,6 +31,8 @@ export interface WorkspaceSelectOptions {
   allProjects?: boolean;
   yes?: boolean;
   plain?: boolean;
+  /** Raw --plain/--table as typed on the CLI — see hasExplicitOutputFlag(). */
+  explicitOutputFlag?: boolean;
 }
 
 function stateSuffix(state: WorkspaceInfo['state']): string {
@@ -53,7 +55,12 @@ function stateSuffix(state: WorkspaceInfo['state']): string {
  */
 export async function runWorkspaceSelect(opts: WorkspaceSelectOptions = {}): Promise<void> {
   const hasFlags = Boolean(
-    opts.workspace || opts.team || opts.projects || opts.allProjects || opts.yes || opts.plain
+    opts.workspace ||
+      opts.team ||
+      opts.projects ||
+      opts.allProjects ||
+      opts.yes ||
+      opts.explicitOutputFlag
   );
   if (shouldRunInteractive(hasFlags)) {
     return runWorkspaceSelectInteractive();
