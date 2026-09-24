@@ -197,6 +197,48 @@ describe('comment list', () => {
     );
   });
 
+  // --- H-640: an issue with zero comments must print an explicit empty
+  // marker instead of silently producing no output. ---
+
+  it('prints an explicit empty marker in --plain output for zero comments', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const requestFn = vi.fn().mockResolvedValue({
+      issue: {
+        comments: {
+          nodes: [],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+    });
+    stdMocks({}, requestFn);
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'issues', 'comment', 'list', 'ISSUE-1', '--plain']);
+
+    expect(consoleSpy).toHaveBeenCalledWith('No comments found.');
+  });
+
+  it('prints an explicit empty marker in table output for zero comments (no boxed headers)', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const requestFn = vi.fn().mockResolvedValue({
+      issue: {
+        comments: {
+          nodes: [],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+    });
+    stdMocks({}, requestFn);
+    const program = await buildProgram();
+    const { prettyTable, printTable } = await import('../src/lib/output/table.js');
+
+    await program.parseAsync(['node', 'linear', 'issues', 'comment', 'list', 'ISSUE-1']);
+
+    expect(consoleSpy).toHaveBeenCalledWith('No comments found.');
+    expect(vi.mocked(prettyTable)).not.toHaveBeenCalled();
+    expect(vi.mocked(printTable)).not.toHaveBeenCalled();
+  });
+
   // --- H-163: bare issue numbers must resolve via the default team, same as
   // other issue commands (get/update), instead of failing with a generic
   // "Argument Validation Error". ---

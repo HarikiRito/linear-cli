@@ -87,7 +87,15 @@ export async function listComments(opts: ListCommentsOptions): Promise<void> {
 
   const r = await result;
   r.match(
-    (data) => renderPaged(data, opts.plain, COLUMNS),
+    (data) => {
+      // Explicit empty marker in both modes — see H-640 (bare renderPaged
+      // left --plain byte-for-byte empty, indistinguishable from failure).
+      if (data.rows.length === 0) {
+        console.log('No comments found.');
+        return;
+      }
+      renderPaged(data, opts.plain, COLUMNS);
+    },
     (e) => exitError(e)
   );
 }
