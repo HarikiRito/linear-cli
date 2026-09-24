@@ -90,7 +90,7 @@ async function resolveClientOrLogin(): Promise<LinearClient> {
 export async function runTeamSelectNonInteractive(opts: TeamSelectOptions): Promise<void> {
   if (!opts.team) {
     throw new ValidationError(
-      'Usage: linear team select --team <key|name> [--projects <name,...> | --all-projects]. ' +
+      'Usage: linear team select --team <key|name> [--projects <name,...> | --all-projects] [--plain]. ' +
         '--team is required outside an interactive terminal.'
     );
   }
