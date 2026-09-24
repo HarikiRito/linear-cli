@@ -19,3 +19,13 @@ export function addAuthOptions(cmd: Command): Command {
 export function isPlain(cmd: Command): boolean {
   return !!cmd.optsWithGlobals().plain;
 }
+
+/**
+ * H-645 dispatch rule shared by `workspace select` / `team select`: interactive
+ * prompts only on a TTY with no flags at all; any flag or non-TTY stdin runs
+ * the non-interactive path instead.
+ */
+export function shouldRunInteractive(hasFlags: boolean): boolean {
+  const isTty = Boolean(process.stdout.isTTY && process.stdin.isTTY);
+  return isTty && !hasFlags;
+}

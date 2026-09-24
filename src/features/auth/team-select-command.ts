@@ -2,7 +2,7 @@ import { intro, outro } from '@clack/prompts';
 import type { LinearClient } from '@linear/sdk';
 import pc from 'picocolors';
 import { buildLinearClient } from '../../lib/client/index.js';
-import { parseCsv } from '../../lib/commandOptions.js';
+import { parseCsv, shouldRunInteractive } from '../../lib/commandOptions.js';
 import type { DefaultProject } from '../../lib/config-file.js';
 import { ValidationError } from '../../lib/errors.js';
 import { findProjectRoot } from '../../lib/scope.js';
@@ -36,8 +36,7 @@ export interface TeamSelectOptions {
  */
 export async function runTeamSelectFlow(opts: TeamSelectOptions = {}): Promise<void> {
   const hasFlags = Boolean(opts.team || opts.projects || opts.allProjects);
-  const isTty = Boolean(process.stdout.isTTY && process.stdin.isTTY);
-  if (isTty && !hasFlags) {
+  if (shouldRunInteractive(hasFlags)) {
     return runTeamSelectInteractive();
   }
   return runTeamSelectNonInteractive(opts);
