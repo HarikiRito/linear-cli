@@ -36,7 +36,7 @@ function scheduleLine(nodePath: string, cliPath: string): string {
  * matches (e.g. /old/store/linear.js vs /store/linear.js).
  */
 function matchesSchedule(line: string, nodePath: string, cliPath: string): boolean {
-  const tokens = line.trim().split(/\s+/);
+  const tokens: string[] = line.trim().match(/(?:[^\s"]+|"[^"]*")+/g) ?? [];
   return tokens.includes(`"${nodePath}"`) && tokens.includes(`"${cliPath}"`);
 }
 
