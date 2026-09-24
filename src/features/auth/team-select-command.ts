@@ -35,7 +35,7 @@ export interface TeamSelectOptions {
  * with a usage error when --team is missing.
  */
 export async function runTeamSelectFlow(opts: TeamSelectOptions = {}): Promise<void> {
-  const hasFlags = Boolean(opts.team || opts.projects || opts.allProjects);
+  const hasFlags = Boolean(opts.team || opts.projects || opts.allProjects || opts.plain);
   if (shouldRunInteractive(hasFlags)) {
     return runTeamSelectInteractive();
   }
