@@ -14,7 +14,7 @@ export function registerListCommand(issues: Command): void {
     .option('--all', 'Fetch all pages (one request per page)')
     .option(
       '--state <tokens>',
-      'Filter by state tokens (comma-separated snake_case, e.g. todo,in_progress,dev_review; default: todo,in_progress,dev_review)'
+      'Filter by state tokens (comma-separated snake_case, e.g. todo,in_progress,in_review; default: todo,in_progress,in_review)'
     )
     .option('--all-states', 'Return issues in ALL states (overrides --state)')
     .option('--include-deleted', 'Include trashed/archived issues (excluded by default)');

@@ -238,7 +238,7 @@ describe('issues list', () => {
     expect(JSON.stringify(vars)).toContain('"ENG"');
   });
 
-  it('default state filter uses todo/in_progress/dev_review as OR-of-eqIgnoreCase', async () => {
+  it('default state filter uses todo/in_progress/in_review as OR-of-eqIgnoreCase', async () => {
     const request = vi.fn().mockResolvedValue(makeListResponse([]));
     stdMocks(request);
     const program = await buildProgram();
@@ -250,10 +250,10 @@ describe('issues list', () => {
     expect(json).toContain('eqIgnoreCase');
     expect(json).toContain('"todo"');
     expect(json).toContain('"in progress"');
-    expect(json).toContain('"dev review"');
+    expect(json).toContain('"in review"');
   });
 
-  it('--state in_progress,dev_review sends those two tokens only', async () => {
+  it('--state in_progress,in_review sends those two tokens only', async () => {
     const request = vi.fn().mockResolvedValue(makeListResponse([]));
     stdMocks(request);
     const program = await buildProgram();
@@ -264,14 +264,53 @@ describe('issues list', () => {
       'issues',
       'list',
       '--state',
-      'in_progress,dev_review',
+      'in_progress,in_review',
     ]);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
     const json = JSON.stringify(vars);
     expect(json).toContain('"in progress"');
-    expect(json).toContain('"dev review"');
+    expect(json).toContain('"in review"');
     expect(json).not.toContain('"todo"');
+  });
+
+  it('--state with an unknown token errors (non-zero exit) instead of returning empty results', async () => {
+    const request = vi.fn().mockResolvedValue(makeListResponse([]));
+    stdMocks(request);
+    const { exitError } = await import('../src/lib/runner.js');
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--state', 'bogus_state']);
+
+    expect(request).not.toHaveBeenCalled();
+    expect(exitError).toHaveBeenCalledOnce();
+    const [err] = (exitError as ReturnType<typeof vi.fn>).mock.calls[0] as [{ message: string }];
+    expect(err.message).toContain('bogus_state');
+    expect(err.message).toContain('todo');
+  });
+
+  it('--state with a mix of known and unknown tokens still errors', async () => {
+    const request = vi.fn().mockResolvedValue(makeListResponse([]));
+    stdMocks(request);
+    const { exitError } = await import('../src/lib/runner.js');
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--state', 'todo,bogus_state']);
+
+    expect(request).not.toHaveBeenCalled();
+    expect(exitError).toHaveBeenCalledOnce();
+  });
+
+  it('--all-states bypasses unknown-token validation', async () => {
+    const request = vi.fn().mockResolvedValue(makeListResponse([]));
+    stdMocks(request);
+    const { exitError } = await import('../src/lib/runner.js');
+    const program = await buildProgram();
+
+    await program.parseAsync(['node', 'linear', 'issues', 'list', '--all-states']);
+
+    expect(request).toHaveBeenCalledOnce();
+    expect(exitError).not.toHaveBeenCalled();
   });
 
   it('--all-states sends NO state filter', async () => {

@@ -48,4 +48,4 @@ export function isTrustedAttachmentHost(hostname: string): boolean {
 
 // Default state filter tokens (snake_case). Used by issues subcommands unless overridden.
 // Underscores are converted to spaces when building the GraphQL eqIgnoreCase filter.
-export const DEFAULT_ISSUE_STATES = ['todo', 'in_progress', 'dev_review'] as const;
+export const DEFAULT_ISSUE_STATES = ['todo', 'in_progress', 'in_review'] as const;

@@ -26,3 +26,21 @@ export function buildStateFilter(tokens: string[]): StateFilter | undefined {
   if (clauses.length === 1) return clauses[0];
   return { or: clauses };
 }
+
+// Recognized --state tokens (snake_case, matching Linear's standard default workflow states).
+export const KNOWN_STATE_TOKENS = [
+  'triage',
+  'backlog',
+  'todo',
+  'in_progress',
+  'in_review',
+  'done',
+  'canceled',
+  'duplicate',
+] as const;
+
+/** Returns the subset of tokens not in KNOWN_STATE_TOKENS, preserving input order. */
+export function findUnknownStateTokens(tokens: string[]): string[] {
+  const known = new Set<string>(KNOWN_STATE_TOKENS);
+  return tokens.filter((token) => !known.has(token));
+}
