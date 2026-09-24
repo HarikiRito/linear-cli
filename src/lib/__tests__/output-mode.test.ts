@@ -23,6 +23,22 @@ describe('parseOutputMode', () => {
       "Invalid output mode 'true' from output.default config key. Valid values: plain, table"
     );
   });
+
+  it('rejects a number raw value', () => {
+    const result = parseOutputMode(1 as unknown as string, 'output.default config key');
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().message).toBe(
+      "Invalid output mode '1' from output.default config key. Valid values: plain, table"
+    );
+  });
+
+  it('rejects an array raw value rather than silently coercing to its lone element (TOML `output.default = ["plain"]`)', () => {
+    const result = parseOutputMode(['plain'] as unknown as string, 'output.default config key');
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().message).toBe(
+      "Invalid output mode 'plain' from output.default config key. Valid values: plain, table"
+    );
+  });
 });
 
 describe('resolveOutputMode precedence: flag > env > config > default', () => {
