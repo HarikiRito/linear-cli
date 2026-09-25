@@ -4,8 +4,8 @@ import { ok, Result, ResultAsync } from 'neverthrow';
 import {
   getWorkspaceLockPath,
   KEEPALIVE_BACKOFF_MS,
-  KEEPALIVE_EXPIRY_MARGIN_MS,
   KEEPALIVE_LOG_MAX_BYTES,
+  KEEPALIVE_REFRESH_INTERVAL_MS,
 } from '../../lib/config.js';
 import { toError } from '../../lib/errors.js';
 import {
@@ -24,9 +24,9 @@ import {
   updateWorkspaceState,
 } from './state.js';
 
-/** True once the access token has less than KEEPALIVE_EXPIRY_MARGIN_MS of life left. */
-function isDueForRotation(expiresAt: number): boolean {
-  return expiresAt - Date.now() <= KEEPALIVE_EXPIRY_MARGIN_MS;
+/** True once the last refresh is at least KEEPALIVE_REFRESH_INTERVAL_MS old (missing → due). */
+function isDueForRotation(lastRefreshAt: number | undefined): boolean {
+  return Date.now() - (lastRefreshAt ?? 0) >= KEEPALIVE_REFRESH_INTERVAL_MS;
 }
 
 export interface RotationSummary {
@@ -191,7 +191,7 @@ async function rotateWorkspace(workspaceId: string, summary: RotationSummary): P
     return;
   }
 
-  if (!isDueForRotation(session.expiresAt)) {
+  if (!isDueForRotation(session.lastRefreshAt)) {
     summary.skipped++;
     return;
   }
@@ -225,7 +225,7 @@ async function rotateWorkspace(workspaceId: string, summary: RotationSummary): P
       }
       return;
     }
-    if (!isDueForRotation(fresh.expiresAt)) {
+    if (!isDueForRotation(fresh.lastRefreshAt)) {
       if (backoff.invalidGrantTier !== undefined) {
         // rotated elsewhere — backoff moot
         await foldStateWrite(

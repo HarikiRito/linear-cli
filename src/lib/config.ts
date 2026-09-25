@@ -16,8 +16,8 @@ export const CALLBACK_PATH = '/callback';
 export const CANDIDATE_PORTS = [9876, 9877, 9878] as const;
 
 // Keepalive: automatic refresh-token rotation to keep sessions alive.
-/** Rotate once the access token has less than this much life left. */
-export const KEEPALIVE_EXPIRY_MARGIN_MS = 2 * 60 * 60 * 1000;
+/** Rotate once the last refresh is at least this old. */
+export const KEEPALIVE_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 /** A workspace's last successful run older than this reads as STALE in `keepalive status`. */
 export const KEEPALIVE_STATUS_STALE_MS = 60 * 60 * 1000;
 /** Cap keepalive.log growth: once past this size, drop the older half. */
