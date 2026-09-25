@@ -48,7 +48,7 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     fs.rmSync(projDir, { recursive: true, force: true });
   });
 
-  /** Write a due-by-default OAuth workspace credential (expiresAt within the 2h rotation margin). */
+  /** Write a due-by-default OAuth workspace credential (lastRefreshAt 25h ago → past the 1h interval). */
   async function seedOAuthSession(
     workspaceId = 'ws-1',
     overrides: Partial<Parameters<typeof writeWorkspaceCredential>[1]> = {}
@@ -56,8 +56,8 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     const session = {
       accessToken: 'old-at',
       refreshToken: 'old-rt',
-      expiresAt: Date.now() + 3600_000, // 1h left — within the 2h margin → due
-      lastRefreshAt: Date.now() - 25 * 3600_000,
+      expiresAt: Date.now() + 3600_000,
+      lastRefreshAt: Date.now() - 25 * 3600_000, // 25h old — well past the 1h interval → due
       ...overrides,
     };
     await writeWorkspaceCredential(workspaceId, session);
@@ -69,11 +69,8 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     return result.value;
   }
 
-  it('skips rotation when the access token has more than 2h left (no network call)', async () => {
-    await seedOAuthSession('ws-1', {
-      expiresAt: Date.now() + 25 * 3600_000,
-      lastRefreshAt: Date.now(),
-    });
+  it('skips rotation when the last refresh is less than 1h old (no network call)', async () => {
+    await seedOAuthSession('ws-1', { lastRefreshAt: Date.now() });
 
     const summary = await runCycle();
 
@@ -81,7 +78,7 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     expect(mockRefresh).not.toHaveBeenCalled();
   });
 
-  it('rotates when the access token has <= 2h left and persists via the workspace credential', async () => {
+  it('rotates when the last refresh is at least 1h old and persists via the workspace credential', async () => {
     const before = Date.now();
     mockRefresh.mockResolvedValue(
       ok({ accessToken: 'new-at', refreshToken: 'new-rt', expiresAt: before + 3600_000 })
@@ -99,15 +96,34 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     expect(fs.existsSync(lockPath('ws-1'))).toBe(false);
   });
 
-  it('rotates immediately when the access token is already expired', async () => {
+  it('rotates immediately when lastRefreshAt is missing', async () => {
     mockRefresh.mockResolvedValue(
       ok({ accessToken: 'new-at', refreshToken: 'new-rt', expiresAt: Date.now() + 3600_000 })
     );
-    await seedOAuthSession('ws-1', { expiresAt: Date.now() - 1000, lastRefreshAt: undefined });
+    await seedOAuthSession('ws-1', { lastRefreshAt: undefined });
 
     const summary = await runCycle();
 
     expect(summary.rotated).toBe(1);
+    expect(mockRefresh).toHaveBeenCalled();
+  });
+
+  it('boundary: skips at 59m since last refresh, rotates at 61m', async () => {
+    await seedOAuthSession('ws-1', { lastRefreshAt: Date.now() - 59 * 60_000 });
+
+    const skipped = await runCycle();
+
+    expect(skipped).toMatchObject({ rotated: 0, skipped: 1 });
+    expect(mockRefresh).not.toHaveBeenCalled();
+
+    mockRefresh.mockResolvedValue(
+      ok({ accessToken: 'new-at', refreshToken: 'new-rt', expiresAt: Date.now() + 3600_000 })
+    );
+    await seedOAuthSession('ws-1', { lastRefreshAt: Date.now() - 61 * 60_000 });
+
+    const rotated = await runCycle();
+
+    expect(rotated).toMatchObject({ rotated: 1, skipped: 0 });
     expect(mockRefresh).toHaveBeenCalled();
   });
 
@@ -264,8 +280,8 @@ describe('keepalive rotation cycle (per-workspace)', () => {
     const fresh = {
       accessToken: 'new-at',
       refreshToken: 'new-rt',
-      expiresAt: Date.now() + 25 * 3600_000, // rotated elsewhere — full lifetime restored
-      lastRefreshAt: Date.now(),
+      expiresAt: Date.now() + 25 * 3600_000,
+      lastRefreshAt: Date.now(), // rotated elsewhere — just refreshed, not due
     };
     // First read (pre-lock) sees the due session; post-lock read sees the fresh one.
     const credMod = await import('../../auth/credentials.js');

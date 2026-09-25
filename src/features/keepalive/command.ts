@@ -4,7 +4,7 @@ import type { Command } from 'commander';
 import { Result } from 'neverthrow';
 import pc from 'picocolors';
 import { isPlain } from '../../lib/commandOptions.js';
-import { KEEPALIVE_EXPIRY_MARGIN_MS, KEEPALIVE_STATUS_STALE_MS } from '../../lib/config.js';
+import { KEEPALIVE_REFRESH_INTERVAL_MS, KEEPALIVE_STATUS_STALE_MS } from '../../lib/config.js';
 import { toError } from '../../lib/errors.js';
 import { renderPlainRecord } from '../../lib/output/plain.js';
 import { exitError } from '../../lib/runner.js';
@@ -113,7 +113,7 @@ async function collectWorkspaceStatus(id: string): Promise<WorkspaceStatusLine> 
   const state = await readWorkspaceState(id);
   const backingOff =
     state.invalidGrantNextAttemptAt !== undefined && state.invalidGrantNextAttemptAt > Date.now();
-  const nextDueAt = session.expiresAt - KEEPALIVE_EXPIRY_MARGIN_MS;
+  const nextDueAt = last + KEEPALIVE_REFRESH_INTERVAL_MS;
   const due = Date.now() >= nextDueAt;
 
   return {
@@ -248,7 +248,7 @@ export function registerKeepaliveCommands(program: Command): void {
         renderPlainRecord('Scheduler', s.installed ? 'installed' : 'not-installed', [
           { key: 'health', value: s.installed ? health : undefined },
           { key: 'detail', value: s.detail },
-          { key: 'cadence', value: 'poll=15m, rotates when access token has <2h remaining' },
+          { key: 'cadence', value: 'poll=15m, rotates hourly (last refresh >= 1h old)' },
           {
             key: 'lastRun',
             value: runStatus
@@ -294,7 +294,7 @@ export function registerKeepaliveCommands(program: Command): void {
         pc.red(`  missing path(s): ${missing} — run \`linear keepalive install\` to fix`)
       );
     }
-    console.log('  cadence: polls every 15m, rotates when the access token has < 2h remaining');
+    console.log('  cadence: polls every 15m, rotates hourly (last refresh >= 1h old)');
     console.log(
       `  last run: ${runStatus ? `${new Date(runStatus.lastRunAt).toISOString()} (${runStatus.result})` : 'never'}`
     );
