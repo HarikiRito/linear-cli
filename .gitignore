@@ -12,3 +12,4 @@ auth.json
 .linear
 .linear/auth.json
 .vercel
+.claude/worktrees/
