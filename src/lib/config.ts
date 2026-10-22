@@ -4,7 +4,7 @@ import { getGlobalConfigDir } from './scope.js';
 // Embedded OAuth client ID for the Linear CLI application.
 // This is a public client (PKCE flow — no secret required).
 // Can be overridden via LINEAR_CLIENT_ID for development/testing.
-export const DEFAULT_CLIENT_ID = '376b5a4327178c99fde2d9aebdc65e8b';
+export const DEFAULT_CLIENT_ID = '57b7f6b406c3ae2cb4cb5e3133512a4d';
 
 export function getClientId(): string {
   return process.env.LINEAR_CLIENT_ID ?? DEFAULT_CLIENT_ID;
