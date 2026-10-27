@@ -44,7 +44,7 @@ Append `--plain` to any read command for clean, agent-parseable output.
 | `linear issues assets download <issue>` | `--output-dir <dir>` — downloads `uploads.linear.app` URLs embedded in the description/comments (not `Attachment` entities) |
 | `linear issues comment list <issue>` | `--limit <n>` |
 | `linear issues comment add <issue>` | `--body <text\|->` (req) |
-| `linear issues comment reply <comment>` | `--body <text\|->` (req) |
+| `linear issues comment reply <comment>` | `--body <text\|->` (req), `--file <path>` |
 | `linear issues comment update <comment>` | `--body <text\|->` (req) |
 | `linear issues comment delete <comment>` | `--yes` |
 
