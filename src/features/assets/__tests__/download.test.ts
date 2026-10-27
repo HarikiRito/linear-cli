@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { useTmpProjectAndHome } from '../../../../tests/helpers/tmp-env.js';
-import { writeWorkspaceCredential } from '../../auth/credentials.js';
+import { readWorkspaceCredential, writeWorkspaceCredential } from '../../auth/credentials.js';
 import { linkProject } from '../../keepalive/registry.js';
 import { downloadAsset } from '../download.js';
 
@@ -21,6 +21,39 @@ function stubFetch(body = 'hello world', init: { status?: number; statusText?: s
 
 function sentHeaders(fetchMock: Mock): Record<string, string> {
   return (fetchMock.mock.calls[0]?.[1]?.headers ?? {}) as Record<string, string>;
+}
+
+/**
+ * fetch stub that answers the OAuth token endpoint with a rotated token and
+ * asset GETs with `body`, so refresh + download share one global fetch.
+ */
+function stubFetchWithRefresh(body = 'hello world', refreshedToken = 'refreshed-at') {
+  const fetchMock = vi.fn().mockImplementation((url: string) =>
+    url.includes('/oauth/token')
+      ? Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              access_token: refreshedToken,
+              refresh_token: 'new-rt',
+              expires_in: 3600,
+            }),
+        })
+      : Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          arrayBuffer: () => Promise.resolve(new TextEncoder().encode(body).buffer),
+        })
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+function sentAssetHeaders(fetchMock: Mock): Record<string, string> {
+  const call = fetchMock.mock.calls.find(([url]) => String(url).includes('uploads.linear.app'));
+  return (call?.[1]?.headers ?? {}) as Record<string, string>;
 }
 
 describe('downloadAsset', () => {
@@ -94,6 +127,62 @@ describe('downloadAsset', () => {
     });
 
     expect(sentHeaders(fetchMock)).toEqual({ Authorization: 'token-a' });
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('percent-decodes the workspace id from the asset URL', async () => {
+    await setupWorkspaces({ 'ws-a': 'token-a', 'ws-b': 'token-b' }, 'ws-a');
+    const fetchMock = stubFetch();
+
+    await downloadAsset({
+      url: 'https://uploads.linear.app/ws%2Db/asset-1/notes.txt',
+      output: path.join(tmpEnv.projectDir, 'notes.txt'),
+    });
+
+    expect(sentHeaders(fetchMock)).toEqual({ Authorization: 'token-b' });
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('refreshes an expired OAuth credential for the URL workspace and writes it back only there', async () => {
+    await setupWorkspaces({ 'ws-a': 'token-a' }, 'ws-a');
+    await writeWorkspaceCredential('ws-b', {
+      accessToken: 'stale-at',
+      refreshToken: 'old-rt',
+      expiresAt: 0,
+    });
+    const fetchMock = stubFetchWithRefresh('hello world', 'refreshed-at');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await downloadAsset({
+      url: 'https://uploads.linear.app/ws-b/asset-1/notes.txt',
+      output: path.join(tmpEnv.projectDir, 'notes.txt'),
+    });
+
+    expect(sentAssetHeaders(fetchMock)).toEqual({ Authorization: 'Bearer refreshed-at' });
+    expect(log.mock.calls.flat().join(' ')).not.toContain('refreshed-at');
+    expect(await readWorkspaceCredential('ws-b')).toMatchObject({
+      accessToken: 'refreshed-at',
+      refreshToken: 'new-rt',
+    });
+    expect(await readWorkspaceCredential('ws-a')).toEqual({ apiKey: 'token-a' });
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('writes the URL last segment when --output is omitted', async () => {
+    const realCwd = process.cwd();
+    await setupWorkspaces({ 'ws-b': 'token-b' }, 'ws-b');
+    stubFetch('default-name-bytes');
+
+    process.chdir(tmpEnv.projectDir);
+    try {
+      await downloadAsset({ url: 'https://uploads.linear.app/ws-b/asset-1/asset.png' });
+    } finally {
+      process.chdir(realCwd);
+    }
+
+    expect(fs.readFileSync(path.join(tmpEnv.projectDir, 'asset.png'), 'utf-8')).toBe(
+      'default-name-bytes'
+    );
     expect(process.exitCode).toBeUndefined();
   });
 

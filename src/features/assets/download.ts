@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { err, type Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import {
   deriveFilenameFromUrl,
   fetchAssetBytes,
@@ -7,11 +7,11 @@ import {
 } from '../../lib/assetFetch.js';
 import { type CliError, UnauthenticatedError } from '../../lib/errors.js';
 import { exitError } from '../../lib/runner.js';
-import { readWorkspaceCredential } from '../auth/credentials.js';
 import {
   type ResolvedCredential,
   resolveCredential,
-  resolveSessionWithRefresh,
+  resolveExplicitCredential,
+  resolveWorkspaceCredential,
 } from '../auth/resolve.js';
 
 export interface DownloadAssetOptions {
@@ -21,35 +21,28 @@ export interface DownloadAssetOptions {
   output?: string;
 }
 
-/** Explicit flags/env (resolveCredential rules 1-4) outrank the URL's workspace. */
-function hasExplicitCredential(opts: DownloadAssetOptions): boolean {
-  return Boolean(
-    opts.apiKey || opts.token || process.env.LINEAR_API_KEY || process.env.LINEAR_ACCESS_TOKEN
-  );
-}
-
 /**
- * Trusted Linear asset URLs embed their workspace id, which may differ from the
- * cwd-linked workspace; use that workspace's stored credential instead, else
- * Linear answers a bare 401.
+ * Explicit flags/env outrank the URL's workspace; a trusted URL's workspace id
+ * outranks the cwd-linked workspace, which may differ and answer a bare 401.
  */
 async function resolveDownloadCredential(
   opts: DownloadAssetOptions,
   workspaceId: string | null
 ): Promise<Result<ResolvedCredential, CliError>> {
-  if (!workspaceId || hasExplicitCredential(opts)) {
-    return resolveCredential({ apiKey: opts.apiKey, token: opts.token });
-  }
+  const explicit = resolveExplicitCredential(opts);
+  if (explicit) return ok(explicit);
+  if (!workspaceId) return resolveCredential({ apiKey: opts.apiKey, token: opts.token });
 
-  const session = await readWorkspaceCredential(workspaceId);
-  if (!session) {
+  const cred = await resolveWorkspaceCredential(workspaceId);
+  if (cred.isErr()) return err(cred.error);
+  if (!cred.value) {
     return err(
       new UnauthenticatedError(
         `Asset belongs to workspace ${workspaceId}, which is not logged in. Run \`linear login\` to authenticate it.`
       )
     );
   }
-  return resolveSessionWithRefresh(session, workspaceId);
+  return ok(cred.value);
 }
 
 export async function downloadAsset(opts: DownloadAssetOptions): Promise<void> {

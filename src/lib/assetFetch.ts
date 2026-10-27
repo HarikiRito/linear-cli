@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import { err, ok, Result, ResultAsync } from 'neverthrow';
+import { Result, ResultAsync } from 'neverthrow';
 import { isTrustedAttachmentHost } from './config.js';
 import { type CliError, coerceCliError, ValidationError } from './errors.js';
 
@@ -45,13 +45,15 @@ export function deriveFilename(title: string, url: string): string {
  * pathless URL. Unparseable URLs are a hard validation failure.
  */
 export function workspaceIdFromAssetUrl(url: string): Result<string | null, CliError> {
-  const parsed = Result.fromThrowable(
-    () => new URL(url),
-    () => undefined
-  )().unwrapOr(undefined);
-  if (!parsed) return err(new ValidationError('Invalid asset URL.'));
-  if (!isTrustedAttachmentHost(parsed.hostname)) return ok(null);
-  return ok(parsed.pathname.split('/').filter(Boolean)[0] ?? null);
+  return Result.fromThrowable(
+    () => {
+      const parsed = new URL(url);
+      if (!isTrustedAttachmentHost(parsed.hostname)) return null;
+      const segment = parsed.pathname.split('/').filter(Boolean)[0];
+      return segment ? decodeURIComponent(segment) : null;
+    },
+    () => new ValidationError('Invalid asset URL.')
+  )();
 }
 
 /** Format the resolved credential the same way LinearClient does internally (see @linear/sdk parseClientOptions): OAuth as `Bearer <token>`, API keys raw. */
