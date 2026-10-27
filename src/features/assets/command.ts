@@ -1,11 +1,12 @@
 import type { Command } from 'commander';
 import { addAuthOptions } from '../../lib/commandOptions.js';
 import { downloadAsset } from './download.js';
+import { uploadAsset } from './upload.js';
 
 export function registerAssets(program: Command): void {
   const assets = program
     .command('assets')
-    .description('Asset subcommands: download')
+    .description('Asset subcommands: download, upload')
     .addHelpCommand(false);
 
   assets.action(() => {
@@ -21,5 +22,15 @@ export function registerAssets(program: Command): void {
       .option('--output <path>', 'Local file path to write to (default: derived from the URL)')
   ).action(async (url: string, opts: { apiKey?: string; token?: string; output?: string }) => {
     await downloadAsset({ apiKey: opts.apiKey, token: opts.token, url, output: opts.output });
+  });
+
+  addAuthOptions(
+    assets
+      .command('upload <path>')
+      .description(
+        'Upload a local file to Linear storage and print its Linear-hosted asset URL (does not attach it to any issue)'
+      )
+  ).action(async (path: string, opts: { apiKey?: string; token?: string }) => {
+    await uploadAsset({ apiKey: opts.apiKey, token: opts.token, path });
   });
 }
