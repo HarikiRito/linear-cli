@@ -1,4 +1,4 @@
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 afterEach(() => {
@@ -349,6 +349,177 @@ describe('addComment with --file', () => {
     );
     // Comment still rendered.
     expect(consoleLogSpy).toHaveBeenCalled();
+  });
+});
+
+describe('replyComment with --file', () => {
+  function replyPayload(body: string) {
+    return {
+      get comment() {
+        return Promise.resolve({
+          id: 'reply-uuid',
+          body,
+          url: '',
+          createdAt: new Date('2024-01-01'),
+          get user() {
+            return Promise.resolve({ name: 'Tester' });
+          },
+        });
+      },
+    };
+  }
+
+  function parentIssueRequestFn() {
+    return vi.fn().mockResolvedValue({ comment: { issueId: 'ISSUE-UUID-1' } });
+  }
+
+  it('embeds an image upload inline in the reply body and does not create an attachment', async () => {
+    const embedded = 'hi\n\n![file.png](https://storage.linear.app/uploads/file.png)';
+    const createCommentFn = vi.fn().mockResolvedValue(replyPayload(embedded));
+    const createAttachmentFn = vi.fn().mockResolvedValue(attachmentPayload());
+    const updateCommentFn = vi.fn();
+
+    vi.doMock('../../../lib/client/index.js', () => ({
+      getClientWithAuthRetry: vi.fn().mockReturnValue(
+        ok(
+          mockClient({
+            createComment: createCommentFn,
+            createAttachment: createAttachmentFn,
+            updateComment: updateCommentFn,
+          })
+        )
+      ),
+      getRequestFn: vi.fn().mockReturnValue(parentIssueRequestFn()),
+    }));
+    vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
+    vi.doMock('../../../lib/upload.js', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('../../../lib/upload.js')>();
+      return {
+        ...actual,
+        uploadAndClassify: vi.fn().mockResolvedValue(
+          ok({
+            uploaded: {
+              assetUrl: 'https://storage.linear.app/uploads/file.png',
+              uploadUrl: 'https://storage.googleapis.com/upload-url',
+              filename: 'file.png',
+            },
+            isImage: true,
+            embedMarkdown: '![file.png](https://storage.linear.app/uploads/file.png)',
+          })
+        ),
+      };
+    });
+
+    const { replyComment } = await import('../comment/reply.js');
+    await replyComment({ parentId: 'COMMENT-1', body: 'hi', plain: true, file: '/tmp/file.png' });
+
+    expect(createCommentFn).toHaveBeenCalledWith({
+      issueId: 'ISSUE-UUID-1',
+      parentId: 'COMMENT-1',
+      body: embedded,
+    });
+    expect(createAttachmentFn).not.toHaveBeenCalled();
+    expect(updateCommentFn).not.toHaveBeenCalled();
+  });
+
+  it('leaves the reply body untouched for a non-image upload and attaches it to the parent issue', async () => {
+    const createCommentFn = vi.fn().mockResolvedValue(replyPayload('Some text'));
+    const createAttachmentFn = vi.fn().mockResolvedValue(attachmentPayload('att-uuid'));
+    const updateCommentFn = vi.fn();
+
+    vi.doMock('../../../lib/client/index.js', () => ({
+      getClientWithAuthRetry: vi.fn().mockReturnValue(
+        ok(
+          mockClient({
+            createComment: createCommentFn,
+            createAttachment: createAttachmentFn,
+            updateComment: updateCommentFn,
+          })
+        )
+      ),
+      getRequestFn: vi.fn().mockReturnValue(parentIssueRequestFn()),
+    }));
+    vi.doMock('../../../lib/runner.js', () => ({ exitError: vi.fn() }));
+    vi.doMock('../../../lib/upload.js', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('../../../lib/upload.js')>();
+      return {
+        ...actual,
+        uploadAndClassify: vi.fn().mockResolvedValue(
+          ok({
+            uploaded: {
+              assetUrl: 'https://storage.linear.app/uploads/file.pdf',
+              uploadUrl: 'https://storage.googleapis.com/upload-url',
+              filename: 'file.pdf',
+            },
+            isImage: false,
+            embedMarkdown: '',
+          })
+        ),
+      };
+    });
+
+    const { replyComment } = await import('../comment/reply.js');
+    await replyComment({
+      parentId: 'COMMENT-1',
+      body: 'Some text',
+      plain: true,
+      file: '/tmp/file.pdf',
+    });
+
+    expect(createCommentFn).toHaveBeenCalledWith({
+      issueId: 'ISSUE-UUID-1',
+      parentId: 'COMMENT-1',
+      body: 'Some text',
+    });
+    expect(createAttachmentFn).toHaveBeenCalledWith({
+      issueId: 'ISSUE-UUID-1',
+      title: 'file.pdf',
+      url: 'https://storage.linear.app/uploads/file.pdf',
+    });
+    expect(updateCommentFn).not.toHaveBeenCalled();
+  });
+
+  it('warns on upload failure but still posts the reply', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const exitErrorFn = vi.fn();
+    const createCommentFn = vi.fn().mockResolvedValue(replyPayload('Some text'));
+    const createAttachmentFn = vi.fn().mockResolvedValue(attachmentPayload());
+
+    vi.doMock('../../../lib/client/index.js', () => ({
+      getClientWithAuthRetry: vi
+        .fn()
+        .mockReturnValue(
+          ok(mockClient({ createComment: createCommentFn, createAttachment: createAttachmentFn }))
+        ),
+      getRequestFn: vi.fn().mockReturnValue(parentIssueRequestFn()),
+    }));
+    vi.doMock('../../../lib/runner.js', () => ({ exitError: exitErrorFn }));
+    vi.doMock('../../../lib/upload.js', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('../../../lib/upload.js')>();
+      return {
+        ...actual,
+        uploadAndClassify: vi.fn().mockResolvedValue(err(new Error('storage unavailable'))),
+      };
+    });
+
+    const { replyComment } = await import('../comment/reply.js');
+    await replyComment({
+      parentId: 'COMMENT-1',
+      body: 'Some text',
+      plain: true,
+      file: '/tmp/file.pdf',
+    });
+
+    expect(exitErrorFn).not.toHaveBeenCalled();
+    expect(process.exitCode).toBeUndefined();
+    expect(createCommentFn).toHaveBeenCalledWith({
+      issueId: 'ISSUE-UUID-1',
+      parentId: 'COMMENT-1',
+      body: 'Some text',
+    });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('file upload failed'));
+    expect(createAttachmentFn).not.toHaveBeenCalled();
   });
 });
 

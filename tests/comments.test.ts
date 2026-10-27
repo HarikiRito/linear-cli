@@ -599,6 +599,87 @@ describe('comment reply', () => {
       expect.objectContaining({ issueId: 'ISSUE-UUID-1', parentId: 'COMMENT-1' })
     );
   });
+
+  it('reply --file uploads and embeds an image inline in the reply body', async () => {
+    const requestFn = vi.fn().mockResolvedValue({ comment: { issueId: 'ISSUE-UUID-1' } });
+    const payloadMock = {
+      get comment() {
+        return Promise.resolve({
+          id: 'c2',
+          body: 'hi\n\n![p.png](https://storage.linear.app/uploads/p.png)',
+          url: '',
+          createdAt: new Date('2024-01-01'),
+          get user() {
+            return Promise.resolve(null);
+          },
+        });
+      },
+    };
+    const createCommentFn = vi.fn().mockResolvedValue(payloadMock);
+    stdMocks(makeClientMock({ createComment: createCommentFn }), requestFn);
+
+    const uploadAndClassifyFn = vi.fn().mockResolvedValue(
+      ok({
+        uploaded: {
+          assetUrl: 'https://storage.linear.app/uploads/p.png',
+          uploadUrl: 'https://storage.googleapis.com/upload-url',
+          filename: 'p.png',
+        },
+        isImage: true,
+        embedMarkdown: '![p.png](https://storage.linear.app/uploads/p.png)',
+      })
+    );
+    vi.doMock('../src/lib/upload.js', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('../src/lib/upload.js')>();
+      return { ...actual, uploadAndClassify: uploadAndClassifyFn };
+    });
+
+    const program = await buildProgram();
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'comment',
+      'reply',
+      'COMMENT-1',
+      '--body',
+      'hi',
+      '--file',
+      '/tmp/p.png',
+    ]);
+
+    expect(uploadAndClassifyFn).toHaveBeenCalledWith(expect.anything(), '/tmp/p.png');
+    expect(createCommentFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueId: 'ISSUE-UUID-1',
+        parentId: 'COMMENT-1',
+        body: expect.stringContaining('![p.png](https://storage.linear.app/uploads/p.png)'),
+      })
+    );
+  });
+
+  it('reply --file without --body is a commander error and makes no API calls', async () => {
+    const requestFn = vi.fn();
+    const createCommentFn = vi.fn();
+    stdMocks(makeClientMock({ createComment: createCommentFn }), requestFn);
+    const program = await buildProgram();
+
+    await expect(
+      program.parseAsync([
+        'node',
+        'linear',
+        'issues',
+        'comment',
+        'reply',
+        'COMMENT-1',
+        '--file',
+        '/tmp/p.png',
+      ])
+    ).rejects.toThrow(/required option '--body/);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    expect(createCommentFn).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

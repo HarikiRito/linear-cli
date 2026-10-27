@@ -74,7 +74,7 @@ export function resolveSessionWithRefresh(
  * Look up a stored workspace credential by id and resolve it (with refresh +
  * writeback). Returns null when no credential exists for the id.
  */
-function resolveWorkspace(
+export function resolveWorkspaceCredential(
   workspaceId: string,
   forceRefresh?: boolean
 ): ResultAsync<ResolvedCredential | null, CliError> {
@@ -118,7 +118,7 @@ function resolveFromStore(opts: ResolveOptions): ResultAsync<ResolvedCredential 
   if (projectRoot) {
     const entry = getEntry(projectRoot);
     if (entry?.workspace) {
-      return resolveWorkspace(entry.workspace, forceRefresh).andThen((cred) => {
+      return resolveWorkspaceCredential(entry.workspace, forceRefresh).andThen((cred) => {
         if (cred) return okAsync(cred);
         return resolveEnvWorkspace(forceRefresh);
       });
@@ -143,6 +143,21 @@ async function buildUnauthenticatedError(): Promise<never> {
 }
 
 /**
+ * Explicit credential material only — rules 1-4: --api-key flag, --token flag,
+ * LINEAR_API_KEY env, LINEAR_ACCESS_TOKEN env. Returns null when absent so
+ * callers can fall through to store resolution.
+ */
+export function resolveExplicitCredential(opts: ResolveOptions): ResolvedCredential | null {
+  if (opts.apiKey) return { type: 'apiKey', value: opts.apiKey };
+  if (opts.token) return { type: 'accessToken', value: opts.token };
+  if (process.env.LINEAR_API_KEY) return { type: 'apiKey', value: process.env.LINEAR_API_KEY };
+  if (process.env.LINEAR_ACCESS_TOKEN) {
+    return { type: 'accessToken', value: process.env.LINEAR_ACCESS_TOKEN };
+  }
+  return null;
+}
+
+/**
  * Resolve a single session to a credential. Strict precedence — no silent
  * fallbacks:
  * 1. --api-key flag → apiKey
@@ -156,27 +171,15 @@ async function buildUnauthenticatedError(): Promise<never> {
 export function resolveCredential(
   opts: ResolveOptions = {}
 ): ResultAsync<ResolvedCredential, CliError> {
-  // 1) Explicit flag
-  if (opts.apiKey) {
-    return okAsync({ type: 'apiKey', value: opts.apiKey });
-  }
-  if (opts.token) {
-    return okAsync({ type: 'accessToken', value: opts.token });
-  }
+  // 1-4) Explicit flag / env var
+  const explicit = resolveExplicitCredential(opts);
+  if (explicit) return okAsync(explicit);
 
-  // 2) Env var
-  if (process.env.LINEAR_API_KEY) {
-    return okAsync({ type: 'apiKey', value: process.env.LINEAR_API_KEY });
-  }
-  if (process.env.LINEAR_ACCESS_TOKEN) {
-    return okAsync({ type: 'accessToken', value: process.env.LINEAR_ACCESS_TOKEN });
-  }
-
-  // 3) Registry (cwd-linked workspace) → LINEAR_WORKSPACE env override
+  // 5) Registry (cwd-linked workspace) → LINEAR_WORKSPACE env override
   return resolveFromStore(opts).andThen((cred) => {
     if (cred) return okAsync(cred);
 
-    // 4) Unlinked / nothing stored — context-aware UnauthenticatedError
+    // 6) Unlinked / nothing stored — context-aware UnauthenticatedError
     return ResultAsync.fromPromise(buildUnauthenticatedError(), coerceCliError);
   });
 }
