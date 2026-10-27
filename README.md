@@ -102,7 +102,7 @@ An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing
 |---|---|
 | `linear issues comment list <issue>` | List comments on an issue |
 | `linear issues comment add <issue> --body <text\|->` | Add a comment |
-| `linear issues comment reply <comment> --body <text\|->` | Reply to a comment |
+| `linear issues comment reply <comment> --body <text\|->` | Reply to a comment. `--file <path>` embeds images inline; other file types attach to the issue's resource tab |
 | `linear issues comment update <comment> --body <text\|->` | Edit a comment |
 | `linear issues comment delete <comment>` | Delete a comment. `--yes` skips confirmation |
 
