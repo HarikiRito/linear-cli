@@ -56,6 +56,8 @@ Run `linear --help` and `linear <area> --help` to discover commands for: project
 
 `linear assets download <url> --output <path>` downloads a single known `uploads.linear.app` URL (e.g. one found by scanning markdown yourself).
 
+`linear assets upload <path>` uploads a local file to Linear storage and prints its Linear-hosted asset URL (no attachment created). Embed the URL in a comment or description.
+
 ## Auth & linking
 
 - `linear login` — user authenticates a workspace (OAuth2 or API key) and may link the current directory + pick a default team.

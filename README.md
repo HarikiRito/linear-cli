@@ -121,6 +121,7 @@ An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing
 | `linear issues attachments download <issue> <attachmentId>` | Download an issue attachment. `--output <path>` (default: derived from the attachment) |
 | `linear issues assets download <issue>` | Download `uploads.linear.app` URLs embedded in an issue's description and comments (not registered `Attachment` entities). `--output-dir <dir>` (default: cwd) |
 | `linear assets download <url>` | Download a single known `uploads.linear.app` URL. `--output <path>` (default: derived from the URL) |
+| `linear assets upload <path>` | Upload a local file to Linear storage and print its Linear-hosted asset URL. Does not attach it to any issue |
 
 ### Projects
 
