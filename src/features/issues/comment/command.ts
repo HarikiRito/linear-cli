@@ -72,15 +72,23 @@ export function registerCommentCommand(issues: Command): void {
       .command('reply <comment>')
       .description('Reply to a comment')
       .requiredOption('--body <text>', 'Reply body (use - to read from stdin)')
+      .option(
+        '--file <path>',
+        'Local file to upload; images are embedded inline in the reply body, other file types are attached to the resource tab'
+      )
   );
   replyCmd.action(
-    async (commentId: string, opts: { body: string; apiKey?: string; token?: string }) => {
+    async (
+      commentId: string,
+      opts: { body: string; apiKey?: string; token?: string; file?: string }
+    ) => {
       await replyComment({
         apiKey: opts.apiKey,
         token: opts.token,
         parentId: commentId,
         body: opts.body,
         plain: isPlain(replyCmd),
+        file: opts.file,
       });
     }
   );
