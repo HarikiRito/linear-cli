@@ -54,7 +54,7 @@ All read commands (list, get, me, query, comment list) accept `--plain`.
 
 Run `linear --help` and `linear <area> --help` to discover commands for: projects, cycles, documents, teams, labels, milestones, statuses, users, whoami.
 
-`linear assets download <url> --output <path>` downloads a single known `uploads.linear.app` URL (e.g. one found by scanning markdown yourself).
+`linear assets download <url> --output <path>` downloads a single known `uploads.linear.app` URL (e.g. one found by scanning markdown yourself). Credentials come from the workspace id in the URL, so `linear login` that workspace first when it differs from the linked one.
 
 `linear assets upload <path>` uploads a local file to Linear storage and prints its Linear-hosted asset URL (no attachment created). Embed the URL in a comment or description.
 
