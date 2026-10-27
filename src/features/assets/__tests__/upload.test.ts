@@ -8,12 +8,12 @@ afterEach(() => {
   process.exitCode = undefined;
 });
 
-function mockDeps(overrides: { client?: Mock; upload?: Mock; exitError?: Mock } = {}) {
+function mockDeps(overrides: { client?: Mock; upload?: Mock } = {}) {
   const getClientWithAuthRetry = overrides.client ?? vi.fn();
   const uploadFile = overrides.upload ?? vi.fn();
   const createAttachmentRecord = vi.fn();
   const attachIfNonImage = vi.fn();
-  const exitErrorFn = overrides.exitError ?? vi.fn();
+  const exitErrorFn = vi.fn();
 
   vi.doMock('../../../lib/client/index.js', () => ({ getClientWithAuthRetry }));
   vi.doMock('../../../lib/upload.js', () => ({

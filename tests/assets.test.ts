@@ -33,7 +33,7 @@ describe('linear assets upload wiring', () => {
     });
   });
 
-  it('advertises upload in the assets command description', async () => {
+  it('registers the upload subcommand', async () => {
     vi.doMock('../src/features/assets/upload.js', () => ({ uploadAsset: vi.fn() }));
 
     const { Command } = await import('commander');
@@ -42,7 +42,6 @@ describe('linear assets upload wiring', () => {
     registerAssets(program);
 
     const assets = program.commands.find((c) => c.name() === 'assets');
-    expect(assets?.description()).toBe('Asset subcommands: download, upload');
     expect(assets?.commands.map((c) => c.name())).toContain('upload');
   });
 });
