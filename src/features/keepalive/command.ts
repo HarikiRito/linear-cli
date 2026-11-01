@@ -200,10 +200,11 @@ export function registerKeepaliveCommands(program: Command): void {
 
   const statusCmd = keepalive
     .command('status')
-    .description('Show scheduler, per-workspace rotation state, and linked directories.')
-    .option('--prune', 'remove linked directories whose root no longer exists on disk');
+    .description('Show scheduler and per-workspace rotation state; linked directories with --all.')
+    .option('--prune', 'remove linked directories whose root no longer exists on disk')
+    .option('--all', 'also list linked directories');
 
-  statusCmd.action(async (opts: { prune?: boolean }) => {
+  statusCmd.action(async (opts: { prune?: boolean; all?: boolean }) => {
     const plain = isPlain(statusCmd);
     const statusResult = getScheduler().status();
     if (statusResult.isErr()) {
@@ -268,15 +269,17 @@ export function registerKeepaliveCommands(program: Command): void {
           ])
         );
       }
-      for (const p of projects) {
-        console.log('---');
-        console.log(
-          renderPlainRecord('LinkedDir', p.root, [
-            { key: 'workspace', value: p.workspace },
-            { key: 'team', value: p.team?.key },
-            { key: 'missing', value: fs.existsSync(p.root) ? undefined : 'true' },
-          ])
-        );
+      if (opts.all) {
+        for (const p of projects) {
+          console.log('---');
+          console.log(
+            renderPlainRecord('LinkedDir', p.root, [
+              { key: 'workspace', value: p.workspace },
+              { key: 'team', value: p.team?.key },
+              { key: 'missing', value: fs.existsSync(p.root) ? undefined : 'true' },
+            ])
+          );
+        }
       }
       return;
     }
@@ -307,14 +310,16 @@ export function registerKeepaliveCommands(program: Command): void {
       console.log('  (ids only — no stored workspace names; link a directory to bind one)');
     }
 
-    if (projects.length === 0) {
-      console.log('Linked directories: none');
-    } else {
-      console.log('Linked directories:');
-      for (const p of projects) {
-        const missing = !fs.existsSync(p.root);
-        const suffix = missing ? pc.yellow('  (MISSING — rerun with --prune to remove)') : '';
-        console.log(`  ${p.root}  → ${p.workspace}${p.team ? ` (${p.team.key})` : ''}${suffix}`);
+    if (opts.all) {
+      if (projects.length === 0) {
+        console.log('Linked directories: none');
+      } else {
+        console.log('Linked directories:');
+        for (const p of projects) {
+          const missing = !fs.existsSync(p.root);
+          const suffix = missing ? pc.yellow('  (MISSING — rerun with --prune to remove)') : '';
+          console.log(`  ${p.root}  → ${p.workspace}${p.team ? ` (${p.team.key})` : ''}${suffix}`);
+        }
       }
     }
   });
