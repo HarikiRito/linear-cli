@@ -80,7 +80,7 @@ An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing
 | `linear whoami` | Show the resolved user + workspace + bound team for cwd. Does not start interactive login when unauthenticated — run `linear login` first. |
 | `linear keepalive install` | Install the global polling scheduler (one-time) that keeps all authenticated workspace sessions alive |
 | `linear keepalive uninstall` | Remove the scheduler |
-| `linear keepalive status` | Show scheduler state, per-workspace rotation state, and linked directories |
+| `linear keepalive status` | Show scheduler state and per-workspace rotation state; linked directories only with `--all` |
 | `linear keepalive run` | Run one rotation cycle manually (used by the scheduler) |
 
 ### Issues

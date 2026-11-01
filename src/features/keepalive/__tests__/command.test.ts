@@ -9,7 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('node:child_process', () => ({ execSync: vi.fn() }));
 
 import { err } from 'neverthrow';
+import { KEEPALIVE_REFRESH_INTERVAL_MS } from '../../../lib/config.js';
 import * as scopeMod from '../../../lib/scope.js';
+import { writeWorkspaceCredential } from '../../auth/credentials.js';
 import { checkSchedulerHealth, registerKeepaliveCommands } from '../command.js';
 import * as registryMod from '../registry.js';
 import { linkProject, listProjects } from '../registry.js';
@@ -37,6 +39,20 @@ function buildProgram(): Command {
   program.option('--plain', 'Output as plain key:value text').exitOverride();
   registerKeepaliveCommands(program);
   return program;
+}
+
+function oauthSession(lastRefreshAt: number): {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  lastRefreshAt: number;
+} {
+  return {
+    accessToken: 'at',
+    refreshToken: 'rt',
+    expiresAt: Date.now() + 3_600_000,
+    lastRefreshAt,
+  };
 }
 
 async function run(args: string[]): Promise<{ log: string[]; err: string[] }> {
@@ -244,7 +260,7 @@ describe('keepalive command (H-643)', () => {
       await linkProject(missingRoot, 'ws-1');
       expect(listProjects()._unsafeUnwrap()).toHaveLength(1);
 
-      const { log } = await run(['keepalive', 'status', '--prune']);
+      const { log } = await run(['keepalive', 'status', '--prune', '--all']);
 
       expect(listProjects()._unsafeUnwrap()).toHaveLength(0);
       expect(log.some((l) => l.includes('Linked directories: none'))).toBe(true);
@@ -264,6 +280,79 @@ describe('keepalive command (H-643)', () => {
       expect(errLines.some((l) => l.includes('EACCES'))).toBe(true);
       // Entry must still be there — the write failed, so it must not be reported as pruned.
       expect(listProjects()._unsafeUnwrap()).toHaveLength(1);
+    });
+
+    it('default output lists workspaces but no linked directories', async () => {
+      crontab = null;
+      await writeWorkspaceCredential('ws-oauth', oauthSession({ lastRefreshAt: Date.now() }));
+      await writeWorkspaceCredential('ws-key', { apiKey: 'key' });
+      await linkProject(path.join(tmpHome, 'proj-1'), 'ws-oauth');
+      await linkProject(path.join(tmpHome, 'proj-2'), 'ws-key');
+
+      const { log } = await run(['keepalive', 'status']);
+
+      expect(log.some((l) => l.includes('ws-oauth'))).toBe(true);
+      expect(log.some((l) => l.includes('ws-key'))).toBe(true);
+      expect(log.every((l) => !l.includes('Linked directories'))).toBe(true);
+    });
+
+    it('--all lists linked directories, flagging deleted roots as MISSING', async () => {
+      crontab = null;
+      const liveRoot = path.join(tmpHome, 'proj-live');
+      const deadRoot = path.join(tmpHome, 'proj-dead');
+      fs.mkdirSync(liveRoot);
+      await linkProject(liveRoot, 'ws-1');
+      await linkProject(deadRoot, 'ws-2');
+
+      const { log } = await run(['keepalive', 'status', '--all']);
+
+      expect(log.some((l) => l.includes('Linked directories:'))).toBe(true);
+      expect(log.some((l) => l.includes(liveRoot))).toBe(true);
+      expect(log.some((l) => l.includes(deadRoot) && l.includes('MISSING'))).toBe(true);
+    });
+
+    it('renders fresh workspaces as ok with next due, overdue ones as due with lastRefresh', async () => {
+      crontab = null;
+      await writeWorkspaceCredential('ws-fresh', oauthSession({ lastRefreshAt: Date.now() }));
+      await writeWorkspaceCredential(
+        'ws-overdue',
+        oauthSession({ lastRefreshAt: Date.now() - 2 * KEEPALIVE_REFRESH_INTERVAL_MS })
+      );
+
+      const { log } = await run(['keepalive', 'status']);
+
+      expect(log.find((l) => l.includes('ws-fresh'))).toContain('ok (next due');
+      const overdue = log.find((l) => l.includes('ws-overdue'));
+      expect(overdue).toContain('due');
+      expect(overdue).toContain('lastRefresh: ');
+    });
+
+    it('default output is identical whether cwd is linked or unlinked', async () => {
+      crontab = null;
+      const linkedRoot = path.join(tmpHome, 'proj-linked');
+      fs.mkdirSync(linkedRoot);
+      await writeWorkspaceCredential('ws-a', oauthSession({ lastRefreshAt: Date.now() }));
+      await linkProject(linkedRoot, 'ws-a');
+
+      const cwd = process.cwd();
+      try {
+        const { log: unlinked } = await run(['keepalive', 'status']);
+        process.chdir(linkedRoot);
+        const { log: inside } = await run(['keepalive', 'status']);
+        const workspaceLines = (lines: string[]) => lines.filter((l) => l.includes('ws-a'));
+        expect(workspaceLines(inside)).toEqual(workspaceLines(unlinked));
+        expect(unlinked.every((l) => !l.includes('Linked directories'))).toBe(true);
+        expect(inside.every((l) => !l.includes('Linked directories'))).toBe(true);
+      } finally {
+        process.chdir(cwd);
+      }
+    });
+
+    it('--all appears in the status help text', () => {
+      const keepaliveCmd = buildProgram().commands.find((c) => c.name() === 'keepalive');
+      const help = keepaliveCmd?.commands.find((c) => c.name() === 'status')?.helpInformation();
+
+      expect(help).toContain('--all');
     });
   });
 });
