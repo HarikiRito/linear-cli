@@ -284,7 +284,7 @@ describe('keepalive command (H-643)', () => {
 
     it('default output lists workspaces but no linked directories', async () => {
       crontab = null;
-      await writeWorkspaceCredential('ws-oauth', oauthSession({ lastRefreshAt: Date.now() }));
+      await writeWorkspaceCredential('ws-oauth', oauthSession(Date.now()));
       await writeWorkspaceCredential('ws-key', { apiKey: 'key' });
       await linkProject(path.join(tmpHome, 'proj-1'), 'ws-oauth');
       await linkProject(path.join(tmpHome, 'proj-2'), 'ws-key');
@@ -313,10 +313,10 @@ describe('keepalive command (H-643)', () => {
 
     it('renders fresh workspaces as ok with next due, overdue ones as due with lastRefresh', async () => {
       crontab = null;
-      await writeWorkspaceCredential('ws-fresh', oauthSession({ lastRefreshAt: Date.now() }));
+      await writeWorkspaceCredential('ws-fresh', oauthSession(Date.now()));
       await writeWorkspaceCredential(
         'ws-overdue',
-        oauthSession({ lastRefreshAt: Date.now() - 2 * KEEPALIVE_REFRESH_INTERVAL_MS })
+        oauthSession(Date.now() - 2 * KEEPALIVE_REFRESH_INTERVAL_MS)
       );
 
       const { log } = await run(['keepalive', 'status']);
@@ -331,7 +331,7 @@ describe('keepalive command (H-643)', () => {
       crontab = null;
       const linkedRoot = path.join(tmpHome, 'proj-linked');
       fs.mkdirSync(linkedRoot);
-      await writeWorkspaceCredential('ws-a', oauthSession({ lastRefreshAt: Date.now() }));
+      await writeWorkspaceCredential('ws-a', oauthSession(Date.now()));
       await linkProject(linkedRoot, 'ws-a');
 
       const cwd = process.cwd();
@@ -339,8 +339,7 @@ describe('keepalive command (H-643)', () => {
         const { log: unlinked } = await run(['keepalive', 'status']);
         process.chdir(linkedRoot);
         const { log: inside } = await run(['keepalive', 'status']);
-        const workspaceLines = (lines: string[]) => lines.filter((l) => l.includes('ws-a'));
-        expect(workspaceLines(inside)).toEqual(workspaceLines(unlinked));
+        expect(inside).toEqual(unlinked);
         expect(unlinked.every((l) => !l.includes('Linked directories'))).toBe(true);
         expect(inside.every((l) => !l.includes('Linked directories'))).toBe(true);
       } finally {
