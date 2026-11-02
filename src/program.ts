@@ -3,6 +3,7 @@ import { version } from '../package.json';
 import { registerAssets } from './features/assets/command.js';
 import { registerAuthCommands, registerTeamSelectCommand } from './features/auth/command.js';
 import { registerWhoami } from './features/auth/whoami.js';
+import { deriveWorkspaceHint, setWorkspaceHint } from './features/auth/workspace-hint.js';
 import { registerCycles } from './features/cycles/command.js';
 import { registerDocuments } from './features/documents/command.js';
 import { registerIssues } from './features/issues/command.js';
@@ -49,6 +50,7 @@ export function createProgram(): Command {
     .hook('preAction', (_thisCommand, actionCommand) => {
       // H-643: warn + self-heal a broken cron entry on every command except `keepalive` itself.
       if (!isKeepaliveCommand(actionCommand)) checkSchedulerHealth();
+      setWorkspaceHint(deriveWorkspaceHint(actionCommand.args, actionCommand.opts().team));
     });
 
   registerAuthCommands(program);

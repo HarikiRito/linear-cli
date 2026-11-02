@@ -23,12 +23,6 @@ export interface LinearConfig {
    * May still be written by the legacy `team select` global path.
    */
   team?: DefaultTeam;
-  /**
-   * @deprecated Retained for backward-compatible reads of legacy config.toml
-   * files — no longer used by production code. Workspace selection is
-   * link-only (registry) with an explicit LINEAR_WORKSPACE env override.
-   */
-  workspace?: string;
   projects?: DefaultProject[];
   /** Global default output mode, e.g. `{ default: "plain" }`. Validated by lib/output-mode.ts. */
   output?: { default?: string };

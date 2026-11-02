@@ -27,9 +27,10 @@ Credentials are resolved in this order:
 
 1. `--api-key <key>` / `--token <token>` flags
 2. Env vars `LINEAR_API_KEY` / `LINEAR_ACCESS_TOKEN`
-3. Linked directory: cwd (or an ancestor) mapped in `projects.json` → that workspace's credential
-4. Global default workspace: `LINEAR_WORKSPACE` env or config `workspace`, or auto-selected when exactly one workspace is authenticated
-5. Interactive `linear login` (TTY only)
+3. Linked directory: cwd (or an ancestor, or the main repo's link from inside a git worktree) mapped in `projects.json` → that workspace's credential
+4. `LINEAR_WORKSPACE` env: id of a stored workspace
+5. Workspace hint from the command: team key in an issue id (`ENG-123`) or `--team KEY`, or the workspace in a Linear issue URL. Team keys are looked up by listing the teams of every stored workspace (cached in `workspace-index.json`); with 2+ stored workspaces a key found in 2+ of them, or in none, is an error; with one stored workspace the lookup is skipped and that workspace is used (the API then reports an unknown team). An unknown workspace in an issue URL is an error. Workspaces whose login expired are skipped
+6. The only stored workspace, when there is no hint. With 2+ stored workspaces and no hint, the command stops and lists them
 
 `linear login` authenticates one workspace (OAuth2 or API key), optionally links the current directory, and picks a default team — no scope prompt. `linear workspace select` links an already-authenticated workspace to the current directory (and picks a team). `linear logout` unlinks the current directory and removes its credential when no other directory uses it.
 
@@ -39,7 +40,8 @@ Data files (all under `~/.config/.linear/`):
 |---|---|
 | `credentials.json` | Workspace-keyed sessions (OAuth or API key); OAuth tokens auto-refresh |
 | `projects.json` | Directory-link registry: project root → `{workspace, team}` |
-| `config.toml` | Global defaults: `team`, `workspace`, `projects`, `output.default` |
+| `workspace-index.json` | Cache of team keys and url keys per stored workspace |
+| `config.toml` | Global defaults: `projects`, `output.default` |
 | `keepalive-state.json` | Per-workspace keepalive rotation/backoff state |
 | `keepalive/` | Per-workspace rotation locks (`<workspace-id>.lock`) |
 
@@ -253,18 +255,12 @@ Agent users should always pass `--plain` to get output in the format the skill e
 Global config lives at `~/.config/.linear/config.toml`. Project-local `config.toml` was removed — defaults are global only; per-directory overrides come from the `projects.json` link (its `team`).
 
 ```toml
-[team]
-id = "xxx"
-key = "ENG"   # default team for issue commands
-
-workspace = "myorg"  # default workspace (must match an authenticated workspace id)
-
 [[projects]]
 id = "yyy"
 name = "API"  # default project(s) for the default team
 ```
 
-All keys are optional. Environment overrides: `LINEAR_TEAM_ID` → default team, `LINEAR_WORKSPACE` → `workspace`.
+All keys are optional. Environment overrides: `LINEAR_TEAM_ID` → default team, `LINEAR_WORKSPACE` → workspace.
 
 ## Contributing
 

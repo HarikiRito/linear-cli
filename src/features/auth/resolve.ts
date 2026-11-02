@@ -1,25 +1,21 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import {
-  AuthError,
-  type CliError,
-  coerceCliError,
-  toError,
-  UnauthenticatedError,
-} from '../../lib/errors.js';
+import { type CliError, coerceCliError, UnauthenticatedError } from '../../lib/errors.js';
 import { findProjectRoot } from '../../lib/scope.js';
 import { getEntry } from '../keepalive/registry.js';
+import { listWorkspaceIds } from './credentials.js';
 import {
-  listWorkspaceIds,
-  readWorkspaceCredential,
-  writeWorkspaceCredential,
-} from './credentials.js';
-import { refreshAccessToken } from './oauth.js';
-import { isApiKeySession, isOAuthSession, type Session } from './session.js';
+  type ResolvedCredential,
+  resolveSessionWithRefresh,
+  resolveWorkspaceCredential,
+} from './refresh.js';
+import { getWorkspaceHint } from './workspace-hint.js';
+import {
+  describeStoredWorkspaces,
+  HOW_TO_CHOOSE,
+  resolveHintWorkspaceId,
+} from './workspace-lookup.js';
 
-export interface ResolvedCredential {
-  type: 'apiKey' | 'accessToken';
-  value: string;
-}
+export { type ResolvedCredential, resolveSessionWithRefresh, resolveWorkspaceCredential };
 
 export interface ResolveOptions {
   apiKey?: string;
@@ -36,57 +32,6 @@ export interface ResolveOptions {
 }
 
 /**
- * Resolve a single session to a credential, refreshing OAuth tokens when
- * expired. Rotated tokens are written back to the workspace credential the
- * session came from (no cross-writing).
- */
-export function resolveSessionWithRefresh(
-  session: Session,
-  workspaceId: string,
-  forceRefresh?: boolean
-): ResultAsync<ResolvedCredential, CliError> {
-  if (isApiKeySession(session)) {
-    return okAsync({ type: 'apiKey' as const, value: session.apiKey });
-  }
-  if (isOAuthSession(session)) {
-    // 60-second skew buffer: refresh proactively before actual expiry
-    const needsRefresh =
-      forceRefresh || (session.expiresAt != null && Date.now() >= session.expiresAt - 60_000);
-    if (needsRefresh) {
-      return refreshAccessToken(session.refreshToken).andThen((refreshed) =>
-        ResultAsync.fromPromise(
-          writeWorkspaceCredential(workspaceId, {
-            accessToken: refreshed.accessToken,
-            refreshToken: refreshed.refreshToken,
-            expiresAt: refreshed.expiresAt,
-            lastRefreshAt: Date.now(),
-          }),
-          (e) => new AuthError(toError(e).message)
-        ).map(() => ({ type: 'accessToken' as const, value: refreshed.accessToken }))
-      );
-    }
-    return okAsync({ type: 'accessToken' as const, value: session.accessToken });
-  }
-  return errAsync(new UnauthenticatedError());
-}
-
-/**
- * Look up a stored workspace credential by id and resolve it (with refresh +
- * writeback). Returns null when no credential exists for the id.
- */
-export function resolveWorkspaceCredential(
-  workspaceId: string,
-  forceRefresh?: boolean
-): ResultAsync<ResolvedCredential | null, CliError> {
-  return ResultAsync.fromPromise(
-    readWorkspaceCredential(workspaceId),
-    (e) => new AuthError(toError(e).message)
-  ).andThen((session) =>
-    session ? resolveSessionWithRefresh(session, workspaceId, forceRefresh) : okAsync(null)
-  );
-}
-
-/**
  * Explicit LINEAR_WORKSPACE env override. Wins-or-fails: never falls through
  * to anything else when the requested credential is absent.
  */
@@ -95,11 +40,14 @@ function resolveEnvWorkspace(
 ): ResultAsync<ResolvedCredential | null, CliError> {
   const configured = process.env.LINEAR_WORKSPACE;
   if (!configured) return okAsync(null);
-  return ResultAsync.fromPromise(
-    readWorkspaceCredential(configured),
-    (e) => new AuthError(toError(e).message)
-  ).andThen((session) =>
-    session ? resolveSessionWithRefresh(session, configured, forceRefresh) : okAsync(null)
+  return resolveWorkspaceCredential(configured, forceRefresh).andThen((cred) =>
+    cred
+      ? okAsync(cred)
+      : errAsync(
+          new UnauthenticatedError(
+            `No stored credential for LINEAR_WORKSPACE '${configured}'. Run \`linear login\` to authenticate it.`
+          )
+        )
   );
 }
 
@@ -109,7 +57,7 @@ function resolveEnvWorkspace(
  *    (falls through when linked but no stored credential)
  * 2. LINEAR_WORKSPACE env → that workspace's credential (explicit override,
  *    wins-or-fails)
- * Returns null when neither yields a stored credential.
+ * Returns null when neither applies.
  */
 function resolveFromStore(opts: ResolveOptions): ResultAsync<ResolvedCredential | null, CliError> {
   const { forceRefresh } = opts;
@@ -128,17 +76,36 @@ function resolveFromStore(opts: ResolveOptions): ResultAsync<ResolvedCredential 
 }
 
 /**
- * Context-aware unauthenticated hint: no stored credentials at all → point at
- * `linear login`; credentials exist but cwd isn't linked and no explicit
- * LINEAR_WORKSPACE matched → point at `linear workspace select`.
+ * Last resorts when no link or LINEAR_WORKSPACE applies: the workspace named by
+ * the command's team key / issue URL hint, else the only stored workspace.
+ * A hint that matches nothing is an error, except a team hint with one stored workspace,
+ * which uses it without any lookup.
  */
-async function buildUnauthenticatedError(): Promise<never> {
-  const ids = await listWorkspaceIds();
-  if (ids.length === 0) {
-    throw new UnauthenticatedError('Not authenticated. Run `linear login` to authenticate.');
-  }
-  throw new UnauthenticatedError(
-    "This directory isn't linked to a workspace. Run `linear workspace select` to link it (or `linear login` to authenticate a new workspace)."
+function resolveFromHintOrSingle(
+  forceRefresh?: boolean
+): ResultAsync<ResolvedCredential, CliError> {
+  return ResultAsync.fromPromise(listWorkspaceIds(), coerceCliError)
+    .andThen(pickWorkspaceId)
+    .andThen((id) => resolveWorkspaceCredential(id, forceRefresh))
+    .andThen((cred) => (cred ? okAsync(cred) : errAsync(notAuthenticated())));
+}
+
+function notAuthenticated(): UnauthenticatedError {
+  return new UnauthenticatedError('Not authenticated. Run `linear login` to authenticate.');
+}
+
+function pickWorkspaceId(ids: string[]): ResultAsync<string, CliError> {
+  if (ids.length === 0) return errAsync(notAuthenticated());
+  const hint = getWorkspaceHint();
+  // A team hint may be a team name or UUID, so with one workspace let the API judge it.
+  if (ids.length === 1 && hint?.kind !== 'url') return okAsync(ids[0]);
+  if (hint) return resolveHintWorkspaceId(hint);
+  return ResultAsync.fromPromise(describeStoredWorkspaces(ids), coerceCliError).andThen((names) =>
+    errAsync(
+      new UnauthenticatedError(
+        `Multiple workspaces are stored and none was selected: ${names}. ${HOW_TO_CHOOSE}`
+      )
+    )
   );
 }
 
@@ -164,9 +131,13 @@ export function resolveExplicitCredential(opts: ResolveOptions): ResolvedCredent
  * 2. --token flag → accessToken
  * 3. LINEAR_API_KEY env → apiKey
  * 4. LINEAR_ACCESS_TOKEN env → accessToken
- * 5. registry: cwd-linked workspace credential (refresh + writeback)
+ * 5. registry: cwd-linked workspace credential, incl. the main repo's link from
+ *    inside a git worktree (refresh + writeback)
  * 6. LINEAR_WORKSPACE env (explicit per-invocation override)
- * 7. UnauthenticatedError with a context-aware hint
+ * 7. team key / issue URL hint of the running command, looked up across stored
+ *    workspaces (see workspace-lookup.ts)
+ * 8. the only stored workspace, when there is no hint
+ * 9. UnauthenticatedError (nothing stored) or an error listing the candidates
  */
 export function resolveCredential(
   opts: ResolveOptions = {}
@@ -175,11 +146,8 @@ export function resolveCredential(
   const explicit = resolveExplicitCredential(opts);
   if (explicit) return okAsync(explicit);
 
-  // 5) Registry (cwd-linked workspace) → LINEAR_WORKSPACE env override
-  return resolveFromStore(opts).andThen((cred) => {
-    if (cred) return okAsync(cred);
-
-    // 6) Unlinked / nothing stored — context-aware UnauthenticatedError
-    return ResultAsync.fromPromise(buildUnauthenticatedError(), coerceCliError);
-  });
+  // 5-6) Registry link → LINEAR_WORKSPACE env override; 7-9) hint / single workspace
+  return resolveFromStore(opts).andThen((cred) =>
+    cred ? okAsync(cred) : resolveFromHintOrSingle(opts.forceRefresh)
+  );
 }
