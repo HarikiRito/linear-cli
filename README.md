@@ -131,6 +131,7 @@ An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing
 | `linear projects get <id>` | Project detail by name or UUID |
 | `linear projects create` | Create a project. Required: `--name <text>`, `--team <key-or-id>`. Optional: `--description`, `--lead <name-or-id\|me>`, `--target-date <YYYY-MM-DD>`, `--start-date <YYYY-MM-DD>`, `--state`/`--status` |
 | `linear projects update <id>` | Update a project. Same optional fields as create. `--team <key-or-id>` optional |
+| `linear projects updates create` | Post a project update. Required: `--project <name-or-id>`, one of `--body <text\|->` / `--body-file <path>`. Optional: `--health <onTrack\|atRisk\|offTrack>` (default `onTrack`), `--attach <file>` (repeatable; uploaded and appended to the body as links) |
 | `linear projects labels --project <id-or-name>` | List labels for a project |
 
 ### Teams

@@ -5,6 +5,7 @@ import { registerGetCommand } from './get/command.js';
 import { registerLabelsCommand } from './labels/command.js';
 import { registerListCommand } from './list/command.js';
 import { registerUpdateCommand } from './update/command.js';
+import { registerUpdatesCommand } from './updates/command.js';
 
 export function registerProjects(program: Command): void {
   const projects = program
@@ -21,5 +22,6 @@ export function registerProjects(program: Command): void {
   registerLabelsCommand(projects);
   registerCreateCommand(projects);
   registerUpdateCommand(projects);
+  registerUpdatesCommand(projects);
   registerDeleteCommand(projects);
 }
