@@ -69,9 +69,9 @@ describe('whoami: uses cwd-linked workspace credential (integration)', () => {
     consoleSpy.mockRestore();
   });
 
-  it('unlinked cwd with stored credentials → hint, no identity printed', async () => {
-    // Credentials exist but the cwd is not linked → workspace-select hint.
+  it('unlinked cwd with several stored credentials → hint, no identity printed', async () => {
     await writeWorkspaceCredential('ws-stored', { apiKey: 'stored-key' });
+    await writeWorkspaceCredential('ws-stored-2', { apiKey: 'stored-key-2' });
 
     process.cwd = () => tmpEnv.projectDir;
 
@@ -81,7 +81,7 @@ describe('whoami: uses cwd-linked workspace credential (integration)', () => {
     await runWhoami({ plain: true });
 
     const allErrors = errorSpy.mock.calls.map((c) => String(c[0])).join('\n');
-    expect(allErrors).toContain("This directory isn't linked to a workspace");
+    expect(allErrors).toContain('Multiple workspaces are stored');
     expect(allErrors).toContain('linear workspace select');
     expect(process.exitCode).toBe(1);
     expect(logSpy).not.toHaveBeenCalled();

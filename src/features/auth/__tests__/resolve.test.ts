@@ -113,15 +113,17 @@ describe('resolveCredential: precedence chain (real files)', () => {
     expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnauthenticatedError);
   });
 
-  it('unlinked dir with stored credentials resolves to UnauthenticatedError, not the single workspace', async () => {
-    await writeWorkspaceCredential('ws-solo', { apiKey: 'solo-key' });
+  it('unlinked dir with two stored workspaces and no hint lists them and how to choose', async () => {
+    await writeWorkspaceCredential('ws-a', { apiKey: 'a-key' });
+    await writeWorkspaceCredential('ws-b', { apiKey: 'b-key' });
 
     const result = await resolveCredential({ allowInteractive: false });
-    expect(result.isErr()).toBe(true);
     const err = result._unsafeUnwrapErr();
     expect(err).toBeInstanceOf(UnauthenticatedError);
+    expect(err.message).toContain('ws-a');
+    expect(err.message).toContain('ws-b');
     expect(err.message).toContain('linear workspace select');
-    expect(err.message).toContain("isn't linked to a workspace");
+    expect(err.message).toContain('LINEAR_WORKSPACE');
   });
 
   it('unlinked dir with zero credentials resolves to UnauthenticatedError with login hint', async () => {

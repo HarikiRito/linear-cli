@@ -15,9 +15,9 @@ describe('config-file', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('round-trips the [team] table and workspace through smol-toml', () => {
+  it('round-trips the [team] table through smol-toml', () => {
     const filePath = path.join(tmpDir, 'config.toml');
-    const config = { team: { id: 't1', key: 'ENG' }, workspace: 'acme' };
+    const config = { team: { id: 't1', key: 'ENG' } };
 
     const writeResult = writeConfig(filePath, config);
     expect(writeResult.isOk()).toBe(true);
@@ -31,8 +31,6 @@ describe('config-file', () => {
     expect(raw).toContain('[team]');
     expect(raw).toContain('t1');
     expect(raw).toContain('ENG');
-    expect(raw).toContain('workspace');
-    expect(raw).toContain('acme');
   });
 
   it('returns empty object when config.toml does not exist', () => {
@@ -106,7 +104,7 @@ describe('config-file', () => {
 
   it('omits both [team] and [[projects]] when neither is set, and read-back has both undefined', () => {
     const filePath = path.join(tmpDir, 'config.toml');
-    const writeResult = writeConfig(filePath, { workspace: 'acme' });
+    const writeResult = writeConfig(filePath, { output: { default: 'plain' } });
     expect(writeResult.isOk()).toBe(true);
 
     const raw = fs.readFileSync(filePath, 'utf-8');
@@ -127,6 +125,5 @@ describe('config-file', () => {
 
     const result = readConfig(filePath);
     expect(result).toEqual({ workspace: 'acme' });
-    expect(result.workspace).toBe('acme');
   });
 });

@@ -85,14 +85,11 @@ describe('Credential resolution order', () => {
     expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'b-key' });
   });
 
-  it('unlinked dir with a single stored workspace is UnauthenticatedError, not auto-resolved', async () => {
+  it('unlinked dir with a single stored workspace and no hint uses it', async () => {
     await writeWorkspaceCredential('ws-solo', { apiKey: 'solo-key' });
 
     const result = await resolveCredential({ allowInteractive: false });
-    expect(result.isErr()).toBe(true);
-    const err = result._unsafeUnwrapErr();
-    expect(err).toBeInstanceOf(UnauthenticatedError);
-    expect(err.message).toContain('linear workspace select');
+    expect(result._unsafeUnwrap()).toEqual({ type: 'apiKey', value: 'solo-key' });
   });
 
   it('reads a non-expired OAuth workspace credential as accessToken when linked', async () => {

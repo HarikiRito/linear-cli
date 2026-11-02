@@ -17,6 +17,7 @@ import {
   ValidationError,
 } from '../../../lib/errors.js';
 import { findProjectRoot } from '../../../lib/scope.js';
+import { parseIssueUrl } from '../../auth/workspace-hint.js';
 import { getEntry } from '../../keepalive/registry.js';
 import { ISSUE_PROJECT_SCOPE_QUERY, PROJECT_MILESTONES_QUERY } from './queries.js';
 
@@ -111,15 +112,6 @@ export function resolveTeam(input: string, client: LinearClient): ResultAsync<st
   );
 }
 
-/**
- * Scalar (string-valued) LinearConfig keys — excludes structured fields like
- * `team` (nested table) and `projects` (array of tables), which have their
- * own dedicated resolution helpers (see resolveDefaultTeam and
- * getDefaultProjectIds), since this precedence chain only handles single
- * string values.
- */
-type ScalarConfigKey = 'workspace';
-
 interface MergedConfigs {
   /** Team bound to the cwd-linked directory (registry entry), if any. */
   linkedTeam: DefaultTeam | null;
@@ -130,8 +122,8 @@ interface MergedConfigs {
 
 /**
  * Resolve the cwd-linked registry entry (if any) once and read the global
- * config.toml once, returning both. Shared by resolveConfigValue() (scalar
- * keys) and getDefaultProjectIds() (array key) so neither duplicates the
+ * config.toml once, returning both. Used by resolveDefaultTeam() and
+ * getDefaultProjectIds() so neither duplicates the
  * project-root walk or the file reads. Per-process memoization avoids
  * re-walking the directory tree / re-reading + re-parsing TOML when these
  * helpers are invoked multiple times within a single CLI invocation.
@@ -157,21 +149,9 @@ function readMergedConfigs(): MergedConfigs {
 }
 
 /**
- * Resolve a scalar config value from precedence chain:
- * env var → global config → null
- */
-function resolveConfigValue(envVar: string, key: ScalarConfigKey): string | null {
-  const envVal = process.env[envVar];
-  if (envVal) return envVal;
-  return readMergedConfigs().globalConfig[key] ?? null;
-}
-
-/**
  * Resolve the full default `team` table (no env var, no API lookup): the
  * cwd-linked registry entry `team` only — global config `team` is no longer
- * read (link-only model). Sibling to resolveConfigValue(), which only handles
- * scalar (string) keys — `team` is a nested `{id, key}` table so it needs its
- * own precedence walk. Exported for direct testing of the precedence behavior.
+ * read (link-only model). Exported for direct testing of the precedence behavior.
  */
 export function resolveDefaultTeam(): DefaultTeam | null {
   return readMergedConfigs().linkedTeam;
@@ -189,14 +169,6 @@ export function getDefaultTeamId(): string | null {
   if (envVal) return envVal;
   const team = resolveDefaultTeam();
   return team ? team.id : null;
-}
-
-/**
- * Resolve workspace from precedence chain:
- * env LINEAR_WORKSPACE → global config workspace → null
- */
-export function getDefaultWorkspace(): string | null {
-  return resolveConfigValue('LINEAR_WORKSPACE', 'workspace');
 }
 
 /**
@@ -383,7 +355,11 @@ export function resolveCycle(
  * Expand a bare issue number (e.g. "123") to "TEAM-123" via the default team
  * key; a full identifier (e.g. "ENG-123") or UUID/node ID passes through.
  */
-function expandIssueIdentifier(input: string, client: LinearClient): ResultAsync<string, CliError> {
+function expandIssueIdentifier(
+  rawInput: string,
+  client: LinearClient
+): ResultAsync<string, CliError> {
+  const input = parseIssueUrl(rawInput)?.identifier ?? rawInput;
   if (/^\d+$/.test(input)) {
     const teamId = getDefaultTeamId();
     if (!teamId) {
