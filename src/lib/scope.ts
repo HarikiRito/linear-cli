@@ -1,8 +1,10 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Result } from 'neverthrow';
 import { listProjects } from '../features/keepalive/registry.js';
+import { toError } from './errors.js';
 
 /** Canonical global config dir: ~/.config/.linear */
 export function getGlobalConfigDir(): string {
@@ -17,18 +19,7 @@ function realpathOrSelf(p: string): string {
   )(p).unwrapOr(p);
 }
 
-/**
- * Walk from startDir upward, returning the nearest ancestor registered as a
- * linked project root (projects.json registry match). Returns the registry
- * entry's canonical root (which may be an ancestor of startDir), or null when
- * no ancestor is linked.
- */
-export function findProjectRoot(startDir: string): string | null {
-  const entryRoots = new Set(
-    listProjects()
-      .unwrapOr([])
-      .map((e) => realpathOrSelf(e.root))
-  );
+function findLinkedAncestor(startDir: string, entryRoots: Set<string>): string | null {
   let dir = realpathOrSelf(path.resolve(startDir));
   const { root } = path.parse(dir);
   while (true) {
@@ -36,4 +27,37 @@ export function findProjectRoot(startDir: string): string | null {
     if (dir === root) return null;
     dir = path.dirname(dir);
   }
+}
+
+/** Main repo root when startDir is inside a git worktree/repo, else null (git missing/failing too). */
+function gitMainRoot(startDir: string): string | null {
+  const cwd = path.resolve(startDir);
+  return Result.fromThrowable(
+    () =>
+      execFileSync('git', ['rev-parse', '--git-common-dir'], {
+        cwd,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      }).trim(),
+    toError
+  )()
+    .map((out) => path.resolve(cwd, out))
+    .map((gitDir) => (path.basename(gitDir) === '.git' ? path.dirname(gitDir) : null))
+    .unwrapOr(null);
+}
+
+/**
+ * Nearest linked ancestor of startDir, else the git main repo's link.
+ * Null when none.
+ */
+export function findProjectRoot(startDir: string): string | null {
+  const entryRoots = new Set(
+    listProjects()
+      .unwrapOr([])
+      .map((e) => realpathOrSelf(e.root))
+  );
+  const direct = findLinkedAncestor(startDir, entryRoots);
+  if (direct) return direct;
+  const mainRoot = gitMainRoot(startDir);
+  return mainRoot ? findLinkedAncestor(mainRoot, entryRoots) : null;
 }
