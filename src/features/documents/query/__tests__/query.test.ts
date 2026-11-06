@@ -65,7 +65,12 @@ describe('queryDocuments', () => {
   });
 
   it('sends includeComments=false, includeArchived=true and the --after cursor', async () => {
-    await queryDocuments({ ...baseOpts, includeComments: false, includeArchived: true, after: 'cur' });
+    await queryDocuments({
+      ...baseOpts,
+      includeComments: false,
+      includeArchived: true,
+      after: 'cur',
+    });
 
     expect(sentVariables()).toMatchObject({
       includeComments: false,
@@ -94,7 +99,20 @@ describe('queryDocuments', () => {
   });
 
   it('renders results as returned, without client-side filtering', async () => {
-    requestFn.mockResolvedValue({ searchDocuments: { nodes: [{ id: 'd1', title: 'Roadmap Doc', slugId: 'roadmap-doc-abc', updatedAt: '2026-01-01T00:00:00.000Z', project: { id: 'p1', name: 'Proj' } }], pageInfo: { hasNextPage: true, endCursor: 'next' } } });
+    requestFn.mockResolvedValue({
+      searchDocuments: {
+        nodes: [
+          {
+            id: 'd1',
+            title: 'Roadmap Doc',
+            slugId: 'roadmap-doc-abc',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            project: { id: 'p1', name: 'Proj' },
+          },
+        ],
+        pageInfo: { hasNextPage: true, endCursor: 'next' },
+      },
+    });
 
     await queryDocuments(baseOpts);
 
