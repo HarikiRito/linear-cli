@@ -36,7 +36,7 @@ Append `--plain` to any read command for clean, agent-parseable output.
 | `linear issues list` | `--team <key>`, `--state <tokens>`, `--all-states`, `--limit <n>`, `--all` |
 | `linear issues get <id>` | — |
 | `linear issues me` | — |
-| `linear issues query <term>` | — |
+| `linear issues query <term>` | Linear search-bar ranking; finds identifiers (`H-1528`), typos, comment text; all states. `--project`, `--team <key-or-name>`, `--state <tokens>`, `--no-comments`, `--include-archived`, `--limit <n>` (default 10, max 250), `--after <cursor>` (no `--all`). No `--project`/`--team` = default project's teams, else whole workspace |
 | `linear issues create` | `--title <text>` (req), `--team <name-or-id>` (req), `--description <text\|->`, `--project`, `--milestone`, `--assignee`, `--labels`, `--state`, `--priority <0-4>`, `--estimate`, `--cycle`, `--parent`, `--due-date` |
 | `linear issues update <id>` | same flags as create (all optional) |
 | `linear issues delete <id>` | — |

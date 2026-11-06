@@ -28,6 +28,7 @@ describe.skipIf(!RUN_E2E)('issues read E2E', () => {
   // Unique token we embed in a created issue title for the query test
   const queryToken = `e2qlabel-${Date.now()}`;
   let queryIssueId = '';
+  let queryIssueIdentifier = '';
 
   beforeAll(async () => {
     // Discover the first available team
@@ -50,6 +51,7 @@ describe.skipIf(!RUN_E2E)('issues read E2E', () => {
     }
     const data = parsePlainRecord(r.stdout);
     queryIssueId = data.id;
+    queryIssueIdentifier = data._primaryId;
     reg.trackIssue(queryIssueId);
   }, CMD_TIMEOUT);
 
@@ -153,18 +155,10 @@ describe.skipIf(!RUN_E2E)('issues read E2E', () => {
   // ── issues query ─────────────────────────────────────────────────────────
 
   it(
-    'issues query <discovered-token> --plain --all-states finds the probe issue',
+    'issues query <discovered-token> --plain finds the probe issue',
     async () => {
       expect(queryToken).not.toBe('');
-      const r = await runCLI([
-        'issues',
-        'query',
-        queryToken,
-        '--plain',
-        '--all-states',
-        '--limit',
-        '10',
-      ]);
+      const r = await runCLI(['issues', 'query', queryToken, '--plain', '--limit', '10']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
       const records = parsePlainList(r.stdout);
       expect(Array.isArray(records)).toBe(true);
@@ -175,10 +169,32 @@ describe.skipIf(!RUN_E2E)('issues read E2E', () => {
   );
 
   it(
+    'issues query <identifier> lists the probe issue first',
+    async () => {
+      const r = await runCLI(['issues', 'query', queryIssueIdentifier, '--plain']);
+      expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+      expect(parsePlainList(r.stdout)[0]?._primaryId).toBe(queryIssueIdentifier);
+    },
+    CMD_TIMEOUT
+  );
+
+  it(
+    'issues query with a one-letter typo in a title word still finds the probe issue',
+    async () => {
+      const typo = queryToken.replace('label', 'lable');
+      const r = await runCLI(['issues', 'query', typo, '--plain']);
+      expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+      const ids = parsePlainList(r.stdout).map((rec) => rec._primaryId);
+      expect(ids).toContain(queryIssueIdentifier);
+    },
+    CMD_TIMEOUT
+  );
+
+  it(
     'issues query with a gibberish no-match token exits 0 with empty output',
     async () => {
       const noMatchToken = `zqxvw-${Math.random().toString(36).slice(2, 10)}-kfjmbnp`;
-      const r = await runCLI(['issues', 'query', noMatchToken, '--plain', '--all-states']);
+      const r = await runCLI(['issues', 'query', noMatchToken, '--plain']);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
       const records = parsePlainList(r.stdout);
       expect(records.length).toBe(0);
