@@ -22,3 +22,15 @@ export const ISSUE_PROJECT_SCOPE_QUERY = graphql(`
     }
   }
 `);
+
+export const PROJECT_TEAMS_QUERY = graphql(`
+  query ProjectTeams($id: String!) {
+    project(id: $id) {
+      teams {
+        nodes {
+          id
+        }
+      }
+    }
+  }
+`);

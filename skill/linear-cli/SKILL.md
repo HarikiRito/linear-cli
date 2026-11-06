@@ -36,7 +36,7 @@ Append `--plain` to any read command for clean, agent-parseable output.
 | `linear issues list` | `--team <key>`, `--state <tokens>`, `--all-states`, `--limit <n>`, `--all` |
 | `linear issues get <id>` | — |
 | `linear issues me` | — |
-| `linear issues query <term>` | — |
+| `linear issues query <term>` | Linear search-bar ranking; finds identifiers (`H-1528`), typos, comment text; all states. `--project`, `--team <key-or-name>`, `--state <tokens>`, `--no-comments`, `--include-archived`, `--limit <n>` (default 10, max 250), `--after <cursor>` (no `--all`). No `--project`/`--team` = default project's teams, else whole workspace |
 | `linear issues create` | `--title <text>` (req), `--team <name-or-id>` (req), `--description <text\|->`, `--project`, `--milestone`, `--assignee`, `--labels`, `--state`, `--priority <0-4>`, `--estimate`, `--cycle`, `--parent`, `--due-date` |
 | `linear issues update <id>` | same flags as create (all optional) |
 | `linear issues delete <id>` | — |
@@ -53,6 +53,8 @@ All read commands (list, get, me, query, comment list) accept `--plain`.
 ## Other commands
 
 Run `linear --help` and `linear <area> --help` to discover commands for: projects, cycles, documents, teams, labels, milestones, statuses, users, whoami.
+
+`linear projects query <term>` and `linear documents query <term>` search like Linear's search bar (ranked, comments searched). Options: `--team <key-or-name>` (ranks that team higher, not a filter; default: default project's team), `--no-comments`, `--include-archived`, `--limit <n>` (default 10, max 250), `--after <cursor>`, `--plain`.
 
 `linear assets download <url> --output <path>` downloads a single known `uploads.linear.app` URL (e.g. one found by scanning markdown yourself). Credentials come from the workspace id in the URL, so `linear login` that workspace first when it differs from the linked one.
 

@@ -16,7 +16,7 @@ export interface ListDocumentsOptions {
   plain: boolean;
 }
 
-interface DocumentRow {
+export interface DocumentRow {
   id: string;
   title: string;
   slugId: string;
@@ -32,7 +32,7 @@ function documentPlainFields(d: DocumentRow): PlainField[] {
   ];
 }
 
-const DOCUMENT_COLUMNS: ColumnConfig<DocumentRow> = {
+export const DOCUMENT_COLUMNS: ColumnConfig<DocumentRow> = {
   headers: ['Title', 'Slug', 'Updated At'],
   toRow: (d) => [d.title, d.slugId, d.updatedAt],
   plainType: 'Document',
@@ -40,7 +40,7 @@ const DOCUMENT_COLUMNS: ColumnConfig<DocumentRow> = {
   toPlainFields: documentPlainFields,
 };
 
-function toDocumentRows(
+export function toDocumentRows(
   nodes: {
     id: string;
     title: string;

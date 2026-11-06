@@ -58,7 +58,7 @@ Most commands accept these common flags (not repeated per command):
 | `--api-key <key>` | Linear API key |
 | `--token <token>` | Linear access token |
 
-List commands also accept: `--limit <n>` (default 50), `--after <cursor>`, `--all` (fetch all pages).
+List commands also accept: `--limit <n>` (default 50), `--after <cursor>`, `--all` (fetch all pages). `issues query` differs: default `--limit 10`, no `--all`.
 
 ### Default Output Mode
 
@@ -92,7 +92,7 @@ An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing
 | `linear issues list` | List issues. `--team`, `--state <tokens>` (comma-sep snake_case, e.g. `todo,in_progress,dev_review`; default: `todo,in_progress,dev_review`), `--all-states` |
 | `linear issues get <id>` | Full issue detail. Accepts `ENG-123`, bare number, or UUID. `--project <name-or-id>` widens the directory's project scope to include it when resolving `<id>` |
 | `linear issues me` | Issues assigned to you. `--state`, `--all-states` |
-| `linear issues query <term>` | Search issues by text. `--state`, `--all-states` |
+| `linear issues query <term>` | Search like Linear's search bar, in Linear's ranking: accepts issue identifiers (`H-1528`, `h1528`), tolerates typos, searches comments and all states by default. `--project`, `--team <key-or-name>`, `--state <tokens>` (narrows), `--no-comments`, `--include-archived`, `--limit <n>` (default 10, max 250), `--after <cursor>` for the next page (no `--all`). With no `--project`/`--team`, limited to the default project's teams (whole workspace if none); fails if those teams cannot be looked up |
 | `linear issues create` | Create an issue. Required: `--title <text>`, `--team <name-or-id>`. Optional: `--description <text\|->`, `--project`, `--milestone` (needs `--project`), `--assignee`, `--labels <csv>`, `--state`, `--priority <0-4>` (0=None 1=Urgent 2=High 3=Medium 4=Low), `--estimate`, `--cycle`, `--parent`, `--due-date <YYYY-MM-DD>`, `--related-to`/`--blocks`/`--blocked-by`/`--duplicate-of` (relation targets; `--project` widens the directory's scope to include them too) |
 | `linear issues update <id>` | Update an issue. Same optional fields as create. `--labels` replaces all. `--state`/`--cycle` resolve correctly only when `--team` is also provided. `--project` also widens the directory's scope to include it when resolving `<id>` |
 | `linear issues batch-update <ids...>` | Update multiple issues at once. Same optional fields as update; `--project` also widens the directory's scope to include it when resolving each id |
@@ -130,6 +130,7 @@ An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing
 | Command | Description |
 |---|---|
 | `linear projects list` | List all projects |
+| `linear projects query <term>` | Search projects like Linear's search bar (ranked, comments searched). `--team <key-or-name>` ranks that team higher (not a filter; default: default project's team), `--no-comments`, `--include-archived`, `--limit <n>` (default 10, max 250), `--after <cursor>` |
 | `linear projects get <id>` | Project detail by name or UUID |
 | `linear projects create` | Create a project. Required: `--name <text>`, `--team <key-or-id>`. Optional: `--description`, `--lead <name-or-id\|me>`, `--target-date <YYYY-MM-DD>`, `--start-date <YYYY-MM-DD>`, `--state`/`--status` |
 | `linear projects update <id>` | Update a project. Same optional fields as create. `--team <key-or-id>` optional |
@@ -180,6 +181,7 @@ An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing
 | Command | Description |
 |---|---|
 | `linear documents list` | List documents. Optional: `--project <id-or-name>` |
+| `linear documents query <term>` | Search documents like Linear's search bar (ranked, content/comments searched). `--team <key-or-name>` ranks that team higher (not a filter; default: default project's team), `--no-comments`, `--include-archived`, `--limit <n>` (default 10, max 250), `--after <cursor>` |
 | `linear documents get <id>` | Document detail by ID or slug |
 | `linear documents create --title <title>` | Create a document. Optional: `--project`, `--content <text\|->`, `--content-file <path>` |
 | `linear documents update <id>` | Update a document. Optional: `--title`, `--content <text\|->`, `--content-file <path>` |
@@ -195,7 +197,7 @@ An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing
 
 Default output is a boxed table (TTY) or markdown table when piped. Use `--plain` for agent-friendly plain-text output optimized for AI tooling.
 
-List commands paginate with `--limit <n>` (default 50), `--after <cursor>` for next-page cursor, or `--all` to fetch all pages automatically.
+List commands paginate with `--limit <n>` (default 50), `--after <cursor>` for next-page cursor, or `--all` to fetch all pages automatically (`issues query` has no `--all`; page with `--after`).
 
 ## Plain Output Format (--plain)
 
