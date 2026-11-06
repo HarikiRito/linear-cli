@@ -4,12 +4,13 @@ import { createDocument } from './create.js';
 import { deleteDocument } from './delete.js';
 import { getDocument } from './get.js';
 import { listDocuments } from './list.js';
+import { registerQueryCommand } from './query/command.js';
 import { updateDocument } from './update.js';
 
 export function registerDocuments(program: Command): void {
   const documents = program
     .command('documents')
-    .description('Document commands: list, get, create, update, delete')
+    .description('Document commands: list, query, get, create, update, delete')
     .addHelpCommand(false);
 
   documents.action(() => {
@@ -45,6 +46,8 @@ export function registerDocuments(program: Command): void {
       });
     }
   );
+
+  registerQueryCommand(documents);
 
   // documents get
   const getCmd = documents.command('get <id>').description('Get a single document by ID or slug');

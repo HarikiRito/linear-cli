@@ -513,3 +513,15 @@ export function mapIssueNotFoundError(e: unknown, issueId: string): CliError {
   }
   return mapLinearError(e);
 }
+
+/**
+ * Team id used to rank search results (Linear boosts, never filters, by it):
+ * explicit --team, else the default project's first team, else undefined.
+ */
+export function resolveSearchTeamId(
+  team: string | undefined,
+  client: LinearClient
+): ResultAsync<string | undefined, CliError> {
+  if (team !== undefined) return resolveTeam(team, client);
+  return getDefaultProjectTeamIds(client).map((ids) => ids[0]);
+}

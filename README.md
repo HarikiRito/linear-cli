@@ -130,6 +130,7 @@ An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing
 | Command | Description |
 |---|---|
 | `linear projects list` | List all projects |
+| `linear projects query <term>` | Search projects like Linear's search bar (ranked, comments searched). `--team <key-or-name>` ranks that team higher (not a filter; default: default project's team), `--no-comments`, `--include-archived`, `--limit <n>` (default 10, max 250), `--after <cursor>` |
 | `linear projects get <id>` | Project detail by name or UUID |
 | `linear projects create` | Create a project. Required: `--name <text>`, `--team <key-or-id>`. Optional: `--description`, `--lead <name-or-id\|me>`, `--target-date <YYYY-MM-DD>`, `--start-date <YYYY-MM-DD>`, `--state`/`--status` |
 | `linear projects update <id>` | Update a project. Same optional fields as create. `--team <key-or-id>` optional |
@@ -180,6 +181,7 @@ An invalid `LINEAR_OUTPUT` or `output.default` value fails with an error listing
 | Command | Description |
 |---|---|
 | `linear documents list` | List documents. Optional: `--project <id-or-name>` |
+| `linear documents query <term>` | Search documents like Linear's search bar (ranked, content/comments searched). `--team <key-or-name>` ranks that team higher (not a filter; default: default project's team), `--no-comments`, `--include-archived`, `--limit <n>` (default 10, max 250), `--after <cursor>` |
 | `linear documents get <id>` | Document detail by ID or slug |
 | `linear documents create --title <title>` | Create a document. Optional: `--project`, `--content <text\|->`, `--content-file <path>` |
 | `linear documents update <id>` | Update a document. Optional: `--title`, `--content <text\|->`, `--content-file <path>` |
