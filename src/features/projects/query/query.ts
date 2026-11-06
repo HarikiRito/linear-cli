@@ -45,5 +45,8 @@ export async function queryProjects(opts: QueryOptions): Promise<void> {
     { all: false, after: opts.after, limit: opts.limit }
   );
 
-  await runAndRender(result.map((r) => ({ projects: r.rows, pageInfo: r.pageInfo })), opts.plain);
+  await runAndRender(
+    result.map((r) => ({ projects: r.rows, pageInfo: r.pageInfo })),
+    opts.plain
+  );
 }

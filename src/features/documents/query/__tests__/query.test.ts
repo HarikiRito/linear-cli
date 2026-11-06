@@ -116,8 +116,13 @@ describe('queryDocuments', () => {
 
     await queryDocuments(baseOpts);
 
-    const out = vi.mocked(console.log).mock.calls.map((c) => String(c[0])).join('\n');
+    const out = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => String(c[0]))
+      .join('\n');
     expect(out).toContain('Roadmap Doc');
+    expect(out).toContain('slugId: roadmap-doc-abc');
+    expect(out).toContain('updatedAt: 2026-01-01');
     expect(out).toContain('nextCursor: next');
   });
 });
