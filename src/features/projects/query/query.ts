@@ -41,7 +41,7 @@ export async function queryProjects(opts: QueryOptions): Promise<void> {
       ...(opts.includeArchived && { includeArchived: true }),
     },
     'searchProjects',
-    (nodes: ProjectRow[]) => nodes.map((n) => ({ id: n.id, name: n.name, state: n.state })),
+    (nodes: ProjectRow[]) => nodes,
     { all: false, after: opts.after, limit: opts.limit }
   );
 

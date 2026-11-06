@@ -65,7 +65,12 @@ describe('queryProjects', () => {
   });
 
   it('sends includeComments=false, includeArchived=true and the --after cursor', async () => {
-    await queryProjects({ ...baseOpts, includeComments: false, includeArchived: true, after: 'cur' });
+    await queryProjects({
+      ...baseOpts,
+      includeComments: false,
+      includeArchived: true,
+      after: 'cur',
+    });
 
     expect(sentVariables()).toMatchObject({
       includeComments: false,
@@ -94,7 +99,12 @@ describe('queryProjects', () => {
   });
 
   it('renders results as returned, without client-side filtering', async () => {
-    requestFn.mockResolvedValue({ searchProjects: { nodes: [{ id: 'p1', name: 'Roadmap Q1', state: 'started' }], pageInfo: { hasNextPage: true, endCursor: 'next' } } });
+    requestFn.mockResolvedValue({
+      searchProjects: {
+        nodes: [{ id: 'p1', name: 'Roadmap Q1', state: 'started' }],
+        pageInfo: { hasNextPage: true, endCursor: 'next' },
+      },
+    });
 
     await queryProjects(baseOpts);
 
