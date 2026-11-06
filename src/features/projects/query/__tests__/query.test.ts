@@ -108,8 +108,13 @@ describe('queryProjects', () => {
 
     await queryProjects(baseOpts);
 
-    const out = vi.mocked(console.log).mock.calls.map((c) => String(c[0])).join('\n');
+    const out = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => String(c[0]))
+      .join('\n');
     expect(out).toContain('Roadmap Q1');
+    expect(out).toContain('id: p1');
+    expect(out).toContain('state: started');
     expect(out).toContain('nextCursor: next');
   });
 });
