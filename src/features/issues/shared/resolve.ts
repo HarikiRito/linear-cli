@@ -19,7 +19,11 @@ import {
 import { findProjectRoot } from '../../../lib/scope.js';
 import { parseIssueUrl } from '../../auth/workspace-hint.js';
 import { getEntry } from '../../keepalive/registry.js';
-import { ISSUE_PROJECT_SCOPE_QUERY, PROJECT_MILESTONES_QUERY } from './queries.js';
+import {
+  ISSUE_PROJECT_SCOPE_QUERY,
+  PROJECT_MILESTONES_QUERY,
+  PROJECT_TEAMS_QUERY,
+} from './queries.js';
 
 /**
  * Returns true if the input looks like a Linear UUID or node ID,
@@ -201,6 +205,31 @@ export function getDefaultProjectIds(): string[] | undefined {
     return globalConfig.projects.map((p) => p.id);
   }
   return undefined;
+}
+
+/** Union of the team ids of the given projects; a missing project is a NotFoundError. */
+export function getProjectTeamIds(
+  projectIds: string[],
+  client: LinearClient
+): ResultAsync<string[], CliError> {
+  const requestFn = getRequestFn(client);
+  return ResultAsync.fromPromise(
+    Promise.all(
+      projectIds.map((id) =>
+        requestFn(PROJECT_TEAMS_QUERY, { id }).then((data) => {
+          if (!data.project) throw new NotFoundError('project', id);
+          return data.project.teams.nodes.map((t) => t.id);
+        })
+      )
+    ).then((lists) => [...new Set(lists.flat())]),
+    (e) => coerceCliError(e)
+  );
+}
+
+/** Team ids of the default project(s); empty when no default project is configured. */
+export function getDefaultProjectTeamIds(client: LinearClient): ResultAsync<string[], CliError> {
+  const projectIds = getDefaultProjectIds();
+  return projectIds ? getProjectTeamIds(projectIds, client) : okAsync([]);
 }
 
 /**

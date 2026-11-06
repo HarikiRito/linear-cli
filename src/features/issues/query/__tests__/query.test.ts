@@ -1,202 +1,177 @@
+import { errAsync, ok, okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../../lib/client/index.js', () => ({
   getClientWithAuthRetry: vi.fn(),
   getRequestFn: vi.fn(),
 }));
+vi.mock('../../../../lib/runner.js', () => ({ exitError: vi.fn() }));
+vi.mock('../../shared/resolve.js', () => ({
+  resolveProject: vi.fn(),
+  resolveTeam: vi.fn(),
+  getDefaultProjectTeamIds: vi.fn(),
+}));
 
 import type { LinearClient } from '@linear/sdk';
-import { ok } from 'neverthrow';
+import { Command } from 'commander';
 import { getClientWithAuthRetry, getRequestFn } from '../../../../lib/client/index.js';
-import { queryIssues } from '../query.js';
+import { NotFoundError } from '../../../../lib/errors.js';
+import { exitError } from '../../../../lib/runner.js';
+import { getDefaultProjectTeamIds, resolveProject, resolveTeam } from '../../shared/resolve.js';
+import { registerQueryCommand } from '../command.js';
+import { type QueryOptions, queryIssues } from '../query.js';
 
-// A syntactically valid UUID so resolveProject() short-circuits via
-// looksLikeId() without needing a real client.projects() call.
-const FAKE_PROJECT_ID = '11111111-1111-1111-1111-111111111111';
+const emptyResponse = {
+  searchIssues: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
+};
 
-interface FakeIssueNode {
-  identifier: string;
-  title: string;
-  description?: string | null;
-  state: { name: string };
-  assignee: { displayName: string } | null;
-}
-
-function makeSearchResponse(nodes: FakeIssueNode[]) {
-  return {
-    searchIssues: {
-      nodes,
-      pageInfo: { hasNextPage: false, endCursor: null },
-    },
-  };
-}
+const baseOpts: QueryOptions = {
+  term: 'H-1528',
+  limit: 10,
+  plain: true,
+  states: [],
+  includeComments: true,
+  includeArchived: false,
+};
 
 describe('queryIssues', () => {
-  let logSpy: ReturnType<typeof vi.spyOn>;
-  let errorSpy: ReturnType<typeof vi.spyOn>;
+  let requestFn: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    requestFn = vi.fn().mockResolvedValue(emptyResponse);
+    vi.mocked(getRequestFn).mockReturnValue(requestFn);
     vi.mocked(getClientWithAuthRetry).mockResolvedValue(ok({} as unknown as LinearClient));
+    vi.mocked(getDefaultProjectTeamIds).mockReturnValue(okAsync([]));
   });
 
   afterEach(() => {
-    logSpy.mockRestore();
-    errorSpy.mockRestore();
+    vi.restoreAllMocks();
   });
 
-  const clusterNodes: FakeIssueNode[] = [
-    {
-      identifier: 'ENG-1',
-      title: 'Batch review pipeline for code submissions',
-      state: { name: 'Todo' },
-      assignee: null,
-    },
-    {
-      identifier: 'ENG-2',
-      title: 'Single review workflow for small diffs',
-      state: { name: 'Todo' },
-      assignee: null,
-    },
-    {
-      identifier: 'ENG-3',
-      title: 'Review comments UI polish',
-      state: { name: 'Todo' },
-      assignee: null,
-    },
-    {
-      identifier: 'ENG-4',
-      title: 'GitHub review integration',
-      state: { name: 'Todo' },
-      assignee: null,
-    },
-    {
-      identifier: 'ENG-5',
-      title: 'GitHub webhook ingestion pipeline',
-      state: { name: 'Todo' },
-      assignee: null,
-    },
-  ];
+  const sentVariables = () => requestFn.mock.calls[0][1] as Record<string, unknown>;
 
-  it('different unrelated terms against the same project return meaningfully different result sets', async () => {
-    // The real Linear searchIssues resolver ranks by relevance but does not
-    // strictly filter — simulate that by returning the *same* full cluster
-    // for every term, regardless of what was searched for (H-321 repro).
-    const requestFn = vi.fn().mockResolvedValue(makeSearchResponse(clusterNodes));
-    vi.mocked(getRequestFn).mockReturnValue(requestFn);
-
-    async function run(term: string): Promise<string[]> {
-      logSpy.mockClear();
-      await queryIssues({
-        term,
-        project: FAKE_PROJECT_ID,
-        limit: 50,
-        all: false,
-        plain: true,
-        states: [],
-        allStates: true,
-      });
-      const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
-      return [...output.matchAll(/Issue: (\S+)/g)].map((m) => m[1]);
-    }
-
-    const batch = await run('batch review');
-    const single = await run('single review');
-    const comments = await run('review comments');
-    const github = await run('GitHub review');
-
-    expect(batch).toEqual(['ENG-1']);
-    expect(single).toEqual(['ENG-2']);
-    expect(comments).toEqual(['ENG-3']);
-    expect(github).toEqual(['ENG-4']);
-
-    // None of the unrelated queries should surface the textually-unrelated issue.
-    expect(batch).not.toContain('ENG-5');
-    expect(single).not.toContain('ENG-5');
-    expect(comments).not.toContain('ENG-5');
-    expect(github).not.toContain('ENG-5');
-
-    // The four term result sets must actually differ from one another.
-    expect(new Set([...batch, ...single, ...comments, ...github]).size).toBeGreaterThan(1);
-  });
-
-  it('still passes term and filter through to the searchIssues request', async () => {
-    const requestFn = vi.fn().mockResolvedValue(makeSearchResponse(clusterNodes));
-    vi.mocked(getRequestFn).mockReturnValue(requestFn);
-
-    await queryIssues({
-      term: 'batch review',
-      project: FAKE_PROJECT_ID,
-      limit: 50,
-      all: false,
-      plain: true,
-      states: [],
-      allStates: true,
-    });
+  it('sends term, comments on, no archived flag, no state filter by default', async () => {
+    await queryIssues(baseOpts);
 
     expect(requestFn).toHaveBeenCalledTimes(1);
-    const [, variables] = requestFn.mock.calls[0];
-    expect(variables.term).toBe('batch review');
-    expect(variables.filter).toBeDefined();
+    expect(sentVariables()).toEqual({
+      term: 'H-1528',
+      filter: undefined,
+      includeComments: true,
+      first: 10,
+      after: undefined,
+    });
   });
 
-  it('warns when relevance filtering drops rows from a limited (non --all) page', async () => {
-    // Simulate the server returning a full page (pageInfo unchanged/raw) where
-    // most rows are irrelevant to the term and get filtered out client-side.
-    const requestFn = vi.fn().mockResolvedValue(makeSearchResponse(clusterNodes));
-    vi.mocked(getRequestFn).mockReturnValue(requestFn);
+  it('sends includeComments=false and includeArchived=true when requested', async () => {
+    await queryIssues({ ...baseOpts, includeComments: false, includeArchived: true });
 
-    await queryIssues({
-      term: 'batch review',
-      project: FAKE_PROJECT_ID,
-      limit: 50,
-      all: false,
-      plain: true,
-      states: [],
-      allStates: true,
-    });
-
-    // 5 raw rows in, only ENG-1 matches "batch review" -> 4 filtered out.
-    expect(errorSpy).toHaveBeenCalledTimes(1);
-    const warning = errorSpy.mock.calls[0][0] as string;
-    expect(warning).toContain('Filtered 4 of 5 results by relevance');
-    expect(warning).toContain('--all');
+    expect(sentVariables()).toMatchObject({ includeComments: false, includeArchived: true });
   });
 
-  it('does not warn when relevance filtering keeps every row on the page', async () => {
-    const matchingOnly = clusterNodes.slice(0, 1); // only ENG-1, matches "batch review"
-    const requestFn = vi.fn().mockResolvedValue(makeSearchResponse(matchingOnly));
-    vi.mocked(getRequestFn).mockReturnValue(requestFn);
+  it('passes --after through and applies validated --state tokens', async () => {
+    await queryIssues({ ...baseOpts, after: 'cur', states: ['todo'] });
 
-    await queryIssues({
-      term: 'batch review',
-      project: FAKE_PROJECT_ID,
-      limit: 50,
-      all: false,
-      plain: true,
-      states: [],
-      allStates: true,
+    expect(sentVariables()).toMatchObject({
+      after: 'cur',
+      filter: { state: { name: { eqIgnoreCase: 'todo' } } },
     });
-
-    expect(errorSpy).not.toHaveBeenCalled();
   });
 
-  it('does not warn when --all is set, even if filtering drops rows', async () => {
-    const requestFn = vi.fn().mockResolvedValue(makeSearchResponse(clusterNodes));
-    vi.mocked(getRequestFn).mockReturnValue(requestFn);
+  it('rejects unknown --state tokens before any client work', async () => {
+    await queryIssues({ ...baseOpts, states: ['nope'] });
 
-    await queryIssues({
-      term: 'batch review',
-      project: FAKE_PROJECT_ID,
-      limit: 50,
-      all: true,
-      plain: true,
-      states: [],
-      allStates: true,
+    expect(exitError).toHaveBeenCalledOnce();
+    expect(getClientWithAuthRetry).not.toHaveBeenCalled();
+  });
+
+  it('scopes to the default project teams when no --project/--team', async () => {
+    vi.mocked(getDefaultProjectTeamIds).mockReturnValue(okAsync(['t1', 't2']));
+
+    await queryIssues(baseOpts);
+
+    expect(sentVariables().filter).toEqual({ team: { id: { in: ['t1', 't2'] } } });
+  });
+
+  it('fails without searching when the default project teams lookup fails', async () => {
+    const error = new NotFoundError('project', 'p1');
+    vi.mocked(getDefaultProjectTeamIds).mockReturnValue(errAsync(error));
+
+    await queryIssues(baseOpts);
+
+    expect(exitError).toHaveBeenCalledWith(error);
+    expect(requestFn).not.toHaveBeenCalled();
+  });
+
+  it('--team filters by the resolved team and skips default scoping', async () => {
+    vi.mocked(resolveTeam).mockReturnValue(okAsync('team-1'));
+
+    await queryIssues({ ...baseOpts, team: 'ENG' });
+
+    expect(resolveTeam).toHaveBeenCalledWith('ENG', expect.anything());
+    expect(getDefaultProjectTeamIds).not.toHaveBeenCalled();
+    expect(sentVariables().filter).toEqual({ team: { id: { in: ['team-1'] } } });
+  });
+
+  it('--project filters by project and skips default scoping', async () => {
+    vi.mocked(resolveProject).mockReturnValue(okAsync('proj-1'));
+
+    await queryIssues({ ...baseOpts, project: 'X' });
+
+    expect(getDefaultProjectTeamIds).not.toHaveBeenCalled();
+    expect(sentVariables().filter).toEqual({ project: { id: { in: ['proj-1'] } } });
+  });
+
+  it('--project and --team are ANDed', async () => {
+    vi.mocked(resolveProject).mockReturnValue(okAsync('proj-1'));
+    vi.mocked(resolveTeam).mockReturnValue(okAsync('team-1'));
+
+    await queryIssues({ ...baseOpts, project: 'X', team: 'ENG' });
+
+    expect(sentVariables().filter).toEqual({
+      and: [{ project: { id: { in: ['proj-1'] } } }, { team: { id: { in: ['team-1'] } } }],
     });
+  });
+});
 
-    expect(errorSpy).not.toHaveBeenCalled();
+describe('query command options', () => {
+  async function run(args: string[]): Promise<void> {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.mocked(getClientWithAuthRetry).mockResolvedValue(ok({} as unknown as LinearClient));
+    vi.mocked(getRequestFn).mockReturnValue(vi.fn().mockResolvedValue(emptyResponse));
+    vi.mocked(getDefaultProjectTeamIds).mockReturnValue(okAsync([]));
+    const issues = new Command('issues').exitOverride();
+    issues.configureOutput({ writeErr: () => {} });
+    registerQueryCommand(issues);
+    const program = new Command().exitOverride();
+    program.configureOutput({ writeErr: () => {} });
+    program.addCommand(issues);
+    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', ...args]);
+  }
+
+  const limitSent = async (args: string[]) => {
+    await run(args);
+    const requestFn = vi.mocked(getRequestFn).mock.results[0].value as ReturnType<typeof vi.fn>;
+    return requestFn.mock.calls[0][1] as Record<string, unknown>;
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('defaults limit to 10, clamps to 250, and sends comments on', async () => {
+    expect(await limitSent([])).toMatchObject({ first: 10, includeComments: true });
+    expect(await limitSent(['--limit', '500'])).toMatchObject({ first: 250 });
+  });
+
+  it('--no-comments turns comment search off', async () => {
+    expect(await limitSent(['--no-comments'])).toMatchObject({ includeComments: false });
+  });
+
+  it('--all is an unknown option', async () => {
+    await expect(run(['--all'])).rejects.toThrow(/unknown option '--all'/);
   });
 });

@@ -817,27 +817,16 @@ describe('issues query', () => {
     );
   });
 
-  it('--all fetches multiple pages', async () => {
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce(
-        makeSearchResponse(
-          Array.from({ length: 50 }, (_, i) => makeIssueNode(`ENG-${i + 1}`, `Issue ${i + 1}`)),
-          { hasNextPage: true, endCursor: 'qCur1' }
-        )
-      )
-      .mockResolvedValueOnce(
-        makeSearchResponse(
-          Array.from({ length: 5 }, (_, i) => makeIssueNode(`ENG-${i + 51}`, `Issue ${i + 51}`)),
-          { hasNextPage: false, endCursor: null }
-        )
-      );
+  it('--all is rejected as an unknown option', async () => {
+    const request = vi.fn().mockResolvedValue(makeSearchResponse([]));
     stdMocks(request);
-
     const program = await buildProgram();
-    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--all']);
+    program.configureOutput({ writeErr: () => {} });
 
-    expect(request).toHaveBeenCalledTimes(2);
+    await expect(
+      program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--all'])
+    ).rejects.toThrow(/unknown option '--all'/);
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('table output produced for issues query', async () => {
@@ -941,7 +930,7 @@ describe('issues query', () => {
     consoleSpy.mockRestore();
   });
 
-  it('default state filter applied to query search (OR-of-eqIgnoreCase)', async () => {
+  it('sends comments on and no state filter by default', async () => {
     const request = vi.fn().mockResolvedValue(makeSearchResponse([]));
     stdMocks(request);
     const program = await buildProgram();
@@ -949,22 +938,31 @@ describe('issues query', () => {
     await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug']);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
-    const json = JSON.stringify(vars);
-    expect(json).toContain('eqIgnoreCase');
-    expect(json).toContain('"bug"');
+    expect(vars).toMatchObject({ term: 'bug', includeComments: true, first: 10 });
+    expect(vars).not.toHaveProperty('includeArchived');
+    expect(JSON.stringify(vars)).not.toContain('eqIgnoreCase');
   });
 
-  it('--all-states on query removes state filter but keeps term', async () => {
+  it('--state narrows, --no-comments and --include-archived are forwarded', async () => {
     const request = vi.fn().mockResolvedValue(makeSearchResponse([]));
     stdMocks(request);
     const program = await buildProgram();
 
-    await program.parseAsync(['node', 'linear', 'issues', 'query', 'bug', '--all-states']);
+    await program.parseAsync([
+      'node',
+      'linear',
+      'issues',
+      'query',
+      'bug',
+      '--state',
+      'todo',
+      '--no-comments',
+      '--include-archived',
+    ]);
 
     const [, vars] = request.mock.calls[0] as [string, Record<string, unknown>];
-    const json = JSON.stringify(vars);
-    expect(json).not.toContain('eqIgnoreCase');
-    expect(json).toContain('"bug"');
+    expect(vars).toMatchObject({ includeComments: false, includeArchived: true });
+    expect(JSON.stringify(vars)).toContain('eqIgnoreCase');
   });
 
   it('--state with an unknown token errors before any API call', async () => {
